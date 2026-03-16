@@ -1,0 +1,3 @@
+ALTER TABLE events ADD COLUMN venue_name VARCHAR(255) NULL;
+ALTER TABLE events ADD COLUMN venue_address VARCHAR(500) NULL;
+ALTER TABLE events ADD COLUMN google_maps_link VARCHAR(1000) NULL;

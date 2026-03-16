@@ -1,0 +1,192 @@
+@import "react-datepicker/dist/react-datepicker.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply text-slate-900 antialiased;
+  background-color: #f7f9fc;
+}
+
+.container-page {
+  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+
+.airbnb-calendar {
+  border: 0 !important;
+  font-family: inherit !important;
+  width: auto !important;
+  padding: 0 !important;
+}
+
+.airbnb-calendar-shell {
+  display: block;
+}
+
+.react-datepicker {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.airbnb-calendar .react-datepicker__month-container {
+  float: none !important;
+  flex: 0 0 auto !important;
+  padding-bottom: 0 !important;
+}
+
+.airbnb-calendar.react-datepicker {
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-start !important;
+  gap: 0.35rem !important;
+}
+
+.react-datepicker__header {
+  background: white !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.45rem !important;
+}
+
+.react-datepicker__current-month {
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+.react-datepicker__navigation-icon::before {
+  border-color: #475569 !important;
+}
+
+.react-datepicker__day-name {
+  color: #64748b !important;
+  font-weight: 600 !important;
+}
+
+.react-datepicker__month {
+  margin: 0.35rem 0.4rem 0.25rem !important;
+}
+
+.react-datepicker__day-names {
+  margin-bottom: 0.1rem !important;
+}
+
+.react-datepicker__week {
+  display: flex !important;
+  justify-content: space-between !important;
+}
+
+.airbnb-day {
+  border-radius: 9999px !important;
+  line-height: 1.95rem !important;
+  width: 1.95rem !important;
+  height: 1.95rem !important;
+  margin: 0.03rem !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background-color: #e11d48 !important;
+  color: white !important;
+}
+
+@keyframes heroZoomIn {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.05);
+  }
+}
+
+.hero-slide-image {
+  transform: scale(1);
+}
+
+.hero-swiper .swiper-slide-active .hero-slide-image {
+  animation: heroZoomIn 4s ease-out forwards;
+}
+
+@keyframes floatBlobA {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(24px, -18px, 0) scale(1.04);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes floatBlobB {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-20px, 16px, 0) scale(1.03);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes floatBlobC {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(18px, 12px, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes floatBlobD {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-16px, -20px, 0) scale(1.03);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-bg-blob-a {
+  animation: floatBlobA 36s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-bg-blob-b {
+  animation: floatBlobB 32s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-bg-blob-c {
+  animation: floatBlobC 40s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-bg-blob-d {
+  animation: floatBlobD 34s ease-in-out infinite;
+  will-change: transform;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

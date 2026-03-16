@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS event_bookings (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  event_id BIGINT UNSIGNED NOT NULL,
+  organizer_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(25) NOT NULL,
+  attendee_count INT NOT NULL DEFAULT 1,
+  booking_date DATE NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_event_bookings_event (event_id),
+  KEY idx_event_bookings_organizer (organizer_id),
+  KEY idx_event_bookings_user (user_id),
+  KEY idx_event_bookings_booking_date (booking_date),
+  CONSTRAINT fk_event_bookings_event FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
+  CONSTRAINT fk_event_bookings_organizer FOREIGN KEY (organizer_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_event_bookings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
