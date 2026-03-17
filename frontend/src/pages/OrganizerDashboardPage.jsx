@@ -21,7 +21,7 @@ import { FiCalendar, FiClipboard, FiMapPin, FiTrendingUp, FiUsers } from "react-
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
 import { categories, cities } from "../utils/filterOptions";
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDateUS } from "../utils/format";
 import { downloadBlob } from "../utils/fileDownload";
 import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
 import FilterPopupField from "../components/FilterPopupField";
@@ -190,8 +190,8 @@ function OrganizerDashboardPage() {
       return acc;
     }, {});
     return Object.entries(grouped)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, count]) => ({ date: formatDateUS(date), count }));
   }, [overviewBookings]);
 
   const bookingsPerEventData = useMemo(() => {
@@ -439,6 +439,18 @@ function OrganizerDashboardPage() {
     downloadBlob(result.blob, `organizer-bookings.${format === "excel" ? "xlsx" : "csv"}`);
   };
 
+  const bookingEventOptions = useMemo(() => {
+    return [...rows].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "en", { sensitivity: "base" }));
+  }, [rows]);
+
+  const filteredBookingEventOptions = useMemo(() => {
+    const query = bookingEventQuery.trim().toLowerCase();
+    if (!query) {
+      return bookingEventOptions;
+    }
+    return bookingEventOptions.filter((item) => String(item.title || "").toLowerCase().includes(query));
+  }, [bookingEventOptions, bookingEventQuery]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -642,7 +654,7 @@ function OrganizerDashboardPage() {
                         <th className="px-2 py-2">Event Title</th>
                         <th className="px-2 py-2">Date</th>
                         <th className="px-2 py-2">City</th>
-                        <th className="px-2 py-2">Price</th>
+                        <th className="px-2 py-2 text-right">Price</th>
                         <th className="px-2 py-2">Status</th>
                         <th className="px-2 py-2">Actions</th>
                       </tr>
@@ -651,9 +663,9 @@ function OrganizerDashboardPage() {
                       {rows.map((item) => (
                         <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
                           <td className="px-2 py-2 font-medium text-slate-900">{item.title}</td>
-                          <td className="px-2 py-2 text-slate-600">{String(item.event_date).slice(0, 10)}</td>
+                          <td className="px-2 py-2 text-slate-600">{formatDateUS(item.event_date)}</td>
                           <td className="px-2 py-2 text-slate-600">{item.city_name || "-"}</td>
-                          <td className="px-2 py-2 text-slate-600">{formatCurrency(item.price || 0)}</td>
+                          <td className="px-2 py-2 text-right text-slate-600">{formatCurrency(item.price || 0)}</td>
                           <td className="px-2 py-2">
                             <span
                               className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${getStatusBadgeClass(item.status)}`}
@@ -727,7 +739,7 @@ function OrganizerDashboardPage() {
                 <FilterPopupField
                   label="Event"
                   value={
-                    rows.find((item) => String(item.id) === String(bookingFilters.event_id))?.title || "All Events"
+                    bookingEventOptions.find((item) => String(item.id) === String(bookingFilters.event_id))?.title || "All Events"
                   }
                   isActive={activeBookingPanel === "event"}
                   onToggle={(e) => {
@@ -759,15 +771,7 @@ function OrganizerDashboardPage() {
                       >
                         <FiMapPin className="text-slate-400" /> All Events
                       </button>
-                      {rows
-                        .filter((item) =>
-                          bookingEventQuery.trim()
-                            ? String(item.title || "")
-                                .toLowerCase()
-                                .includes(bookingEventQuery.trim().toLowerCase())
-                            : true
-                        )
-                        .map((item) => (
+                      {filteredBookingEventOptions.map((item) => (
                         <button
                           key={item.id}
                           type="button"
@@ -780,13 +784,7 @@ function OrganizerDashboardPage() {
                           <FiMapPin className="text-slate-400" /> {item.title}
                         </button>
                       ))}
-                      {rows.filter((item) =>
-                        bookingEventQuery.trim()
-                          ? String(item.title || "")
-                              .toLowerCase()
-                              .includes(bookingEventQuery.trim().toLowerCase())
-                          : true
-                      ).length === 0 ? (
+                      {filteredBookingEventOptions.length === 0 ? (
                         <p className="px-2.5 py-3 text-sm text-slate-500">No events found.</p>
                       ) : null}
                       </div>
@@ -796,7 +794,7 @@ function OrganizerDashboardPage() {
 
                 <FilterPopupField
                   label="Date"
-                  value={bookingFilters.date || "Any Date"}
+                  value={bookingFilters.date ? formatDateUS(bookingFilters.date) : "Any Date"}
                   isActive={activeBookingPanel === "date"}
                   onToggle={(e) => {
                     e.stopPropagation();
@@ -823,7 +821,7 @@ function OrganizerDashboardPage() {
                       <th className="px-2 py-2">Phone</th>
                       <th className="px-2 py-2">Guests</th>
                       <th className="px-2 py-2">Selected Dates</th>
-                      <th className="px-2 py-2">Total Amount</th>
+                      <th className="px-2 py-2 text-right">Total Amount</th>
                       <th className="px-2 py-2">Booking Date</th>
                     </tr>
                   </thead>
@@ -852,11 +850,11 @@ function OrganizerDashboardPage() {
                             <td className="px-2 py-2 text-slate-600">{item.attendee_count}</td>
                             <td className="px-2 py-2 text-slate-600">
                               {Array.isArray(item.selected_dates) && item.selected_dates.length
-                                ? item.selected_dates.join(", ")
+                                ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
                                 : "-"}
                             </td>
-                            <td className="px-2 py-2 text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
-                            <td className="px-2 py-2 text-slate-600">{String(item.booking_date).slice(0, 10)}</td>
+                            <td className="px-2 py-2 text-right text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
+                            <td className="px-2 py-2 text-slate-600">{formatDateUS(item.booking_date)}</td>
                           </tr>
                         ))
                       : null}

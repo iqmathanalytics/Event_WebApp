@@ -5,7 +5,7 @@ import { FiCalendar, FiClock, FiExternalLink, FiMapPin, FiMinus, FiPlus, FiUser 
 import { CheckCircle, Clock, Globe, Music, Users } from "lucide-react";
 import { fetchEventById } from "../services/eventService";
 import { createBooking } from "../services/bookingService";
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDateUS } from "../utils/format";
 import useAuth from "../hooks/useAuth";
 
 function parseHighlights(value) {
@@ -461,8 +461,7 @@ function getAvailableDates(event) {
 }
 
 function formatSimpleDate(value) {
-  const parsed = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return formatDateUS(String(value).slice(0, 10));
 }
 
 function formatEventScheduleLabel(event) {
@@ -473,7 +472,7 @@ function formatEventScheduleLabel(event) {
   if (event.schedule_type === "multiple" && available.length > 1) {
     return `${available.length} dates available`;
   }
-  return available[0] ? formatSimpleDate(available[0]) : String(event?.event_date || "");
+  return available[0] ? formatSimpleDate(available[0]) : formatDateUS(event?.event_date || "");
 }
 
 export default EventDetailsPage;

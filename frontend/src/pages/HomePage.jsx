@@ -12,6 +12,7 @@ import { fetchEvents } from "../services/eventService";
 import { deals, influencers, services } from "../utils/mockData";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
+import { formatDateUS } from "../utils/format";
 
 function HomePage() {
   const { setHomeSearchSummary, setIsHeroSearchVisible } = useOutletContext();
@@ -154,7 +155,7 @@ function HomePage() {
                     title: item.title,
                     category: item.category_name || "General",
                     city: item.city_name || "City",
-                    date: item.event_date,
+                    date: formatDateUS(item.event_date),
                     time: item.event_time ? String(item.event_time).slice(0, 5) : "",
                     price: item.price,
                     image: item.image_url

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import useFavorites from "../hooks/useFavorites";
 import { fetchMyBookings } from "../services/bookingService";
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDateUS } from "../utils/format";
 
 function getDisplayPrice(item) {
   if (item.listing_type === "event") {
@@ -22,15 +22,7 @@ function formatReadableDate(value) {
   if (!value) {
     return "Date not available";
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return String(value);
-  }
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric"
-  }).format(parsed);
+  return formatDateUS(value);
 }
 
 function getLocationUrl(booking) {

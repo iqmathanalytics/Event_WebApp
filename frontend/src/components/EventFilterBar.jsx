@@ -11,6 +11,7 @@ import {
 import { categories, cities, sortOptions } from "../utils/filterOptions";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import FilterPopupField from "./FilterPopupField";
+import { formatDateUS } from "../utils/format";
 
 function EventFilterControls({
   query,
@@ -67,7 +68,7 @@ function EventFilterControls({
     return categories.filter((item) => item.label.toLowerCase().includes(query));
   }, [categoryQuery]);
 
-  const dateLabel = date || "Any Date";
+  const dateLabel = date ? formatDateUS(date) : "Any Date";
   const priceLabel = priceMin || priceMax ? `${priceMin || 0} - ${priceMax || "Any"}` : "Any Price";
 
   return (

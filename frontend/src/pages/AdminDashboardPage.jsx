@@ -23,7 +23,7 @@ import {
   updateAdminListingStatus
 } from "../services/adminService";
 import { downloadBlob } from "../utils/fileDownload";
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDateUS } from "../utils/format";
 
 const eventHighlightOptions = [
   "Free Parking",
@@ -347,10 +347,10 @@ function AdminDashboardPage() {
     pushText("Time", reviewForm.event_time);
 
     if ((reviewForm.schedule_type || "single") === "single") {
-      pushText("Event Date", reviewForm.event_date);
+      pushText("Event Date", formatDateUS(reviewForm.event_date));
     } else if ((reviewForm.schedule_type || "single") === "multiple") {
       if (Array.isArray(reviewForm.event_dates) && reviewForm.event_dates.length) {
-        pushText("Selected Dates", reviewForm.event_dates.join(", "));
+        pushText("Selected Dates", reviewForm.event_dates.map((value) => formatDateUS(value)).join(", "));
       }
     } else if ((reviewForm.schedule_type || "single") === "range") {
       const hasStart = hasDisplayValue(reviewForm.event_start_date);
@@ -358,7 +358,9 @@ function AdminDashboardPage() {
       if (hasStart || hasEnd) {
         pushText(
           "Date Range",
-          `${hasStart ? reviewForm.event_start_date : "Not provided"} to ${hasEnd ? reviewForm.event_end_date : "Not provided"}`
+          `${hasStart ? formatDateUS(reviewForm.event_start_date) : "Not provided"} to ${
+            hasEnd ? formatDateUS(reviewForm.event_end_date) : "Not provided"
+          }`
         );
       }
     }
@@ -642,26 +644,36 @@ function AdminDashboardPage() {
 
   const bookingEventOptions = useMemo(() => {
     const seen = new Set();
-    return bookingRows.filter((item) => {
+    return bookingRows
+      .filter((item) => {
       const key = `${item.event_id}`;
       if (seen.has(key)) {
         return false;
       }
       seen.add(key);
       return true;
-    });
+      })
+      .sort((a, b) => String(a.event_title || "").localeCompare(String(b.event_title || ""), "en", { sensitivity: "base" }));
   }, [bookingRows]);
 
   const bookingOrganizerOptions = useMemo(() => {
     const seen = new Set();
-    return bookingRows.filter((item) => {
+    return bookingRows
+      .filter((item) => {
       const key = `${item.organizer_id}`;
       if (seen.has(key)) {
         return false;
       }
       seen.add(key);
       return true;
-    });
+      })
+      .sort((a, b) =>
+        String(a.organizer_name || `Organizer #${a.organizer_id}`).localeCompare(
+          String(b.organizer_name || `Organizer #${b.organizer_id}`),
+          "en",
+          { sensitivity: "base" }
+        )
+      );
   }, [bookingRows]);
   const filteredBookingEventOptions = useMemo(() => {
     const query = bookingEventQuery.trim().toLowerCase();
@@ -910,7 +922,7 @@ function AdminDashboardPage() {
 
               <FilterPopupField
                 label="Date"
-                value={bookingFilters.date || "Any Date"}
+                value={bookingFilters.date ? formatDateUS(bookingFilters.date) : "Any Date"}
                 isActive={activeBookingPanel === "date"}
                 onToggle={(e) => {
                   e.stopPropagation();
@@ -938,7 +950,7 @@ function AdminDashboardPage() {
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Attendee Count</th>
                     <th className="px-4 py-3">Selected Dates</th>
-                    <th className="px-4 py-3">Total Amount</th>
+                    <th className="px-4 py-3 text-right">Total Amount</th>
                     <th className="px-4 py-3">Booking Date</th>
                   </tr>
                 </thead>
@@ -967,11 +979,11 @@ function AdminDashboardPage() {
                           <td className="px-4 py-3 text-slate-600">{item.attendee_count}</td>
                           <td className="px-4 py-3 text-slate-600">
                             {Array.isArray(item.selected_dates) && item.selected_dates.length
-                              ? item.selected_dates.join(", ")
+                              ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
                               : "-"}
                           </td>
-                          <td className="px-4 py-3 text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
-                          <td className="px-4 py-3 text-slate-600">{String(item.booking_date).slice(0, 10)}</td>
+                          <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
+                          <td className="px-4 py-3 text-slate-600">{formatDateUS(item.booking_date)}</td>
                         </tr>
                       ))
                     : null}

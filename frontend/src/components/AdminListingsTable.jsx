@@ -41,7 +41,7 @@ function AdminListingsTable({
             <th className="px-4 py-3">City</th>
             <th className="px-4 py-3">Category</th>
             <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Value</th>
+            <th className="px-4 py-3 text-right">Value</th>
             <th className="px-4 py-3">Actions</th>
           </tr>
         </thead>
@@ -56,27 +56,18 @@ function AdminListingsTable({
                   {item.status || "n/a"}
                 </span>
               </td>
-              <td className="px-4 py-3 text-slate-600">{getListingPrimaryMeta(item)}</td>
+              <td className="px-4 py-3 text-right text-slate-600">{getListingPrimaryMeta(item)}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-2">
                   {type === "events" ? (
                     item.status === "pending" ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => onApprove(item)}
-                          className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white"
-                        >
-                          Review & Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onEdit(item)}
-                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold"
-                        >
-                          Edit
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => onApprove(item)}
+                        className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white"
+                      >
+                        Review & Approve
+                      </button>
                     ) : (
                       <>
                         <button

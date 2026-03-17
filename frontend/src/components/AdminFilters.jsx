@@ -3,6 +3,7 @@ import { FiMapPin, FiTag } from "react-icons/fi";
 import { categories, cities } from "../utils/filterOptions";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import FilterPopupField from "./FilterPopupField";
+import { formatDateUS } from "../utils/format";
 
 function AdminFilters({ filters, onChange, onApply, onReset, canApply = true }) {
   const containerRef = useRef(null);
@@ -53,7 +54,7 @@ function AdminFilters({ filters, onChange, onApply, onReset, canApply = true }) 
     >
       <FilterPopupField
         label="Date"
-        value={filters.date || "Any Date"}
+        value={filters.date ? formatDateUS(filters.date) : "Any Date"}
         isActive={activePanel === "date"}
         onToggle={(e) => {
           e.stopPropagation();

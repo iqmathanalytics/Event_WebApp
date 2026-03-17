@@ -1,3 +1,5 @@
+const byLabelAsc = (a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" });
+
 export const cities = [
   { value: "1", label: "New York" },
   { value: "2", label: "Los Angeles" },
@@ -19,7 +21,7 @@ export const cities = [
   { value: "18", label: "Nashville" },
   { value: "19", label: "San Jose" },
   { value: "20", label: "Portland" }
-];
+].sort(byLabelAsc);
 
 export const categories = [
   { value: "1", label: "Music" },
@@ -42,11 +44,11 @@ export const categories = [
   { value: "18", label: "Sports" },
   { value: "19", label: "Influencer Meetups" },
   { value: "20", label: "Community Events" }
-];
+].sort(byLabelAsc);
 
 export const sortOptions = [
   { value: "popularity", label: "Popularity" },
   { value: "relevance", label: "Relevance" },
   { value: "newest", label: "Newest" },
   { value: "price", label: "Price" }
-];
+].sort(byLabelAsc);

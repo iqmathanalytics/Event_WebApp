@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { categories, cities } from "../utils/filterOptions";
 import useCityFilter from "../hooks/useCityFilter";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
+import { formatDateUS } from "../utils/format";
 
 function DiscoverySearchBar({ onCriteriaChange }) {
   const navigate = useNavigate();
@@ -180,9 +181,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
   };
 
   const selectedCityLabel = cities.find((item) => item.value === city)?.label || "All Cities";
-  const selectedDateLabel = date
-    ? new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "Any date";
+  const selectedDateLabel = date ? formatDateUS(date) : "Any date";
   const selectedCategoryLabel = categories.find((item) => item.value === category)?.label || "Any category";
   const selectedPriceLabel = priceMax ? `Up to $${priceMax}` : "Any price";
   const fieldBase =
