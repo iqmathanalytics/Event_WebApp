@@ -8,11 +8,29 @@ const { corsOrigin, nodeEnv } = require("./config/env");
 const { notFoundMiddleware, errorMiddleware } = require("./middleware/errorMiddleware");
 
 const app = express();
+const allowedOrigins = String(corsOrigin || "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
 
 app.use(helmet());
 app.use(
   cors({
-    origin: corsOrigin === "*" ? true : corsOrigin,
+    origin(origin, callback) {
+      if (allowedOrigins.includes("*")) {
+        callback(null, true);
+        return;
+      }
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true
   })
 );
