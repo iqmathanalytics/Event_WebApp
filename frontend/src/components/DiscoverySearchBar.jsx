@@ -3,14 +3,14 @@ import { motion } from "framer-motion";
 import { FiMapPin, FiNavigation, FiSearch, FiTag } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { categories, cities } from "../utils/filterOptions";
+import { categories } from "../utils/filterOptions";
 import useCityFilter from "../hooks/useCityFilter";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import { formatDateUS } from "../utils/format";
 
 function DiscoverySearchBar({ onCriteriaChange }) {
   const navigate = useNavigate();
-  const { selectedCity, setSelectedCity } = useCityFilter();
+  const { cities, selectedCity, setSelectedCity } = useCityFilter();
   const containerRef = useRef(null);
   const whereButtonRef = useRef(null);
   const whenButtonRef = useRef(null);

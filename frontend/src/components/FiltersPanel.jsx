@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import SortDropdown from "./SortDropdown";
-import { categories, cities, sortOptions } from "../utils/filterOptions";
+import { categories, sortOptions } from "../utils/filterOptions";
+import useCityFilter from "../hooks/useCityFilter";
 
 function FiltersPanel({
   city,
@@ -22,6 +23,7 @@ function FiltersPanel({
   onReset,
   canApply = true
 }) {
+  const { cities } = useCityFilter();
   const [cityQuery, setCityQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
   const filteredCities = useMemo(() => {

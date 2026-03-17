@@ -1,6 +1,9 @@
 import axios from "axios";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
+const defaultBaseURL = import.meta.env.PROD
+  ? "https://city-events-lifestyle-hub-api.onrender.com/api/v1"
+  : "http://localhost:5000/api/v1";
+const baseURL = import.meta.env.VITE_API_BASE_URL || defaultBaseURL;
 const api = axios.create({
   baseURL,
   timeout: 15000

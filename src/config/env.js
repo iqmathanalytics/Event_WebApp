@@ -38,5 +38,9 @@ module.exports = {
     refreshSecret: process.env.JWT_REFRESH_SECRET,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN
   },
-  corsOrigin: process.env.CORS_ORIGIN || "*"
+  corsOrigin: process.env.CORS_ORIGIN || "*",
+  citySync: {
+    apiKey: process.env.CSC_API_KEY || "",
+    refreshDays: Number(process.env.CITY_SYNC_REFRESH_DAYS || 30)
+  }
 };

@@ -3,7 +3,6 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { FiCheck, FiChevronDown, FiMapPin, FiMenu, FiSearch, FiShield, FiUser, FiX } from "react-icons/fi";
 import useAuth from "../hooks/useAuth";
-import { cities } from "../utils/filterOptions";
 import useCityFilter from "../hooks/useCityFilter";
 
 const navItems = [
@@ -23,7 +22,7 @@ function Navbar({
   isHeroSearchVisible = true
 }) {
   const { user, isAuthenticated, isAdmin, isOrganizer, logout } = useAuth();
-  const { selectedCity, selectedCityLabel, setSelectedCity } = useCityFilter();
+  const { cities, selectedCity, selectedCityLabel, setSelectedCity } = useCityFilter();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCityMenuOpen, setIsCityMenuOpen] = useState(false);

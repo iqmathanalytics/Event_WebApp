@@ -1,6 +1,7 @@
-import { cities } from "../utils/filterOptions";
+import useCityFilter from "../hooks/useCityFilter";
 
 function CitySelector({ value, onChange }) {
+  const { cities } = useCityFilter();
   return (
     <select
       value={value}

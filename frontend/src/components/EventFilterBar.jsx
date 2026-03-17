@@ -8,10 +8,11 @@ import {
   FiTag,
   FiX
 } from "react-icons/fi";
-import { categories, cities, sortOptions } from "../utils/filterOptions";
+import { categories, sortOptions } from "../utils/filterOptions";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import FilterPopupField from "./FilterPopupField";
 import { formatDateUS } from "../utils/format";
+import useCityFilter from "../hooks/useCityFilter";
 
 function EventFilterControls({
   query,
@@ -33,6 +34,7 @@ function EventFilterControls({
   const [activePanel, setActivePanel] = useState(null);
   const [cityQuery, setCityQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
+  const { cities } = useCityFilter();
 
   useEffect(() => {
     const onDocClick = (event) => {

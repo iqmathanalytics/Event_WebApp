@@ -20,12 +20,13 @@ import DatePicker from "react-datepicker";
 import { FiCalendar, FiClipboard, FiMapPin, FiTrendingUp, FiUsers } from "react-icons/fi";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
-import { categories, cities } from "../utils/filterOptions";
+import { categories } from "../utils/filterOptions";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { downloadBlob } from "../utils/fileDownload";
 import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
 import FilterPopupField from "../components/FilterPopupField";
 import OrganizerSidebar from "../components/OrganizerSidebar";
+import useCityFilter from "../hooks/useCityFilter";
 
 const initialForm = {
   title: "",
@@ -136,6 +137,7 @@ function parseDateValue(value) {
 }
 
 function OrganizerDashboardPage() {
+  const { cities } = useCityFilter();
   const [activeSection, setActiveSection] = useState("overview");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);

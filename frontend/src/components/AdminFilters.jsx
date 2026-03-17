@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiMapPin, FiTag } from "react-icons/fi";
-import { categories, cities } from "../utils/filterOptions";
+import { categories } from "../utils/filterOptions";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import FilterPopupField from "./FilterPopupField";
 import { formatDateUS } from "../utils/format";
+import useCityFilter from "../hooks/useCityFilter";
 
 function AdminFilters({ filters, onChange, onApply, onReset, canApply = true }) {
   const containerRef = useRef(null);
   const [activePanel, setActivePanel] = useState(null);
   const [cityQuery, setCityQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
+  const { cities } = useCityFilter();
 
   useEffect(() => {
     const onDocClick = (event) => {

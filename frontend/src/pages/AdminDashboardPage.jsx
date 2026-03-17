@@ -9,7 +9,7 @@ import AdminFilters from "../components/AdminFilters";
 import AdminListingsTable from "../components/AdminListingsTable";
 import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
 import FilterPopupField from "../components/FilterPopupField";
-import { categories, cities } from "../utils/filterOptions";
+import { categories } from "../utils/filterOptions";
 import {
   createTeamUser,
   deactivateTeamUser,
@@ -24,6 +24,7 @@ import {
 } from "../services/adminService";
 import { downloadBlob } from "../utils/fileDownload";
 import { formatCurrency, formatDateUS } from "../utils/format";
+import useCityFilter from "../hooks/useCityFilter";
 
 const eventHighlightOptions = [
   "Free Parking",
@@ -105,6 +106,7 @@ function parseDateValue(value) {
 }
 
 function AdminDashboardPage() {
+  const { cities } = useCityFilter();
   const [activeSection, setActiveSection] = useState("overview");
   const [stats, setStats] = useState({});
   const [rows, setRows] = useState([]);
