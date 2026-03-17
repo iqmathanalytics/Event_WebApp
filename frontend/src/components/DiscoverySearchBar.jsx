@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { FiMapPin, FiNavigation, FiSearch, FiTag } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -220,9 +220,8 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                 <p className="truncate pt-0.5 text-sm text-slate-600">{selectedCityLabel}</p>
               </button>
 
-              <AnimatePresence mode="wait">
-                {activePanel === "where" ? (
-                  createPortal(<motion.div
+              {activePanel === "where"
+                ? createPortal(<motion.div
                     key="where-panel"
                     ref={panelRef}
                     data-discovery-panel-portal="true"
@@ -293,8 +292,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                       ) : null}
                     </div>
                   </motion.div>, document.body)
-                ) : null}
-              </AnimatePresence>
+                : null}
             </div>
 
             <div className="relative min-w-0">
@@ -310,9 +308,8 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                 <p className="truncate pt-0.5 text-sm text-slate-600">{selectedDateLabel}</p>
               </button>
 
-              <AnimatePresence mode="wait">
-                {activePanel === "when" ? (
-                  createPortal(<motion.div
+              {activePanel === "when"
+                ? createPortal(<motion.div
                     key="when-panel"
                     ref={panelRef}
                     data-discovery-panel-portal="true"
@@ -333,8 +330,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                       onClose={() => setActivePanel(null)}
                     />
                   </motion.div>, document.body)
-                ) : null}
-              </AnimatePresence>
+                : null}
             </div>
 
             <div className="relative min-w-0">
@@ -353,9 +349,8 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                 <p className="truncate pt-0.5 text-sm text-slate-600">{selectedCategoryLabel}</p>
               </button>
 
-              <AnimatePresence mode="wait">
-                {activePanel === "category" ? (
-                  createPortal(<motion.div
+              {activePanel === "category"
+                ? createPortal(<motion.div
                     key="category-panel"
                     ref={panelRef}
                     data-discovery-panel-portal="true"
@@ -417,8 +412,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                       ) : null}
                     </div>
                   </motion.div>, document.body)
-                ) : null}
-              </AnimatePresence>
+                : null}
             </div>
 
             <label className="min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-2xl px-4 py-3 transition hover:bg-slate-50">
