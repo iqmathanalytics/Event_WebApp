@@ -1,5 +1,28 @@
 const byLabelAsc = (a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" });
 
+export const cities = [
+  { value: "1", label: "New York" },
+  { value: "2", label: "Los Angeles" },
+  { value: "3", label: "Miami" },
+  { value: "4", label: "Chicago" },
+  { value: "5", label: "Austin" },
+  { value: "6", label: "San Francisco" },
+  { value: "7", label: "San Diego" },
+  { value: "8", label: "Seattle" },
+  { value: "9", label: "Boston" },
+  { value: "10", label: "Dallas" },
+  { value: "11", label: "Houston" },
+  { value: "12", label: "Las Vegas" },
+  { value: "13", label: "Denver" },
+  { value: "14", label: "Atlanta" },
+  { value: "15", label: "Orlando" },
+  { value: "16", label: "Washington DC" },
+  { value: "17", label: "Phoenix" },
+  { value: "18", label: "Nashville" },
+  { value: "19", label: "San Jose" },
+  { value: "20", label: "Portland" }
+].sort(byLabelAsc);
+
 export const categories = [
   { value: "1", label: "Music" },
   { value: "2", label: "Nightlife" },

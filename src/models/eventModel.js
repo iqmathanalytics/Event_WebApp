@@ -87,7 +87,7 @@ async function createEvent(payload) {
        venue_name, venue_address, google_maps_link, organizer_id, ticket_link,
        image_url, price, duration_hours, age_limit, languages, genres, event_highlights,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
     [
       title,
       description || null,
