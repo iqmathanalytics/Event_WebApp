@@ -27,10 +27,20 @@ const analyticsSchema = z.object({
 });
 
 const updateListingStatusSchema = z.object({
-  body: z.object({
-    status: z.enum(["approved", "rejected"]),
-    note: z.string().max(500).optional()
-  }),
+  body: z
+    .object({
+      status: z.enum(["approved", "rejected"]),
+      note: z.string().max(500).optional()
+    })
+    .superRefine((value, ctx) => {
+      if (value.status === "rejected" && !String(value.note || "").trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["note"],
+          message: "Rejection reason is required"
+        });
+      }
+    }),
   query: z.object({}).passthrough(),
   params: z.object({
     type: z.enum(["events", "deals", "influencers", "services"]),
@@ -51,6 +61,23 @@ const editListingSchema = z.object({
     price_min: z.coerce.number().min(0).optional(),
     price_max: z.coerce.number().min(0).optional(),
     event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    event_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
+    schedule_type: z.enum(["single", "multiple", "range"]).optional(),
+    event_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    event_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    event_dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+    venue: z.string().max(255).optional(),
+    venue_name: z.string().max(255).optional(),
+    venue_address: z.string().max(400).optional(),
+    google_maps_link: z.string().url().max(500).optional(),
+    ticket_link: z.string().url().max(500).optional(),
+    image_url: z.string().url().max(500).optional(),
+    duration_hours: z.coerce.number().int().positive().max(168).optional(),
+    age_limit: z.string().max(50).optional(),
+    languages: z.string().max(255).optional(),
+    genres: z.string().max(255).optional(),
+    event_highlights: z.array(z.string().min(1).max(100)).optional(),
+    price_per_day: z.coerce.number().min(0).optional(),
     expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   }),
   query: z.object({}).passthrough(),

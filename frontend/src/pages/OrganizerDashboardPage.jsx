@@ -16,6 +16,7 @@ import {
   YAxis
 } from "recharts";
 import { createPortal } from "react-dom";
+import DatePicker from "react-datepicker";
 import { FiCalendar, FiClipboard, FiMapPin, FiTrendingUp, FiUsers } from "react-icons/fi";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
@@ -29,7 +30,11 @@ import OrganizerSidebar from "../components/OrganizerSidebar";
 const initialForm = {
   title: "",
   description: "",
+  schedule_type: "single",
   event_date: "",
+  event_start_date: "",
+  event_end_date: "",
+  event_dates: [],
   event_time: "",
   venue_name: "",
   venue_address: "",
@@ -102,14 +107,32 @@ function getStatusBadgeClass(status) {
   return "bg-amber-100 text-amber-700";
 }
 
-function getStatusNote(status) {
+function getStatusNote(status, reviewNote) {
   if (status === "approved") {
     return "Approved and visible to users";
   }
   if (status === "rejected") {
+    if (String(reviewNote || "").trim()) {
+      return `Rejected: ${String(reviewNote).trim()}`;
+    }
     return "Rejected by admin. Please edit and resubmit.";
   }
   return "Waiting for admin approval";
+}
+
+function formatDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateValue(value) {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function OrganizerDashboardPage() {
@@ -211,6 +234,10 @@ function OrganizerDashboardPage() {
       title: event.title || "",
       description: event.description || "",
       event_date: event.event_date ? String(event.event_date).slice(0, 10) : "",
+      schedule_type: event.schedule_type || "single",
+      event_start_date: event.event_start_date ? String(event.event_start_date).slice(0, 10) : "",
+      event_end_date: event.event_end_date ? String(event.event_end_date).slice(0, 10) : "",
+      event_dates: Array.isArray(event.event_dates) ? event.event_dates : [],
       event_time: event.event_time ? String(event.event_time).slice(0, 5) : "",
       venue_name: event.venue_name || event.venue || "",
       venue_address: event.venue_address || "",
@@ -300,8 +327,17 @@ function OrganizerDashboardPage() {
       if (!form.title.trim()) {
         throw new Error("Event title is required.");
       }
-      if (!form.event_date) {
+      if (form.schedule_type === "single" && !form.event_date) {
         throw new Error("Event date is required.");
+      }
+      if (form.schedule_type === "range" && (!form.event_start_date || !form.event_end_date)) {
+        throw new Error("Start and end dates are required for date range events.");
+      }
+      if (
+        form.schedule_type === "multiple" &&
+        !form.event_dates.length
+      ) {
+        throw new Error("Please add at least one date for multiple-date events.");
       }
       if (!form.venue_name.trim()) {
         throw new Error("Venue name is required.");
@@ -320,7 +356,11 @@ function OrganizerDashboardPage() {
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
-        event_date: form.event_date,
+        event_date: form.event_date || undefined,
+        schedule_type: form.schedule_type,
+        event_start_date: form.schedule_type === "range" ? form.event_start_date || undefined : undefined,
+        event_end_date: form.schedule_type === "range" ? form.event_end_date || undefined : undefined,
+        event_dates: form.schedule_type === "multiple" ? form.event_dates : undefined,
         event_time: form.event_time || undefined,
         venue: form.venue_name.trim(),
         venue_name: form.venue_name.trim(),
@@ -620,7 +660,7 @@ function OrganizerDashboardPage() {
                             >
                               {item.status}
                             </span>
-                            <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status)}</p>
+                            <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status, item.review_note)}</p>
                           </td>
                           <td className="px-2 py-2">
                             <div className="flex items-center gap-2">
@@ -782,20 +822,22 @@ function OrganizerDashboardPage() {
                       <th className="px-2 py-2">Email</th>
                       <th className="px-2 py-2">Phone</th>
                       <th className="px-2 py-2">Guests</th>
+                      <th className="px-2 py-2">Selected Dates</th>
+                      <th className="px-2 py-2">Total Amount</th>
                       <th className="px-2 py-2">Booking Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loadingBookingRows ? (
                       <tr>
-                        <td className="px-2 py-2 text-slate-500" colSpan={6}>
+                        <td className="px-2 py-2 text-slate-500" colSpan={8}>
                           Loading bookings...
                         </td>
                       </tr>
                     ) : null}
                     {!loadingBookingRows && bookingRows.length === 0 ? (
                       <tr>
-                        <td className="px-2 py-2 text-slate-500" colSpan={6}>
+                        <td className="px-2 py-2 text-slate-500" colSpan={8}>
                           No bookings match the selected filters.
                         </td>
                       </tr>
@@ -808,6 +850,12 @@ function OrganizerDashboardPage() {
                             <td className="px-2 py-2 text-slate-600">{item.email}</td>
                             <td className="px-2 py-2 text-slate-600">{item.phone}</td>
                             <td className="px-2 py-2 text-slate-600">{item.attendee_count}</td>
+                            <td className="px-2 py-2 text-slate-600">
+                              {Array.isArray(item.selected_dates) && item.selected_dates.length
+                                ? item.selected_dates.join(", ")
+                                : "-"}
+                            </td>
+                            <td className="px-2 py-2 text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
                             <td className="px-2 py-2 text-slate-600">{String(item.booking_date).slice(0, 10)}</td>
                           </tr>
                         ))
@@ -862,13 +910,102 @@ function OrganizerDashboardPage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
                 className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
               />
-              <input
-                type="date"
-                required
-                value={form.event_date}
-                onChange={(e) => setForm((prev) => ({ ...prev, event_date: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
+              <select
+                value={form.schedule_type}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    schedule_type: e.target.value
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+              >
+                <option value="single">Single Date Event</option>
+                <option value="multiple">Multiple Dates Event</option>
+                <option value="range">Date Range Event</option>
+              </select>
+              {form.schedule_type === "single" ? (
+                <input
+                  type="date"
+                  required
+                  value={form.event_date}
+                  onChange={(e) => setForm((prev) => ({ ...prev, event_date: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              ) : null}
+              {form.schedule_type === "multiple" ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                  <p className="text-sm font-semibold text-slate-900">Select Multiple Dates</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Click dates in the calendar to add or remove them.</p>
+                  <div className="mt-3 overflow-x-auto">
+                    <DatePicker
+                      inline
+                      selected={parseDateValue(form.event_dates[0])}
+                      onChange={(date) => {
+                        if (!date) {
+                          return;
+                        }
+                        const value = formatDateValue(date);
+                        setForm((prev) => {
+                          const exists = prev.event_dates.includes(value);
+                          const nextDates = exists
+                            ? prev.event_dates.filter((item) => item !== value)
+                            : [...prev.event_dates, value].sort();
+                          return {
+                            ...prev,
+                            event_dates: nextDates
+                          };
+                        });
+                      }}
+                      minDate={new Date()}
+                      monthsShown={2}
+                      dayClassName={(date) =>
+                        form.event_dates.includes(formatDateValue(date)) ? "multi-selected-day" : undefined
+                      }
+                      calendarClassName="airbnb-calendar"
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {form.event_dates.length ? (
+                      form.event_dates.map((dateItem) => (
+                        <button
+                          key={dateItem}
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              event_dates: prev.event_dates.filter((item) => item !== dateItem)
+                            }))
+                          }
+                          className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                        >
+                          {dateItem} ×
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-500">No dates selected yet.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+              {form.schedule_type === "range" ? (
+                <>
+                  <input
+                    type="date"
+                    required
+                    value={form.event_start_date}
+                    onChange={(e) => setForm((prev) => ({ ...prev, event_start_date: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                  <input
+                    type="date"
+                    required
+                    value={form.event_end_date}
+                    onChange={(e) => setForm((prev) => ({ ...prev, event_end_date: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                </>
+              ) : null}
               <input
                 type="time"
                 value={form.event_time}

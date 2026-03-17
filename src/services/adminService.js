@@ -195,7 +195,31 @@ async function updateListingStatus({ type, id, status, note, adminId }) {
 
 function resolveEditableColumns(type) {
   const mapping = {
-    events: ["title", "description", "city_id", "category_id", "price", "event_date"],
+    events: [
+      "title",
+      "description",
+      "city_id",
+      "category_id",
+      "price",
+      "event_date",
+      "event_time",
+      "schedule_type",
+      "event_start_date",
+      "event_end_date",
+      "event_dates",
+      "venue",
+      "venue_name",
+      "venue_address",
+      "google_maps_link",
+      "ticket_link",
+      "image_url",
+      "duration_hours",
+      "age_limit",
+      "languages",
+      "genres",
+      "event_highlights",
+      "price_per_day"
+    ],
     deals: ["title", "description", "city_id", "category_id", "original_price", "discounted_price", "expiry_date"],
     influencers: ["name", "bio", "city_id", "category_id"],
     services: ["title", "description", "city_id", "category_id", "price_min", "price_max"]
@@ -214,8 +238,23 @@ async function editListing({ type, id, payload }) {
     throw new ApiError(400, "No editable fields provided");
   }
 
-  const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
-  const values = entries.map(([, value]) => value);
+  const mappedEntries = entries.map(([key, value]) => {
+    if (table === "events") {
+      if (key === "event_dates" && Array.isArray(value)) {
+        return ["event_dates_json", JSON.stringify(value)];
+      }
+      if (key === "event_highlights" && Array.isArray(value)) {
+        return ["event_highlights", JSON.stringify(value)];
+      }
+      if (key === "price_per_day") {
+        return ["price", value];
+      }
+    }
+    return [key, value];
+  });
+
+  const setClause = mappedEntries.map(([key]) => `${key} = ?`).join(", ");
+  const values = mappedEntries.map(([, value]) => value);
 
   const [result] = await pool.query(
     `UPDATE ${table}

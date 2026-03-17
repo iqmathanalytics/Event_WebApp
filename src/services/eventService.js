@@ -12,11 +12,50 @@ const {
 } = require("../models/eventModel");
 const { getPagination } = require("../utils/pagination");
 const { getMonthRange } = require("../utils/dateRange");
+const { getPrimaryEventDate, normalizeDateList, parseDateOnly } = require("../utils/eventSchedule");
+
+function normalizeEventSchedulePayload(payload) {
+  const scheduleType = payload.schedule_type || "single";
+  if (scheduleType === "multiple") {
+    const eventDates = normalizeDateList(payload.event_dates || []);
+    const primaryDate = eventDates[0] || parseDateOnly(payload.event_date);
+    return {
+      ...payload,
+      schedule_type: "multiple",
+      event_dates: eventDates,
+      event_date: primaryDate,
+      event_start_date: null,
+      event_end_date: null
+    };
+  }
+  if (scheduleType === "range") {
+    const startDate = parseDateOnly(payload.event_start_date) || parseDateOnly(payload.event_date);
+    const endDate = parseDateOnly(payload.event_end_date) || startDate;
+    return {
+      ...payload,
+      schedule_type: "range",
+      event_date: startDate,
+      event_start_date: startDate,
+      event_end_date: endDate,
+      event_dates: []
+    };
+  }
+  const singleDate = parseDateOnly(payload.event_date);
+  return {
+    ...payload,
+    schedule_type: "single",
+    event_date: singleDate,
+    event_start_date: null,
+    event_end_date: null,
+    event_dates: []
+  };
+}
 
 async function submitEvent(payload, organizerId) {
+  const normalizedPayload = normalizeEventSchedulePayload(payload);
   let eventId;
   try {
-    eventId = await createEvent({ ...payload, organizer_id: organizerId });
+    eventId = await createEvent({ ...normalizedPayload, organizer_id: organizerId });
   } catch (err) {
     if (err?.code === "ER_NO_REFERENCED_ROW_2") {
       throw new ApiError(400, "Selected city or category is invalid. Please reselect and try again.");
@@ -105,7 +144,10 @@ async function fetchEventById(eventId) {
   if (!event) {
     throw new ApiError(404, "Event not found");
   }
-  return event;
+  return {
+    ...event,
+    display_date: getPrimaryEventDate(event)
+  };
 }
 
 async function fetchMySubmissions(userId) {
@@ -124,7 +166,7 @@ async function editOwnEvent(eventId, organizerId, payload) {
   const updated = await updateEventByOrganizer({
     eventId,
     organizerId,
-    updates: payload
+    updates: normalizeEventSchedulePayload(payload)
   });
   if (!updated) {
     throw new ApiError(400, "No valid fields provided for update");

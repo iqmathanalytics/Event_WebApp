@@ -97,6 +97,12 @@ body {
   color: white !important;
 }
 
+.react-datepicker__day.multi-selected-day {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border-radius: 9999px !important;
+}
+
 @keyframes heroZoomIn {
   from {
     transform: scale(1);

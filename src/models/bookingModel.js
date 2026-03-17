@@ -9,14 +9,29 @@ async function createBooking(payload) {
     email,
     phone,
     attendee_count,
-    booking_date
+    booking_date,
+    selected_dates_json,
+    total_days,
+    total_amount
   } = payload;
 
   const [result] = await pool.query(
     `INSERT INTO event_bookings
-      (event_id, organizer_id, user_id, name, email, phone, attendee_count, booking_date, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [event_id, organizer_id, user_id, name, email, phone, attendee_count, booking_date]
+      (event_id, organizer_id, user_id, name, email, phone, attendee_count, booking_date, selected_dates_json, total_days, total_amount, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+    [
+      event_id,
+      organizer_id,
+      user_id,
+      name,
+      email,
+      phone,
+      attendee_count,
+      booking_date,
+      selected_dates_json,
+      total_days,
+      total_amount
+    ]
   );
 
   return result.insertId;
@@ -44,6 +59,9 @@ async function listBookingsByOrganizer({ organizerId, eventId, date }) {
             eb.phone,
             eb.attendee_count,
             eb.booking_date,
+            eb.selected_dates_json,
+            eb.total_days,
+            eb.total_amount,
             eb.created_at,
             e.title AS event_title,
             e.city_id,
@@ -90,6 +108,9 @@ async function listBookingsForAdmin({ eventId, organizerId, cityId, date }) {
             eb.phone,
             eb.attendee_count,
             eb.booking_date,
+            eb.selected_dates_json,
+            eb.total_days,
+            eb.total_amount,
             eb.created_at,
             e.title AS event_title,
             e.city_id,
@@ -121,6 +142,9 @@ async function listBookingsByUser({ userId }) {
             e.price,
             eb.attendee_count,
             eb.booking_date,
+            eb.selected_dates_json,
+            eb.total_days,
+            eb.total_amount,
             org.name AS organizer_name,
             e.google_maps_link
      FROM event_bookings eb

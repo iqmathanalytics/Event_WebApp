@@ -5,6 +5,7 @@ const createBookingSchema = z.object({
     event_id: z.coerce.number().int().positive(),
     attendee_count: z.coerce.number().int().min(1).max(50),
     booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    selected_dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(366).optional(),
     name: z.string().trim().min(2).max(120).optional(),
     email: z.string().trim().email().optional(),
     phone: z

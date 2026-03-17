@@ -204,10 +204,21 @@ function UserDashboardPage() {
                       Guests: <span className="font-semibold">{booking.attendee_count}</span>
                     </p>
                     <p>
+                      Days: <span className="font-semibold">{booking.total_days || 1}</span>
+                    </p>
+                    <p>
+                      Selected Dates:{" "}
+                      <span className="font-semibold">
+                        {Array.isArray(booking.selected_dates) && booking.selected_dates.length
+                          ? booking.selected_dates.map((d) => formatReadableDate(d)).join(", ")
+                          : formatReadableDate(booking.booking_date)}
+                      </span>
+                    </p>
+                    <p>
                       Booked On: <span className="font-semibold">{formatReadableDate(booking.booking_date)}</span>
                     </p>
                     <p>
-                      Price: <span className="font-semibold">{formatCurrency(booking.price || 0)}</span>
+                      Total: <span className="font-semibold">{formatCurrency(booking.total_amount || booking.price || 0)}</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2 pt-1">

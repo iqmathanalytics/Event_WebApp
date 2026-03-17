@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { normalizeDateList } = require("../utils/eventSchedule");
 
 function parseHighlights(value) {
   if (!value) {
@@ -24,7 +25,23 @@ function normalizeEventRow(row) {
   }
   return {
     ...row,
-    event_highlights: parseHighlights(row.event_highlights)
+    event_highlights: parseHighlights(row.event_highlights),
+    event_dates: normalizeDateList(
+      (() => {
+        if (!row.event_dates_json) {
+          return [];
+        }
+        try {
+          const parsed = JSON.parse(row.event_dates_json);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_err) {
+          return String(row.event_dates_json)
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+        }
+      })()
+    )
   };
 }
 
@@ -33,6 +50,10 @@ async function createEvent(payload) {
     title,
     description,
     event_date,
+    schedule_type,
+    event_start_date,
+    event_end_date,
+    event_dates,
     event_time,
     venue,
     venue_name,
@@ -48,24 +69,33 @@ async function createEvent(payload) {
     age_limit,
     languages,
     genres,
-    event_highlights
+    event_highlights,
+    price_per_day
   } = payload;
 
   const highlightsValue = Array.isArray(event_highlights)
     ? JSON.stringify(event_highlights)
     : event_highlights || null;
+  const normalizedEventDates = normalizeDateList(event_dates || []);
+  const eventDatesValue = normalizedEventDates.length ? JSON.stringify(normalizedEventDates) : null;
+  const scheduleType = schedule_type || "single";
+  const perDayPrice = price_per_day !== undefined ? price_per_day : price;
 
   const [result] = await pool.query(
     `INSERT INTO events
-      (title, description, event_date, event_time, venue, city_id, category_id,
+      (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
        venue_name, venue_address, google_maps_link, organizer_id, ticket_link,
        image_url, price, duration_hours, age_limit, languages, genres, event_highlights,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
     [
       title,
       description || null,
       event_date,
+      scheduleType,
+      event_start_date || null,
+      event_end_date || null,
+      eventDatesValue,
       event_time || null,
       venue,
       city_id,
@@ -76,7 +106,7 @@ async function createEvent(payload) {
       organizer_id,
       ticket_link || null,
       image_url || null,
-      price || 0,
+      perDayPrice || 0,
       duration_hours || null,
       age_limit || null,
       languages || null,
@@ -135,6 +165,10 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "title",
     "description",
     "event_date",
+    "schedule_type",
+    "event_start_date",
+    "event_end_date",
+    "event_dates",
     "event_time",
     "venue",
     "venue_name",
@@ -145,6 +179,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "ticket_link",
     "image_url",
     "price",
+    "price_per_day",
     "duration_hours",
     "age_limit",
     "languages",
@@ -152,14 +187,20 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "event_highlights"
   ];
 
-  const entries = Object.entries(updates).filter(
-    ([key, value]) => allowed.includes(key) && value !== undefined
-  ).map(([key, value]) => {
-    if (key === "event_highlights" && Array.isArray(value)) {
-      return [key, JSON.stringify(value)];
-    }
-    return [key, value];
-  });
+  const entries = Object.entries(updates)
+    .filter(([key, value]) => allowed.includes(key) && value !== undefined)
+    .map(([key, value]) => {
+      if (key === "event_highlights" && Array.isArray(value)) {
+        return [key, JSON.stringify(value)];
+      }
+      if (key === "event_dates" && Array.isArray(value)) {
+        return ["event_dates_json", JSON.stringify(normalizeDateList(value))];
+      }
+      if (key === "price_per_day") {
+        return ["price", value];
+      }
+      return [key, value];
+    });
 
   if (!entries.length) {
     return false;
@@ -207,15 +248,16 @@ async function listEvents({ filters, pagination }) {
     whereValues.push(`%${filters.q}%`, `%${filters.q}%`);
   }
   if (filters.date) {
-    conditions.push("e.event_date = ?");
-    whereValues.push(filters.date);
+    conditions.push(
+      `(
+        (e.schedule_type = 'range' AND e.event_start_date <= ? AND e.event_end_date >= ?)
+        OR (e.schedule_type = 'multiple' AND JSON_CONTAINS(COALESCE(e.event_dates_json, '[]'), JSON_QUOTE(?)))
+        OR ((e.schedule_type = 'single' OR e.schedule_type IS NULL) AND e.event_date = ?)
+      )`
+    );
+    whereValues.push(filters.date, filters.date, filters.date, filters.date);
   }
-  if (filters.time && filters.date) {
-    conditions.pop();
-    whereValues.pop();
-    conditions.push("(e.event_date > ? OR (e.event_date = ? AND COALESCE(e.event_time, '00:00:00') >= ?))");
-    whereValues.push(filters.date, filters.date, filters.time.length === 5 ? `${filters.time}:00` : filters.time);
-  } else if (filters.time) {
+  if (filters.time) {
     conditions.push("COALESCE(e.event_time, '00:00:00') >= ?");
     whereValues.push(filters.time.length === 5 ? `${filters.time}:00` : filters.time);
   }

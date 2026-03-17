@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { createPortal } from "react-dom";
+import DatePicker from "react-datepicker";
 import { FiCalendar, FiMapPin, FiUsers } from "react-icons/fi";
 import AdminSidebar from "../components/AdminSidebar";
 import AnalyticsCards from "../components/AnalyticsCards";
@@ -21,6 +23,86 @@ import {
   updateAdminListingStatus
 } from "../services/adminService";
 import { downloadBlob } from "../utils/fileDownload";
+import { formatCurrency } from "../utils/format";
+
+const eventHighlightOptions = [
+  "Free Parking",
+  "Food & Drinks",
+  "Live Music",
+  "Wheelchair Accessible",
+  "Family Friendly",
+  "Outdoor Event",
+  "Photography Allowed",
+  "After Party"
+];
+
+function parseHighlights(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_err) {
+    return String(value)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+}
+
+function parseEventDates(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).slice(0, 10)).filter(Boolean);
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item).slice(0, 10)).filter(Boolean) : [];
+  } catch (_err) {
+    return [];
+  }
+}
+
+function hasDisplayValue(value) {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (value === null || value === undefined) {
+    return false;
+  }
+  return String(value).trim() !== "";
+}
+
+function getScheduleTypeLabel(scheduleType) {
+  if (scheduleType === "multiple") {
+    return "Multiple Dates Event";
+  }
+  if (scheduleType === "range") {
+    return "Date Range Event";
+  }
+  return "Single Date Event";
+}
+
+function formatDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateValue(value) {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 function AdminDashboardPage() {
   const [activeSection, setActiveSection] = useState("overview");
@@ -55,6 +137,16 @@ function AdminDashboardPage() {
   const [editForm, setEditForm] = useState({});
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [reviewListing, setReviewListing] = useState(null);
+  const [reviewForm, setReviewForm] = useState({});
+  const [reviewEditing, setReviewEditing] = useState(false);
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [rejectListing, setRejectListing] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectSaving, setRejectSaving] = useState(false);
+  const [rejectError, setRejectError] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");
   const [bookingRows, setBookingRows] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [bookingFilters, setBookingFilters] = useState({
@@ -84,6 +176,17 @@ function AdminDashboardPage() {
     window.addEventListener("click", onDocClick);
     return () => window.removeEventListener("click", onDocClick);
   }, []);
+
+  useEffect(() => {
+    if (!reviewListing && !editingListing) {
+      return undefined;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [reviewListing, editingListing]);
 
   const listingType = useMemo(
     () => (["overview", "team"].includes(activeSection) ? "events" : activeSection),
@@ -170,26 +273,130 @@ function AdminDashboardPage() {
     setAppliedFilters(reset);
   };
 
-  const handleApprove = async (item) => {
-    await updateAdminListingStatus({
-      type: "events",
-      id: item.id,
-      status: "approved"
+  const buildEventReviewForm = (item) => ({
+    title: item.title || "",
+    description: item.description || "",
+    city_id: item.city_id ? String(item.city_id) : "",
+    category_id: item.category_id ? String(item.category_id) : "",
+    event_date: item.event_date ? String(item.event_date).slice(0, 10) : "",
+    event_start_date: item.event_start_date ? String(item.event_start_date).slice(0, 10) : "",
+    event_end_date: item.event_end_date ? String(item.event_end_date).slice(0, 10) : "",
+    event_dates: parseEventDates(item.event_dates || item.event_dates_json),
+    event_time: item.event_time ? String(item.event_time).slice(0, 5) : "",
+    venue_name: item.venue_name || item.venue || "",
+    venue: item.venue || item.venue_name || "",
+    venue_address: item.venue_address || "",
+    google_maps_link: item.google_maps_link || "",
+    ticket_link: item.ticket_link || "",
+    image_url: item.image_url || "",
+    price: item.price ?? "",
+    duration_hours: item.duration_hours ?? "",
+    age_limit: item.age_limit || "All Ages",
+    languages: item.languages || "",
+    genres: item.genres || "",
+    schedule_type: item.schedule_type || "single",
+    event_highlights: parseHighlights(item.event_highlights)
+  });
+
+  const buildEventPayloadFromForm = (formValues) => {
+    const payload = {};
+    Object.entries(formValues).forEach(([key, value]) => {
+      if (value === "" || value === null || value === undefined) {
+        return;
+      }
+      if (["city_id", "category_id", "price", "duration_hours"].includes(key)) {
+        payload[key] = Number(value);
+        return;
+      }
+      if (key === "event_highlights" && Array.isArray(value)) {
+        payload[key] = value;
+        return;
+      }
+      if (key === "event_dates" && Array.isArray(value)) {
+        payload[key] = value;
+        return;
+      }
+      payload[key] = typeof value === "string" ? value.trim() : value;
     });
-    await loadListings();
-    await loadAnalytics();
+    if (payload.venue_name && !payload.venue) {
+      payload.venue = payload.venue_name;
+    }
+    return payload;
+  };
+
+  const reviewDisplayItems = useMemo(() => {
+    if (!reviewListing) {
+      return [];
+    }
+
+    const items = [];
+    const pushText = (label, value) => {
+      if (hasDisplayValue(value)) {
+        items.push({ label, value: String(value), type: "text" });
+      }
+    };
+    const pushLink = (label, href, text) => {
+      if (hasDisplayValue(href)) {
+        items.push({ label, href: String(href), value: text, type: "link" });
+      }
+    };
+
+    pushText("Title", reviewForm.title);
+    pushText("Description", reviewForm.description);
+    pushText("Schedule Type", getScheduleTypeLabel(reviewForm.schedule_type));
+    pushText("Time", reviewForm.event_time);
+
+    if ((reviewForm.schedule_type || "single") === "single") {
+      pushText("Event Date", reviewForm.event_date);
+    } else if ((reviewForm.schedule_type || "single") === "multiple") {
+      if (Array.isArray(reviewForm.event_dates) && reviewForm.event_dates.length) {
+        pushText("Selected Dates", reviewForm.event_dates.join(", "));
+      }
+    } else if ((reviewForm.schedule_type || "single") === "range") {
+      const hasStart = hasDisplayValue(reviewForm.event_start_date);
+      const hasEnd = hasDisplayValue(reviewForm.event_end_date);
+      if (hasStart || hasEnd) {
+        pushText(
+          "Date Range",
+          `${hasStart ? reviewForm.event_start_date : "Not provided"} to ${hasEnd ? reviewForm.event_end_date : "Not provided"}`
+        );
+      }
+    }
+
+    pushText("City", cities.find((city) => city.value === reviewForm.city_id)?.label);
+    pushText("Category", categories.find((cat) => cat.value === reviewForm.category_id)?.label);
+    pushText("Venue", reviewForm.venue_name);
+    pushText("Venue Address", reviewForm.venue_address);
+    if (hasDisplayValue(reviewForm.price)) {
+      pushText("Price", formatCurrency(Number(reviewForm.price || 0)));
+    }
+    if (hasDisplayValue(reviewForm.duration_hours)) {
+      pushText("Duration", `${reviewForm.duration_hours} hour(s)`);
+    }
+    pushText("Age Limit", reviewForm.age_limit);
+    pushText("Languages", reviewForm.languages);
+    pushText("Genres", reviewForm.genres);
+    if (Array.isArray(reviewForm.event_highlights) && reviewForm.event_highlights.length) {
+      pushText("Event Highlights", reviewForm.event_highlights.join(", "));
+    }
+    pushLink("Google Maps", reviewForm.google_maps_link, "Open Map");
+    pushLink("Ticket Link", reviewForm.ticket_link, "Open Ticket Page");
+    pushLink("Image", reviewForm.image_url, "View Image");
+
+    return items;
+  }, [reviewListing, reviewForm]);
+
+  const handleApprove = async (item) => {
+    setReviewListing(item);
+    setReviewForm(buildEventReviewForm(item));
+    setReviewEditing(false);
+    setReviewError("");
   };
 
   const handleReject = async (item) => {
-    const note = window.prompt("Rejection note (optional):") || "";
-    await updateAdminListingStatus({
-      type: "events",
-      id: item.id,
-      status: "rejected",
-      note
-    });
-    await loadListings();
-    await loadAnalytics();
+    setRejectListing(item);
+    setRejectReason("");
+    setRejectError("");
   };
 
   const handleDelete = async (item) => {
@@ -206,14 +413,7 @@ function AdminDashboardPage() {
     setEditError("");
     setEditingListing(item);
     if (listingType === "events") {
-      setEditForm({
-        title: item.title || "",
-        description: item.description || "",
-        city_id: item.city_id ? String(item.city_id) : "",
-        category_id: item.category_id ? String(item.category_id) : "",
-        price: item.price ?? "",
-        event_date: item.event_date ? String(item.event_date).slice(0, 10) : ""
-      });
+      setEditForm(buildEventReviewForm(item));
       return;
     }
     if (listingType === "deals") {
@@ -253,6 +453,63 @@ function AdminDashboardPage() {
     setEditError("");
   };
 
+  const closeReviewModal = () => {
+    setReviewListing(null);
+    setReviewForm({});
+    setReviewEditing(false);
+    setReviewSaving(false);
+    setReviewError("");
+    setRejectListing(null);
+    setRejectReason("");
+    setRejectSaving(false);
+    setRejectError("");
+  };
+
+  const closeRejectModal = () => {
+    setRejectListing(null);
+    setRejectReason("");
+    setRejectSaving(false);
+    setRejectError("");
+  };
+
+  const submitReject = async () => {
+    if (!rejectListing) {
+      return;
+    }
+    if (!rejectReason.trim()) {
+      setRejectError("Please enter a rejection reason.");
+      return;
+    }
+    setRejectError("");
+    try {
+      setRejectSaving(true);
+      await updateAdminListingStatus({
+        type: "events",
+        id: rejectListing.id,
+        status: "rejected",
+        note: rejectReason.trim()
+      });
+      closeRejectModal();
+      if (reviewListing && Number(reviewListing.id) === Number(rejectListing.id)) {
+        closeReviewModal();
+      }
+      await loadListings();
+      await loadAnalytics();
+      setAdminMessage("Event rejected with reason.");
+      window.setTimeout(() => setAdminMessage(""), 3000);
+    } catch (err) {
+      const apiMessage = err?.response?.data?.message;
+      const details = err?.response?.data?.details;
+      if (Array.isArray(details) && details.length) {
+        setRejectError(details.map((item) => item.message).join(" | "));
+      } else {
+        setRejectError(apiMessage || "Could not reject event. Please try again.");
+      }
+    } finally {
+      setRejectSaving(false);
+    }
+  };
+
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingListing) {
@@ -262,22 +519,26 @@ function AdminDashboardPage() {
     setEditError("");
     try {
       setEditSaving(true);
-      const payload = {};
-      Object.entries(editForm).forEach(([key, value]) => {
-        if (value === "" || value === null || value === undefined) {
-          return;
+      let payload = {};
+      if (listingType === "events") {
+        payload = buildEventPayloadFromForm(editForm);
+      } else {
+        Object.entries(editForm).forEach(([key, value]) => {
+          if (value === "" || value === null || value === undefined) {
+            return;
+          }
+          if (["city_id", "category_id", "price", "original_price", "discounted_price", "price_min", "price_max"].includes(key)) {
+            payload[key] = Number(value);
+          } else if (key === "description" && listingType === "influencers") {
+            payload.bio = value;
+          } else {
+            payload[key] = typeof value === "string" ? value.trim() : value;
+          }
+        });
+        delete payload.description;
+        if (listingType !== "influencers" && editForm.description?.trim()) {
+          payload.description = editForm.description.trim();
         }
-        if (["city_id", "category_id", "price", "original_price", "discounted_price", "price_min", "price_max"].includes(key)) {
-          payload[key] = Number(value);
-        } else if (key === "description" && listingType === "influencers") {
-          payload.bio = value;
-        } else {
-          payload[key] = typeof value === "string" ? value.trim() : value;
-        }
-      });
-      delete payload.description;
-      if (listingType !== "influencers" && editForm.description?.trim()) {
-        payload.description = editForm.description.trim();
       }
 
       await editAdminListing({ type: listingType, id: editingListing.id, payload });
@@ -288,6 +549,36 @@ function AdminDashboardPage() {
       setEditError(apiMessage || "Could not update listing. Please check input values.");
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const handleApproveEventFromReview = async () => {
+    if (!reviewListing) {
+      return;
+    }
+    setReviewError("");
+    try {
+      setReviewSaving(true);
+      if (reviewEditing) {
+        const payload = buildEventPayloadFromForm(reviewForm);
+        await editAdminListing({ type: "events", id: reviewListing.id, payload });
+      }
+
+      await updateAdminListingStatus({
+        type: "events",
+        id: reviewListing.id,
+        status: "approved"
+      });
+      closeReviewModal();
+      await loadListings();
+      await loadAnalytics();
+      setAdminMessage("Approved successfully.");
+      window.setTimeout(() => setAdminMessage(""), 3000);
+    } catch (err) {
+      const apiMessage = err?.response?.data?.message;
+      setReviewError(apiMessage || "Could not approve event. Please verify details and try again.");
+    } finally {
+      setReviewSaving(false);
     }
   };
 
@@ -646,20 +937,22 @@ function AdminDashboardPage() {
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Attendee Count</th>
+                    <th className="px-4 py-3">Selected Dates</th>
+                    <th className="px-4 py-3">Total Amount</th>
                     <th className="px-4 py-3">Booking Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingBookings ? (
                     <tr>
-                      <td className="px-4 py-3 text-slate-500" colSpan={6}>
+                      <td className="px-4 py-3 text-slate-500" colSpan={8}>
                         Loading bookings...
                       </td>
                     </tr>
                   ) : null}
                   {!loadingBookings && bookingRows.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-3 text-slate-500" colSpan={6}>
+                      <td className="px-4 py-3 text-slate-500" colSpan={8}>
                         No bookings match the selected filters.
                       </td>
                     </tr>
@@ -672,6 +965,12 @@ function AdminDashboardPage() {
                           <td className="px-4 py-3 text-slate-600">{item.email}</td>
                           <td className="px-4 py-3 text-slate-600">{item.phone}</td>
                           <td className="px-4 py-3 text-slate-600">{item.attendee_count}</td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {Array.isArray(item.selected_dates) && item.selected_dates.length
+                              ? item.selected_dates.join(", ")
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
                           <td className="px-4 py-3 text-slate-600">{String(item.booking_date).slice(0, 10)}</td>
                         </tr>
                       ))
@@ -825,17 +1124,24 @@ function AdminDashboardPage() {
         )}
       </section>
 
-      {editingListing ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="hide-scrollbar max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Edit {listingType.slice(0, -1)}</h3>
-              <button type="button" onClick={closeEditModal} className="text-sm font-semibold text-slate-500">
-                Close
-              </button>
+      {editingListing
+        ? createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-3 sm:p-6">
+          <form
+            onSubmit={handleSaveEdit}
+            className="flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[min(88dvh,780px)]"
+          >
+            <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Edit {listingType.slice(0, -1)}</h3>
+                <button type="button" onClick={closeEditModal} className="text-sm font-semibold text-slate-500">
+                  Close
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="hide-scrollbar flex-1 overflow-y-auto overscroll-contain scroll-smooth px-5 py-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {listingType === "influencers" ? (
                 <input
                   required
@@ -890,6 +1196,107 @@ function AdminDashboardPage() {
 
               {listingType === "events" ? (
                 <>
+                  <select
+                    value={editForm.schedule_type || "single"}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, schedule_type: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  >
+                    <option value="single">Single Date Event</option>
+                    <option value="multiple">Multiple Dates Event</option>
+                    <option value="range">Date Range Event</option>
+                  </select>
+                  {(editForm.schedule_type || "single") === "single" ? (
+                    <input
+                      type="date"
+                      value={editForm.event_date || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, event_date: e.target.value }))}
+                      className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  ) : null}
+                  {(editForm.schedule_type || "single") === "range" ? (
+                    <>
+                      <input
+                        type="date"
+                        value={editForm.event_start_date || ""}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, event_start_date: e.target.value }))}
+                        className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      />
+                      <input
+                        type="date"
+                        value={editForm.event_end_date || ""}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, event_end_date: e.target.value }))}
+                        className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      />
+                    </>
+                  ) : null}
+                  {(editForm.schedule_type || "single") === "multiple" ? (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                      <p className="text-sm font-semibold text-slate-900">Select Multiple Dates</p>
+                      <p className="mt-0.5 text-xs text-slate-500">Click dates in the calendar to add or remove them.</p>
+                      <div className="mt-3 overflow-x-auto">
+                        <DatePicker
+                          inline
+                          selected={parseDateValue(editForm.event_dates?.[0])}
+                          onChange={(date) => {
+                            if (!date) {
+                              return;
+                            }
+                            const value = formatDateValue(date);
+                            setEditForm((prev) => {
+                              const currentDates = Array.isArray(prev.event_dates) ? prev.event_dates : [];
+                              const exists = currentDates.includes(value);
+                              const nextDates = exists
+                                ? currentDates.filter((item) => item !== value)
+                                : [...currentDates, value].sort();
+                              return {
+                                ...prev,
+                                event_dates: nextDates
+                              };
+                            });
+                          }}
+                          minDate={new Date()}
+                          monthsShown={2}
+                          dayClassName={(date) =>
+                            (Array.isArray(editForm.event_dates) ? editForm.event_dates : []).includes(
+                              formatDateValue(date)
+                            )
+                              ? "multi-selected-day"
+                              : undefined
+                          }
+                          calendarClassName="airbnb-calendar"
+                        />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {Array.isArray(editForm.event_dates) && editForm.event_dates.length ? (
+                          editForm.event_dates.map((dateItem) => (
+                            <button
+                              key={dateItem}
+                              type="button"
+                              onClick={() =>
+                                setEditForm((prev) => ({
+                                  ...prev,
+                                  event_dates: (Array.isArray(prev.event_dates) ? prev.event_dates : []).filter(
+                                    (item) => item !== dateItem
+                                  )
+                                }))
+                              }
+                              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                            >
+                              {dateItem} ×
+                            </button>
+                          ))
+                        ) : (
+                          <p className="text-xs text-slate-500">No dates selected yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                  <input
+                    type="time"
+                    value={editForm.event_time || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, event_time: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
                   <input
                     type="number"
                     min="0"
@@ -900,11 +1307,99 @@ function AdminDashboardPage() {
                     className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                   <input
-                    type="date"
-                    value={editForm.event_date || ""}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, event_date: e.target.value }))}
+                    type="number"
+                    min="1"
+                    max="168"
+                    placeholder="Duration (Hours)"
+                    value={editForm.duration_hours || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
                     className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
+                  <select
+                    value={editForm.age_limit || "All Ages"}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, age_limit: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  >
+                    <option value="All Ages">All Ages</option>
+                    <option value="5 yrs +">5 yrs +</option>
+                    <option value="12 yrs +">12 yrs +</option>
+                    <option value="18 yrs +">18 yrs +</option>
+                  </select>
+                  <input
+                    placeholder="Languages (comma separated)"
+                    value={editForm.languages || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, languages: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  />
+                  <input
+                    placeholder="Genres (comma separated)"
+                    value={editForm.genres || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, genres: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  />
+                  <input
+                    placeholder="Venue Name"
+                    value={editForm.venue_name || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, venue_name: e.target.value, venue: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  />
+                  <input
+                    placeholder="Venue Address"
+                    value={editForm.venue_address || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, venue_address: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  />
+                  <input
+                    placeholder="Google Maps Link"
+                    value={editForm.google_maps_link || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, google_maps_link: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  />
+                  <input
+                    placeholder="Ticket Link"
+                    value={editForm.ticket_link || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                  <input
+                    placeholder="Image URL"
+                    value={editForm.image_url || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, image_url: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                    <p className="text-sm font-semibold text-slate-900">Event Highlights</p>
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {eventHighlightOptions.map((option) => {
+                        const selected = Array.isArray(editForm.event_highlights)
+                          ? editForm.event_highlights.includes(option)
+                          : false;
+                        return (
+                          <label
+                            key={option}
+                            className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={(e) =>
+                                setEditForm((prev) => ({
+                                  ...prev,
+                                  event_highlights: e.target.checked
+                                    ? [...(Array.isArray(prev.event_highlights) ? prev.event_highlights : []), option]
+                                    : (Array.isArray(prev.event_highlights) ? prev.event_highlights : []).filter(
+                                        (item) => item !== option
+                                      )
+                                }))
+                              }
+                              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                            />
+                            <span>{option}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </>
               ) : null}
 
@@ -960,30 +1455,411 @@ function AdminDashboardPage() {
                 </>
               ) : null}
 
-              {editError ? (
-                <p className="text-sm font-medium text-rose-600 sm:col-span-2">{editError}</p>
-              ) : null}
-
-              <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={editSaving}
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  {editSaving ? "Saving..." : "Save Changes"}
-                </button>
               </div>
-            </form>
+            </div>
+            <div className="shrink-0 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/90">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                {editError ? <p className="text-sm font-medium text-rose-600">{editError}</p> : <span />}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeEditModal}
+                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editSaving}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {editSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>,
+        document.body
+          )
+        : null}
+
+      {reviewListing
+        ? createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-3 sm:p-6">
+          <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[min(88dvh,820px)]">
+            <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4">
+              <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Review Event Submission</h3>
+                <p className="text-sm text-slate-500">
+                  Review details, optionally edit, then approve this event listing.
+                </p>
+              </div>
+              <button type="button" onClick={closeReviewModal} className="text-sm font-semibold text-slate-500">
+                Close
+              </button>
+              </div>
+            </div>
+
+            <div className="hide-scrollbar flex-1 overflow-y-auto overscroll-contain scroll-smooth px-5 py-4 pb-6">
+              {!reviewEditing ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  {reviewDisplayItems.length ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {reviewDisplayItems.map((item) => (
+                        <div key={`${item.label}-${item.value}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                          {item.type === "link" ? (
+                            <a
+                              href={item.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-flex text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                            >
+                              {item.value}
+                            </a>
+                          ) : (
+                            <p className="mt-1 text-sm text-slate-700">{item.value}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-600">No event details were provided by the organizer.</p>
+                  )}
+                </div>
+              ) : (
+                <form className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <input
+                  value={reviewForm.title || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, title: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  placeholder="Title"
+                />
+                <textarea
+                  rows={3}
+                  value={reviewForm.description || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  placeholder="Description"
+                />
+                <select
+                  value={reviewForm.schedule_type || "single"}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, schedule_type: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                >
+                  <option value="single">Single Date Event</option>
+                  <option value="multiple">Multiple Dates Event</option>
+                  <option value="range">Date Range Event</option>
+                </select>
+                {(reviewForm.schedule_type || "single") === "single" ? (
+                  <input
+                    type="date"
+                    value={reviewForm.event_date || ""}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, event_date: e.target.value }))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                ) : null}
+                {(reviewForm.schedule_type || "single") === "range" ? (
+                  <>
+                    <input
+                      type="date"
+                      value={reviewForm.event_start_date || ""}
+                      onChange={(e) => setReviewForm((prev) => ({ ...prev, event_start_date: e.target.value }))}
+                      className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                    <input
+                      type="date"
+                      value={reviewForm.event_end_date || ""}
+                      onChange={(e) => setReviewForm((prev) => ({ ...prev, event_end_date: e.target.value }))}
+                      className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </>
+                ) : null}
+                {(reviewForm.schedule_type || "single") === "multiple" ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                    <p className="text-sm font-semibold text-slate-900">Select Multiple Dates</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Click dates in the calendar to add or remove them.</p>
+                    <div className="mt-3 overflow-x-auto">
+                      <DatePicker
+                        inline
+                        selected={parseDateValue(reviewForm.event_dates?.[0])}
+                        onChange={(date) => {
+                          if (!date) {
+                            return;
+                          }
+                          const value = formatDateValue(date);
+                          setReviewForm((prev) => {
+                            const currentDates = Array.isArray(prev.event_dates) ? prev.event_dates : [];
+                            const exists = currentDates.includes(value);
+                            const nextDates = exists
+                              ? currentDates.filter((item) => item !== value)
+                              : [...currentDates, value].sort();
+                            return {
+                              ...prev,
+                              event_dates: nextDates
+                            };
+                          });
+                        }}
+                        minDate={new Date()}
+                        monthsShown={2}
+                        dayClassName={(date) =>
+                          (Array.isArray(reviewForm.event_dates) ? reviewForm.event_dates : []).includes(
+                            formatDateValue(date)
+                          )
+                            ? "multi-selected-day"
+                            : undefined
+                        }
+                        calendarClassName="airbnb-calendar"
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {Array.isArray(reviewForm.event_dates) && reviewForm.event_dates.length ? (
+                        reviewForm.event_dates.map((dateItem) => (
+                          <button
+                            key={dateItem}
+                            type="button"
+                            onClick={() =>
+                              setReviewForm((prev) => ({
+                                ...prev,
+                                event_dates: (Array.isArray(prev.event_dates) ? prev.event_dates : []).filter(
+                                  (item) => item !== dateItem
+                                )
+                              }))
+                            }
+                            className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                          >
+                            {dateItem} ×
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-500">No dates selected yet.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+                <input
+                  type="time"
+                  value={reviewForm.event_time || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, event_time: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+                <select
+                  value={reviewForm.city_id || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, city_id: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                >
+                  <option value="">Select City</option>
+                  {cities.map((city) => (
+                    <option key={city.value} value={city.value}>
+                      {city.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={reviewForm.category_id || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, category_id: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={reviewForm.venue_name || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, venue_name: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  placeholder="Venue Name"
+                />
+                <input
+                  value={reviewForm.venue_address || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, venue_address: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  placeholder="Venue Address"
+                />
+                <input
+                  value={reviewForm.google_maps_link || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, google_maps_link: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                  placeholder="Google Maps Link"
+                />
+                <input
+                  value={reviewForm.ticket_link || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  placeholder="Ticket Link"
+                />
+                <input
+                  value={reviewForm.image_url || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, image_url: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  placeholder="Image URL"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={reviewForm.price || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, price: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  placeholder="Price"
+                />
+                <input
+                  type="number"
+                  min="1"
+                  value={reviewForm.duration_hours || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  placeholder="Duration (hours)"
+                />
+                <select
+                  value={reviewForm.age_limit || "All Ages"}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, age_limit: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                >
+                  <option value="All Ages">All Ages</option>
+                  <option value="5 yrs +">5 yrs +</option>
+                  <option value="12 yrs +">12 yrs +</option>
+                  <option value="18 yrs +">18 yrs +</option>
+                </select>
+                <input
+                  placeholder="Languages (comma separated)"
+                  value={reviewForm.languages || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, languages: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                />
+                <input
+                  placeholder="Genres (comma separated)"
+                  value={reviewForm.genres || ""}
+                  onChange={(e) => setReviewForm((prev) => ({ ...prev, genres: e.target.value }))}
+                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+                />
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                  <p className="text-sm font-semibold text-slate-900">Event Highlights</p>
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {eventHighlightOptions.map((option) => {
+                      const selected = Array.isArray(reviewForm.event_highlights)
+                        ? reviewForm.event_highlights.includes(option)
+                        : false;
+                      return (
+                        <label
+                          key={option}
+                          className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={(e) =>
+                              setReviewForm((prev) => ({
+                                ...prev,
+                                event_highlights: e.target.checked
+                                  ? [...(Array.isArray(prev.event_highlights) ? prev.event_highlights : []), option]
+                                  : (Array.isArray(prev.event_highlights) ? prev.event_highlights : []).filter(
+                                      (item) => item !== option
+                                    )
+                              }))
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                          />
+                          <span>{option}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                </form>
+              )}
+            </div>
+
+            <div className="shrink-0 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/90">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                {reviewError ? <p className="text-sm font-medium text-rose-600">{reviewError}</p> : <span />}
+                <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => handleReject(reviewListing)}
+                className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
+              >
+                Reject Event
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewEditing((prev) => !prev)}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                {reviewEditing ? "Cancel Edit" : "Edit"}
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveEventFromReview}
+                disabled={reviewSaving}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {reviewSaving ? "Approving..." : "Approve Event"}
+              </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+          )
+        : null}
+
+      {adminMessage ? (
+        <div className="pointer-events-none fixed right-4 top-20 z-[90] w-full max-w-sm">
+          <div className="pointer-events-auto rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-xl">
+            <p className="text-sm font-semibold text-emerald-700">{adminMessage}</p>
           </div>
         </div>
       ) : null}
+
+      {rejectListing
+        ? createPortal(
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/45 p-3 sm:p-6">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h4 className="text-base font-semibold text-slate-900">Reject Event Submission</h4>
+              <p className="mt-1 text-sm text-slate-500">
+                Add a clear reason. The organizer will see this message.
+              </p>
+            </div>
+            <div className="px-5 py-4">
+              <textarea
+                rows={5}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Enter rejection reason"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-slate-400"
+              />
+              {rejectError ? <p className="mt-2 text-sm font-medium text-rose-600">{rejectError}</p> : null}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+              <button
+                type="button"
+                onClick={closeRejectModal}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitReject}
+                disabled={rejectSaving}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {rejectSaving ? "Rejecting..." : "Reject Event"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+          )
+        : null}
     </motion.div>
   );
 }

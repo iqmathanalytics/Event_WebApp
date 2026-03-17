@@ -59,40 +59,60 @@ function AdminListingsTable({
               <td className="px-4 py-3 text-slate-600">{getListingPrimaryMeta(item)}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-2">
-                  {type === "events" && item.status === "pending" ? (
+                  {type === "events" ? (
+                    item.status === "pending" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onApprove(item)}
+                          className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white"
+                        >
+                          Review & Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onEdit(item)}
+                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold"
+                        >
+                          Edit
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onEdit(item)}
+                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(item)}
+                          className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )
+                  ) : (
                     <>
                       <button
                         type="button"
-                        onClick={() => onApprove(item)}
-                        className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white"
+                        onClick={() => onEdit(item)}
+                        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold"
                       >
-                        Approve
+                        Edit
                       </button>
                       <button
                         type="button"
-                        onClick={() => onReject(item)}
-                        className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white"
+                        onClick={() => onDelete(item)}
+                        className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white"
                       >
-                        Reject
+                        Delete
                       </button>
                     </>
-                  ) : null}
-                  {type !== "events" || item.status !== "rejected" ? (
-                    <button
-                      type="button"
-                      onClick={() => onEdit(item)}
-                      className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold"
-                    >
-                      Edit
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onDelete(item)}
-                    className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white"
-                  >
-                    Delete
-                  </button>
+                  )}
                 </div>
               </td>
             </tr>

@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FiCalendar, FiClock, FiExternalLink, FiMapPin, FiUser } from "react-icons/fi";
+import { FiCalendar, FiClock, FiExternalLink, FiMapPin, FiMinus, FiPlus, FiUser } from "react-icons/fi";
 import { CheckCircle, Clock, Globe, Music, Users } from "lucide-react";
 import { fetchEventById } from "../services/eventService";
 import { createBooking } from "../services/bookingService";
@@ -54,7 +54,7 @@ function EventDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [attendeeCount, setAttendeeCount] = useState(1);
-  const [bookingDate, setBookingDate] = useState("");
+  const [selectedDates, setSelectedDates] = useState([]);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [bookingForm, setBookingForm] = useState({
     name: "",
@@ -104,9 +104,16 @@ function EventDetailsPage() {
 
   useEffect(() => {
     if (event?.event_date) {
-      setBookingDate(String(event.event_date).slice(0, 10));
+      const available = getAvailableDates(event);
+      setSelectedDates(available.length ? [available[0]] : [String(event.event_date).slice(0, 10)]);
     }
   }, [event]);
+
+  const availableDates = event ? getAvailableDates(event) : [];
+  const pricePerDay = Number(event?.price || 0);
+  const totalDays = selectedDates.length || 1;
+  const subtotal = pricePerDay * totalDays;
+  const totalAmount = subtotal * attendeeCount;
 
   const submitBooking = async (e) => {
     e.preventDefault();
@@ -117,7 +124,8 @@ function EventDetailsPage() {
       await createBooking({
         event_id: Number(event.id),
         attendee_count: Number(attendeeCount),
-        booking_date: String(event.event_date).slice(0, 10),
+        selected_dates: selectedDates,
+        booking_date: selectedDates[0] || String(event.event_date).slice(0, 10),
         name: bookingForm.name,
         email: bookingForm.email,
         phone: bookingForm.phone
@@ -172,7 +180,7 @@ function EventDetailsPage() {
           <div className="mt-4 grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
             <p className="inline-flex items-center gap-2">
               <FiCalendar className="text-slate-500" />
-              {event.event_date}
+              {formatEventScheduleLabel(event)}
             </p>
             <p className="inline-flex items-center gap-2">
               <FiClock className="text-slate-500" />
@@ -267,39 +275,72 @@ function EventDetailsPage() {
           className="sticky top-28 h-fit rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Booking</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{formatCurrency(event.price || 0)}</p>
-          <p className="mt-1 text-sm text-slate-500">per ticket</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900">{formatCurrency(pricePerDay)}</p>
+          <p className="mt-1 text-sm text-slate-500">per day / per guest</p>
 
           <div className="mt-4 space-y-3">
-            <label className="block">
+            <div>
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Event Date
+                Select Date{event.schedule_type === "single" ? "" : "(s)"}
               </span>
-              <input
-                type="date"
-                value={bookingDate}
-                readOnly
-                disabled
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
-            </label>
+              <div className="hide-scrollbar max-h-40 space-y-1.5 overflow-y-auto pr-1">
+                {availableDates.map((dateItem) => {
+                  const isSelected = selectedDates.includes(dateItem);
+                  return (
+                    <button
+                      key={dateItem}
+                      type="button"
+                      onClick={() => {
+                        if (event.schedule_type === "single") {
+                          setSelectedDates([dateItem]);
+                          return;
+                        }
+                        setSelectedDates((prev) => {
+                          if (prev.includes(dateItem)) {
+                            const next = prev.filter((d) => d !== dateItem);
+                            return next.length ? next : [dateItem];
+                          }
+                          return [...prev, dateItem].sort();
+                        });
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm ${
+                        isSelected
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span>{formatSimpleDate(dateItem)}</span>
+                      <span className="text-xs font-semibold">{isSelected ? "Selected" : "Select"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-            <label className="block">
+            <div>
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Guests / Attendees
               </span>
-              <select
-                value={attendeeCount}
-                onChange={(e) => setAttendeeCount(Number(e.target.value))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              >
-                {Array.from({ length: 10 }).map((_, idx) => (
-                  <option key={idx + 1} value={idx + 1}>
-                    {idx + 1} {idx === 0 ? "guest" : "guests"}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div className="flex items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setAttendeeCount((prev) => Math.max(1, prev - 1))}
+                  className="grid h-8 w-8 place-content-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
+                >
+                  <FiMinus />
+                </button>
+                <p className="text-sm font-semibold text-slate-900">
+                  {attendeeCount} {attendeeCount === 1 ? "Guest" : "Guests"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAttendeeCount((prev) => Math.min(50, prev + 1))}
+                  className="grid h-8 w-8 place-content-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
+                >
+                  <FiPlus />
+                </button>
+              </div>
+            </div>
           </div>
 
           <span className="mt-4 inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
@@ -322,6 +363,21 @@ function EventDetailsPage() {
               {showBookingForm ? "Close Booking Form" : "Reserve Tickets"}
             </button>
           )}
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Price Breakdown</p>
+            <p className="mt-1">
+              {formatCurrency(pricePerDay)} x {totalDays} {totalDays === 1 ? "day" : "days"} x {attendeeCount}{" "}
+              {attendeeCount === 1 ? "guest" : "guests"}
+            </p>
+            <p className="mt-1">
+              Selected dates:{" "}
+              <span className="font-medium">
+                {selectedDates.length ? selectedDates.map((d) => formatSimpleDate(d)).join(", ") : "None"}
+              </span>
+            </p>
+            <p className="mt-2 text-base font-bold text-slate-900">Total: {formatCurrency(totalAmount)}</p>
+          </div>
 
           {showBookingForm ? (
             <motion.form
@@ -382,6 +438,42 @@ function EventDetailsPage() {
       </div>
     </motion.div>
   );
+}
+
+function getAvailableDates(event) {
+  if (!event) {
+    return [];
+  }
+  if (event.schedule_type === "multiple" && Array.isArray(event.event_dates) && event.event_dates.length) {
+    return [...event.event_dates].sort();
+  }
+  if (event.schedule_type === "range" && event.event_start_date && event.event_end_date) {
+    const dates = [];
+    const start = new Date(`${String(event.event_start_date).slice(0, 10)}T00:00:00`);
+    const end = new Date(`${String(event.event_end_date).slice(0, 10)}T00:00:00`);
+    while (start <= end && dates.length < 366) {
+      dates.push(start.toISOString().slice(0, 10));
+      start.setDate(start.getDate() + 1);
+    }
+    return dates;
+  }
+  return event.event_date ? [String(event.event_date).slice(0, 10)] : [];
+}
+
+function formatSimpleDate(value) {
+  const parsed = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatEventScheduleLabel(event) {
+  const available = getAvailableDates(event);
+  if (event.schedule_type === "range" && available.length) {
+    return `${formatSimpleDate(available[0])} - ${formatSimpleDate(available[available.length - 1])}`;
+  }
+  if (event.schedule_type === "multiple" && available.length > 1) {
+    return `${available.length} dates available`;
+  }
+  return available[0] ? formatSimpleDate(available[0]) : String(event?.event_date || "");
 }
 
 export default EventDetailsPage;
