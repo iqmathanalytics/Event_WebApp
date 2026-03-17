@@ -118,7 +118,8 @@ async function fetchCities({ q, limit } = {}) {
   const rows = await listActiveCities({ q, limit });
   return rows.map((item) => ({
     value: String(item.id),
-    label: item.name,
+    label: item.state ? `${item.name}, ${item.state}` : item.name,
+    name: item.name,
     state: item.state
   }));
 }

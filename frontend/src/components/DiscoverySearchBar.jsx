@@ -32,7 +32,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
         ...item,
         subtitle: index % 2 === 0 ? "High booking activity this week" : "Great for weekend plans"
       })),
-    []
+    [cities]
   );
   const categorySuggestions = useMemo(
     () =>
@@ -40,7 +40,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
         ...item,
         subtitle: index % 2 === 0 ? "Trending this week" : "Popular with local audiences"
       })),
-    []
+    [categories]
   );
   const filteredCitySuggestions = useMemo(() => {
     const query = cityQuery.trim().toLowerCase();

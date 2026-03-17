@@ -36,7 +36,15 @@ function HomePage() {
           limit: 6
         });
         if (active) {
-          const rows = response?.data?.rows || [];
+          let rows = response?.data?.rows || [];
+          if (selectedCity && rows.length === 0) {
+            const fallback = await fetchEvents({
+              sort: "newest",
+              page: 1,
+              limit: 6
+            });
+            rows = fallback?.data?.rows || [];
+          }
           setTrendingEvents(rows);
         }
       } catch (_err) {

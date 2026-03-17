@@ -53,20 +53,22 @@ async function listActiveCities({ q = "", limit = 5000 }) {
   const query = String(q || "").trim();
   if (query) {
     const [rows] = await pool.query(
-      `SELECT id, name, state
+      `SELECT MIN(id) AS id, name, state
        FROM cities
-       WHERE is_active = 1 AND name LIKE ?
+       WHERE is_active = 1 AND (name LIKE ? OR state LIKE ?)
+       GROUP BY name, state
        ORDER BY name ASC, state ASC
        LIMIT ?`,
-      [`%${query}%`, safeLimit]
+      [`%${query}%`, `%${query}%`, safeLimit]
     );
     return rows;
   }
 
   const [rows] = await pool.query(
-    `SELECT id, name, state
+    `SELECT MIN(id) AS id, name, state
      FROM cities
      WHERE is_active = 1
+     GROUP BY name, state
      ORDER BY name ASC, state ASC
      LIMIT ?`,
     [safeLimit]

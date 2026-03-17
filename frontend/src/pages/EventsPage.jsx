@@ -104,7 +104,7 @@ function EventsPage() {
     async function loadEvents() {
       try {
         setLoading(true);
-        const response = await fetchEvents({
+        const requestParams = {
           q: appliedFilters.query || undefined,
           city: appliedFilters.city || undefined,
           category: appliedFilters.category || undefined,
@@ -115,13 +115,37 @@ function EventsPage() {
           sort: appliedFilters.sortBy,
           page,
           limit: 6
-        });
+        };
+        const response = await fetchEvents(requestParams);
 
         if (!active) {
           return;
         }
 
-        const payload = response?.data || {};
+        let payload = response?.data || {};
+        const hasOnlyCityFilter =
+          Boolean(appliedFilters.city) &&
+          !appliedFilters.query &&
+          !appliedFilters.category &&
+          !appliedFilters.date &&
+          !appliedFilters.time &&
+          !appliedFilters.priceMin &&
+          !appliedFilters.priceMax;
+
+        if (hasOnlyCityFilter && (!payload.rows || payload.rows.length === 0)) {
+          const fallbackResponse = await fetchEvents({
+            ...requestParams,
+            city: undefined
+          });
+          payload = fallbackResponse?.data || {};
+          setCity("");
+          setSelectedCity("");
+          setAppliedFilters((prev) => ({
+            ...prev,
+            city: ""
+          }));
+        }
+
         setEvents(payload.rows || []);
         setTotalPages(Math.max(1, Math.ceil((payload.total || 0) / (payload.limit || 6))));
       } catch (_err) {
