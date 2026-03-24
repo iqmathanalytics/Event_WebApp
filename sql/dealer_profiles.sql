@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS dealer_profiles (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  created_by BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(180) NOT NULL,
+  business_email VARCHAR(190) NOT NULL,
+  business_mobile VARCHAR(25) NOT NULL,
+  location_text VARCHAR(255) NOT NULL,
+  city_id BIGINT UNSIGNED NULL,
+  category_id BIGINT UNSIGNED NOT NULL,
+  bio TEXT NULL,
+  website_or_social_link VARCHAR(500) NULL,
+  profile_image_url VARCHAR(500) NULL,
+  status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  review_note VARCHAR(500) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_dealer_profiles_status (status, created_at),
+  KEY idx_dealer_profiles_creator (created_by, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

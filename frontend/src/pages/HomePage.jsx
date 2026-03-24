@@ -4,24 +4,30 @@ import { motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import InfluencerCard from "../components/InfluencerCard";
 import DealCard from "../components/DealCard";
-import ServiceCard from "../components/ServiceCard";
 import DiscoverySearchBar from "../components/DiscoverySearchBar";
 import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
 import HeroSlideshow from "../components/HeroSlideshow";
-import { fetchEvents } from "../services/eventService";
-import { deals, influencers, services } from "../utils/mockData";
+import BrandHeroLogo from "../components/BrandHeroLogo";
+import { fetchFeaturedEvents } from "../services/eventService";
+import { fetchDeals, fetchInfluencers } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
+import useAuth from "../hooks/useAuth";
 import { formatDateUS } from "../utils/format";
 
 function HomePage() {
   const { setHomeSearchSummary, setIsHeroSearchVisible } = useOutletContext();
   const { selectedCity, selectedCityLabel } = useCityFilter();
   const [trendingEvents, setTrendingEvents] = useState([]);
+  const [liveInfluencers, setLiveInfluencers] = useState([]);
+  const [liveDeals, setLiveDeals] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingInfluencers, setLoadingInfluencers] = useState(false);
+  const [loadingDeals, setLoadingDeals] = useState(false);
   const [isSearchDocked, setIsSearchDocked] = useState(false);
   const heroSearchRef = useRef(null);
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     let active = true;
@@ -29,23 +35,41 @@ function HomePage() {
     async function loadTrendingEvents() {
       try {
         setLoadingEvents(true);
-        const response = await fetchEvents({
+        const response = await fetchFeaturedEvents({
           city: selectedCity || undefined,
-          sort: "newest",
-          page: 1,
           limit: 6
         });
         if (active) {
-          let rows = response?.data?.rows || [];
-          if (selectedCity && rows.length === 0) {
-            const fallback = await fetchEvents({
-              sort: "newest",
-              page: 1,
-              limit: 6
-            });
-            rows = fallback?.data?.rows || [];
-          }
-          setTrendingEvents(rows);
+          const now = Date.now();
+          const rawRows = response?.data || [];
+
+          const enriched = rawRows
+            .map((ev) => {
+              const dateStr = String(ev.event_date || "").slice(0, 10);
+              const timeStr = ev.event_time ? String(ev.event_time).slice(0, 5) : "00:00";
+              const start = new Date(`${dateStr}T${timeStr}:00`);
+              const diffMs = start.getTime() - now;
+
+              let countdownLabel = null;
+              if (diffMs > 0) {
+                const totalMinutes = Math.floor(diffMs / (1000 * 60));
+                const days = Math.floor(totalMinutes / (60 * 24));
+                const hours = Math.floor((totalMinutes - days * 60 * 24) / 60);
+                const minutes = totalMinutes - days * 60 * 24 - hours * 60;
+
+                if (days > 0) countdownLabel = `${days}d ${hours}h`;
+                else if (hours > 0) countdownLabel = `${hours}h ${minutes}m`;
+                else countdownLabel = `${minutes}m`;
+              }
+
+              return {
+                ...ev,
+                countdownLabel
+              };
+            })
+            .filter((ev) => ev.countdownLabel !== null);
+
+          setTrendingEvents(enriched);
         }
       } catch (_err) {
         if (active) {
@@ -65,13 +89,50 @@ function HomePage() {
   }, [selectedCity]);
 
   const citySuffix = selectedCity ? `in ${selectedCityLabel}` : "Near You";
-  const filteredInfluencers = selectedCity
-    ? influencers.filter((item) => item.city === selectedCityLabel)
-    : influencers;
-  const filteredDeals = selectedCity ? deals.filter((item) => item.city === selectedCityLabel) : deals;
-  const filteredServices = selectedCity
-    ? services.filter((item) => item.city === selectedCityLabel)
-    : services;
+
+  useEffect(() => {
+    let active = true;
+    async function loadInfluencersAndDeals() {
+      try {
+        setLoadingInfluencers(true);
+        setLoadingDeals(true);
+        const [influencerResponse, dealsResponse] = await Promise.all([
+          fetchInfluencers({
+            city: selectedCity || undefined,
+            sort: "popularity"
+          }),
+          fetchDeals({
+            city: selectedCity || undefined,
+            sort: "popularity",
+            only_active: "true"
+          })
+        ]);
+        if (!active) {
+          return;
+        }
+        setLiveInfluencers((influencerResponse?.data || []).slice(0, 12));
+        const allDeals = dealsResponse?.data || [];
+        const visibleDeals = isAuthenticated
+          ? allDeals
+          : allDeals.filter((item) => !(item.is_premium === 1 || item.is_premium === true));
+        setLiveDeals(visibleDeals.slice(0, 12));
+      } catch (_err) {
+        if (active) {
+          setLiveInfluencers([]);
+          setLiveDeals([]);
+        }
+      } finally {
+        if (active) {
+          setLoadingInfluencers(false);
+          setLoadingDeals(false);
+        }
+      }
+    }
+    loadInfluencersAndDeals();
+    return () => {
+      active = false;
+    };
+  }, [selectedCity, isAuthenticated]);
 
   useEffect(() => {
     const node = heroSearchRef.current;
@@ -112,11 +173,9 @@ function HomePage() {
       >
         <div className="grid grid-cols-1 items-center gap-7 lg:grid-cols-[1.15fr_0.85fr] lg:gap-8">
           <div className="space-y-6">
-            <p className="mb-1 inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
-              City Events & Lifestyle Hub
-            </p>
-            <h1 className="max-w-2xl text-3xl font-bold leading-tight sm:text-5xl lg:text-6xl">
-              Discover events, deals, creators, and services around you.
+            <BrandHeroLogo className="hero-brand-logo-mobile-only" />
+            <h1 className="max-w-2xl text-2xl font-bold leading-tight sm:text-4xl lg:text-6xl">
+              Discover events, deals, and creators around you.
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-slate-200 sm:text-base">
               Explore trusted local experiences with one unified platform built for city life.
@@ -169,6 +228,8 @@ function HomePage() {
                     image: item.image_url
                   }}
                   isFavorite={isFavorite("event", item.id)}
+                  tags={item.tags || []}
+                  countdownLabel={item.countdownLabel}
                   onToggleFavorite={() =>
                     toggleFavorite({
                       listingType: "event",
@@ -181,28 +242,70 @@ function HomePage() {
       </DiscoverySectionCarousel>
 
       <DiscoverySectionCarousel title={`Popular Influencers ${citySuffix}`} actionHref="/influencers">
-        {filteredInfluencers.map((item) => (
-          <div key={item.id} className="min-w-[260px] max-w-[260px] snap-start">
-            <InfluencerCard item={item} />
-          </div>
-        ))}
+        {loadingInfluencers
+          ? Array.from({ length: 4 }).map((_, idx) => (
+              <div
+                key={`influencer-skeleton-${idx}`}
+                className="h-[290px] min-w-[260px] animate-pulse rounded-3xl border border-slate-200 bg-white"
+              />
+            ))
+          : liveInfluencers.length > 0
+            ? liveInfluencers.map((item) => (
+                <div key={item.id} className="min-w-[260px] max-w-[260px] snap-start">
+                  <InfluencerCard
+                    item={{
+                      id: item.id,
+                      name: item.name,
+                      category: item.category_name || "Lifestyle",
+                      city: item.city_name || "City",
+                      followers: item.followers_count || 0,
+                      image: item.profile_image_url
+                    }}
+                  />
+                </div>
+              ))
+            : (
+              <p className="min-w-[260px] text-sm text-slate-500">No influencers available right now.</p>
+            )}
       </DiscoverySectionCarousel>
 
       <DiscoverySectionCarousel title={`Top Deals ${citySuffix}`} actionHref="/deals">
-        {filteredDeals.map((item) => (
-          <div key={item.id} className="min-w-[260px] max-w-[260px] snap-start">
-            <DealCard item={item} />
-          </div>
-        ))}
+        {loadingDeals
+          ? Array.from({ length: 4 }).map((_, idx) => (
+              <div
+                key={`deal-skeleton-${idx}`}
+                className="h-[290px] min-w-[260px] animate-pulse rounded-3xl border border-slate-200 bg-white"
+              />
+            ))
+          : liveDeals.length > 0
+            ? liveDeals.map((item) => (
+                <div key={item.id} className="min-w-[260px] max-w-[260px] snap-start">
+                  <DealCard
+                    item={{
+                      id: item.id,
+                      title: item.title,
+                      city: item.city_name || "City",
+                      tags: item.tags || [],
+                      discount: item.original_price
+                        ? Math.max(0, Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100))
+                        : 0,
+                      originalPrice: item.original_price || item.discounted_price || 0,
+                      price: item.discounted_price || item.original_price || 0,
+                      image: item.image_url,
+                      offerType: item.offer_type,
+                      offerMetaJson: item.offer_meta_json
+                    }}
+                    tags={item.tags || []}
+                    isPremium={item.is_premium === 1 || item.is_premium === true}
+                    showPremiumBadge={isAuthenticated}
+                  />
+                </div>
+              ))
+            : (
+              <p className="min-w-[260px] text-sm text-slate-500">No deals available right now.</p>
+            )}
       </DiscoverySectionCarousel>
 
-      <DiscoverySectionCarousel title={`Beauty Services ${citySuffix}`} actionHref="/services">
-        {filteredServices.map((item) => (
-          <div key={item.id} className="min-w-[260px] max-w-[260px] snap-start">
-            <ServiceCard item={item} />
-          </div>
-        ))}
-      </DiscoverySectionCarousel>
     </div>
   );
 }

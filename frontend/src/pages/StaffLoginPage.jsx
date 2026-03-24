@@ -22,7 +22,9 @@ function StaffLoginPage() {
         throw new Error("Invalid login response");
       }
       login(payload);
-      navigate(payload.user.role === "admin" ? "/dashboard/admin" : "/dashboard/organizer");
+      const isAdmin = payload?.user?.role === "admin";
+      const canOrganize = payload?.user?.organizer_enabled === 1 || payload?.user?.role === "organizer";
+      navigate(isAdmin ? "/dashboard/admin" : canOrganize ? "/dashboard/organizer" : "/dashboard/user");
     } catch (_err) {
       setError("Invalid credentials or this account must use user login.");
     } finally {
@@ -37,6 +39,9 @@ function StaffLoginPage() {
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-soft"
     >
+      <div className="mb-3 flex justify-center">
+        <img src="/branding/yay-tickets-logo.png" alt="Yay! Tickets" className="h-10 w-auto object-contain" />
+      </div>
       <h1 className="text-2xl font-bold">Staff Sign In</h1>
       <p className="mt-1 text-sm text-slate-600">For administrator and organizer access only.</p>
       <form onSubmit={onSubmit} className="mt-5 space-y-4">

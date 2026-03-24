@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import EventFilterBar from "../components/EventFilterBar";
@@ -7,9 +7,14 @@ import Pagination from "../components/Pagination";
 import { fetchEvents } from "../services/eventService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
+import useAuth from "../hooks/useAuth";
+import { enableOrganizer } from "../services/userService";
+import { refreshAccessToken } from "../services/authService";
 import { formatDateUS } from "../utils/format";
 
 function EventsPage() {
+  const navigate = useNavigate();
+  const { isAuthenticated, user, canPostEvents, login } = useAuth();
   const [searchParams] = useSearchParams();
   const { selectedCity, setSelectedCity } = useCityFilter();
   const initialFilters = {
@@ -37,7 +42,19 @@ function EventsPage() {
   const [events, setEvents] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [organizerCtaLoading, setOrganizerCtaLoading] = useState(false);
+  const [organizerCtaError, setOrganizerCtaError] = useState("");
   const { isFavorite, toggleFavorite } = useFavorites();
+  const canOpenOrganizerDashboard = Boolean(Number(user?.organizer_enabled) === 1 && canPostEvents);
+
+  const handlePageChange = (nextPage) => {
+    // Guest users can browse only first page. Prompt login/register for deeper pagination.
+    if (!isAuthenticated && Number(nextPage) > 1) {
+      navigate("/login");
+      return;
+    }
+    setPage(nextPage);
+  };
   const canApply =
     query !== appliedFilters.query ||
     city !== appliedFilters.city ||
@@ -174,9 +191,80 @@ function EventsPage() {
       className="space-y-5"
     >
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold sm:text-4xl">Events</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Events</h1>
         <p className="text-sm text-slate-600">Explore verified city events with smart filters, clear pricing, and real-time availability.</p>
       </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-900">Create your Event Organizer profile</p>
+            <p className="text-sm text-slate-600">
+              Become an Event Organizer and submit events for admin approval.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isAuthenticated ? (
+              <>
+                <Link
+                  to="/register"
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Create Account
+                </Link>
+                <Link
+                  to="/login"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                >
+                  Login to Request Organizer Access
+                </Link>
+              </>
+            ) : canOpenOrganizerDashboard ? (
+              <Link
+                to="/dashboard/organizer"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+              >
+                Open Organizer Dashboard
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled={organizerCtaLoading}
+                onClick={async () => {
+                  try {
+                    setOrganizerCtaError("");
+                    setOrganizerCtaLoading(true);
+                    await enableOrganizer();
+                    let canOpenAfterRefresh = false;
+                    const refreshTokenValue = localStorage.getItem("refreshToken");
+                    if (refreshTokenValue) {
+                      const refreshed = await refreshAccessToken(refreshTokenValue);
+                      const payload = refreshed?.data;
+                      if (payload?.accessToken && payload?.refreshToken && payload?.user) {
+                        login(payload);
+                        canOpenAfterRefresh = Boolean(payload.user?.can_post_events);
+                      }
+                    }
+                    if (canOpenAfterRefresh) {
+                      navigate("/dashboard/organizer");
+                    } else {
+                      setOrganizerCtaError("Organizer access request submitted. You can open Organizer Dashboard after admin approval.");
+                    }
+                  } catch (_err) {
+                    setOrganizerCtaError("Could not submit organizer access request. Please try again.");
+                  } finally {
+                    setOrganizerCtaLoading(false);
+                  }
+                }}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {organizerCtaLoading ? "Submitting..." : "Request Organizer Access"}
+              </button>
+            )}
+          </div>
+        </div>
+        {organizerCtaError ? <p className="mt-2 text-sm font-medium text-rose-600">{organizerCtaError}</p> : null}
+      </section>
 
       <EventFilterBar
         query={query}
@@ -222,6 +310,7 @@ function EventsPage() {
                   price: item.price,
                   image: item.image_url
                 }}
+                tags={item.tags || []}
                 isFavorite={isFavorite("event", item.id)}
                 onToggleFavorite={() =>
                   toggleFavorite({
@@ -233,7 +322,7 @@ function EventsPage() {
             ))
           : null}
       </div>
-      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
     </motion.div>
   );
 }

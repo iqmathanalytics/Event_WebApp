@@ -2,11 +2,20 @@ const asyncHandler = require("../utils/asyncHandler");
 const newsletterService = require("../services/newsletterService");
 
 const subscribe = asyncHandler(async (req, res) => {
-  await newsletterService.subscribe(req.validated.body);
+  const result = await newsletterService.subscribe(req.validated.body, req.user);
   res.status(200).json({
     success: true,
-    message: "Subscribed successfully"
+    message: result.alreadySubscribed ? "Already subscribed. You are on our VIP update list." : "Subscribed successfully",
+    data: result
   });
 });
 
-module.exports = { subscribe };
+const getMySubscriptionStatus = asyncHandler(async (req, res) => {
+  const result = await newsletterService.getSubscriptionStatus(req.validated.query, req.user);
+  res.status(200).json({
+    success: true,
+    data: result
+  });
+});
+
+module.exports = { subscribe, getMySubscriptionStatus };

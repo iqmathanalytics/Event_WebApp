@@ -3,7 +3,7 @@ const { z } = require("zod");
 const listListingsSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({
-    type: z.enum(["events", "deals", "influencers", "services"]),
+    type: z.enum(["events", "deals", "influencers", "dealers"]),
     status: z.enum(["pending", "approved", "rejected"]).optional(),
     city: z.string().regex(/^\d+$/).optional(),
     category: z.string().regex(/^\d+$/).optional(),
@@ -43,7 +43,7 @@ const updateListingStatusSchema = z.object({
     }),
   query: z.object({}).passthrough(),
   params: z.object({
-    type: z.enum(["events", "deals", "influencers", "services"]),
+    type: z.enum(["events", "deals", "influencers", "dealers"]),
     id: z.string().regex(/^\d+$/)
   })
 });
@@ -52,6 +52,9 @@ const editListingSchema = z.object({
   body: z.object({
     title: z.string().min(2).max(220).optional(),
     name: z.string().min(2).max(160).optional(),
+    business_email: z.string().email().optional(),
+    business_mobile: z.string().max(25).optional(),
+    location_text: z.string().max(255).optional(),
     description: z.string().max(5000).optional(),
     city_id: z.coerce.number().int().positive().optional(),
     category_id: z.coerce.number().int().positive().optional(),
@@ -77,12 +80,15 @@ const editListingSchema = z.object({
     languages: z.string().max(255).optional(),
     genres: z.string().max(255).optional(),
     event_highlights: z.array(z.string().min(1).max(100)).optional(),
+    one_of_a_kind_manual: z.union([z.boolean(), z.coerce.number().int().min(0).max(1)]).optional(),
     price_per_day: z.coerce.number().min(0).optional(),
-    expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+    expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    website_or_social_link: z.string().url().max(500).optional(),
+    profile_image_url: z.string().url().max(500).optional()
   }),
   query: z.object({}).passthrough(),
   params: z.object({
-    type: z.enum(["events", "deals", "influencers", "services"]),
+    type: z.enum(["events", "deals", "influencers", "dealers"]),
     id: z.string().regex(/^\d+$/)
   })
 });
@@ -91,7 +97,7 @@ const deleteListingSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
   params: z.object({
-    type: z.enum(["events", "deals", "influencers", "services"]),
+    type: z.enum(["events", "deals", "influencers", "dealers"]),
     id: z.string().regex(/^\d+$/)
   })
 });
@@ -121,8 +127,42 @@ const listTeamUsersSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const listUsersSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
 const deactivateTeamUserSchema = z.object({
   body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const deleteUserSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const activateTeamUserSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const updateTeamCapabilitiesSchema = z.object({
+  body: z.object({
+    can_post_events: z.boolean(),
+    can_create_influencer_profile: z.boolean(),
+    can_post_deals: z.boolean()
+  }),
   query: z.object({}).passthrough(),
   params: z.object({
     id: z.string().regex(/^\d+$/)
@@ -141,6 +181,68 @@ const adminBookingsSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const adminNewsletterListSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    page: z.string().regex(/^\d+$/).optional(),
+    limit: z.string().regex(/^\d+$/).optional()
+  }),
+  params: z.object({}).passthrough()
+});
+
+const adminNewsletterExportSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    format: z.enum(["csv", "excel"]).optional()
+  }),
+  params: z.object({}).passthrough()
+});
+
+const adminContactListSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    page: z.string().regex(/^\d+$/).optional(),
+    limit: z.string().regex(/^\d+$/).optional()
+  }),
+  params: z.object({}).passthrough()
+});
+
+const adminContactExportSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    format: z.enum(["csv", "excel"]).optional()
+  }),
+  params: z.object({}).passthrough()
+});
+
+const adminNotificationsListSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    limit: z.string().regex(/^\d+$/).optional()
+  }),
+  params: z.object({}).passthrough()
+});
+
+const adminNotificationsReadSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
+const adminNotificationsDeleteSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const adminNewsletterSyncSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
 module.exports = {
   analyticsSchema,
   listListingsSchema,
@@ -149,6 +251,18 @@ module.exports = {
   deleteListingSchema,
   createTeamUserSchema,
   listTeamUsersSchema,
+  listUsersSchema,
+  updateTeamCapabilitiesSchema,
   deactivateTeamUserSchema,
-  adminBookingsSchema
+  deleteUserSchema,
+  activateTeamUserSchema,
+  adminBookingsSchema,
+  adminNewsletterListSchema,
+  adminNewsletterExportSchema,
+  adminContactListSchema,
+  adminContactExportSchema,
+  adminNewsletterSyncSchema,
+  adminNotificationsListSchema,
+  adminNotificationsReadSchema,
+  adminNotificationsDeleteSchema
 };

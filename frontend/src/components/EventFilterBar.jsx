@@ -28,7 +28,10 @@ function EventFilterControls({
   priceMax,
   setPriceMax,
   sortBy,
-  setSortBy
+  setSortBy,
+  showDate = true,
+  showPrice = true,
+  searchPlaceholder = "Search events"
 }) {
   const containerRef = useRef(null);
   const [activePanel, setActivePanel] = useState(null);
@@ -81,7 +84,7 @@ function EventFilterControls({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search events"
+          placeholder={searchPlaceholder}
           className="w-full rounded-full border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none"
         />
       </label>
@@ -194,68 +197,72 @@ function EventFilterControls({
         }
       />
 
-      <FilterPopupField
-        label="When"
-        value={dateLabel}
-        isActive={activePanel === "date"}
-        onToggle={(e) => {
-          e.stopPropagation();
-          setActivePanel((prev) => (prev === "date" ? null : "date"));
-        }}
-        panelClassName="w-fit max-w-[calc(100vw-2rem)]"
-        panelContent={
-          <AirbnbDatePickerPanel
-            value={date}
-            onChange={setDate}
-            minDate={new Date()}
-            closeOnSelect
-            onClose={() => setActivePanel(null)}
-          />
-        }
-      />
+      {showDate ? (
+        <FilterPopupField
+          label="When"
+          value={dateLabel}
+          isActive={activePanel === "date"}
+          onToggle={(e) => {
+            e.stopPropagation();
+            setActivePanel((prev) => (prev === "date" ? null : "date"));
+          }}
+          panelClassName="w-fit max-w-[calc(100vw-2rem)]"
+          panelContent={
+            <AirbnbDatePickerPanel
+              value={date}
+              onChange={setDate}
+              minDate={new Date()}
+              closeOnSelect
+              onClose={() => setActivePanel(null)}
+            />
+          }
+        />
+      ) : null}
 
-      <FilterPopupField
-        label="Price"
-        value={priceLabel}
-        isActive={activePanel === "price"}
-        onToggle={(e) => {
-          e.stopPropagation();
-          setActivePanel((prev) => (prev === "price" ? null : "price"));
-        }}
-        panelClassName="w-full min-w-[220px]"
-        panelContent={
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Min
-              <div className="relative mt-1">
-                <FiDollarSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="number"
-                  min="0"
-                  value={priceMin}
-                  onChange={(e) => setPriceMin(e.target.value)}
-                  placeholder="0"
-                  className="w-full rounded-xl border border-slate-300 py-2.5 pl-8 pr-3 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400"
-                />
-              </div>
-            </label>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Max
-              <div className="relative mt-1">
-                <FiDollarSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="number"
-                  min="0"
-                  value={priceMax}
-                  onChange={(e) => setPriceMax(e.target.value)}
-                  placeholder="Any"
-                  className="w-full rounded-xl border border-slate-300 py-2.5 pl-8 pr-3 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400"
-                />
-              </div>
-            </label>
-          </div>
-        }
-      />
+      {showPrice ? (
+        <FilterPopupField
+          label="Price"
+          value={priceLabel}
+          isActive={activePanel === "price"}
+          onToggle={(e) => {
+            e.stopPropagation();
+            setActivePanel((prev) => (prev === "price" ? null : "price"));
+          }}
+          panelClassName="w-full min-w-[220px]"
+          panelContent={
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Min
+                <div className="relative mt-1">
+                  <FiDollarSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    min="0"
+                    value={priceMin}
+                    onChange={(e) => setPriceMin(e.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-xl border border-slate-300 py-2.5 pl-8 pr-3 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
+              </label>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Max
+                <div className="relative mt-1">
+                  <FiDollarSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    min="0"
+                    value={priceMax}
+                    onChange={(e) => setPriceMax(e.target.value)}
+                    placeholder="Any"
+                    className="w-full rounded-xl border border-slate-300 py-2.5 pl-8 pr-3 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
+              </label>
+            </div>
+          }
+        />
+      ) : null}
 
       <FilterPopupField
         label="Sort"
@@ -290,7 +297,21 @@ function EventFilterControls({
 
 function EventFilterBar(props) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const { onApply, onReset, canApply } = props;
+  const { onApply, onReset, canApply, mobileTitle = "Filter Events" } = props;
+
+  useEffect(() => {
+    if (!isMobileOpen) {
+      return undefined;
+    }
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [isMobileOpen]);
 
   return (
     <>
@@ -336,13 +357,13 @@ function EventFilterBar(props) {
 
       {isMobileOpen ? (
         <div className="fixed inset-0 z-50 bg-slate-900/45 lg:hidden">
-          <div className="hide-scrollbar absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-4">
+          <div className="hide-scrollbar absolute inset-x-0 bottom-0 max-h-[90vh] overflow-y-auto rounded-t-3xl bg-white p-4 pb-28 shadow-2xl transition-transform duration-200 ease-out">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-bold">Filter Events</h3>
+              <h3 className="text-base font-bold">{mobileTitle}</h3>
               <button
                 type="button"
                 onClick={() => setIsMobileOpen(false)}
-                className="grid h-9 w-9 place-content-center rounded-full border border-slate-300 text-slate-600"
+                className="grid h-11 w-11 place-content-center rounded-full border border-slate-300 text-slate-600"
               >
                 <FiX />
               </button>
@@ -351,12 +372,12 @@ function EventFilterBar(props) {
             <div className="grid grid-cols-1 gap-3">
               <EventFilterControls {...props} />
             </div>
-
-            <div className="mt-5 flex items-center justify-end gap-2">
+            <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] bg-gradient-to-t from-white via-white to-white/85 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3">
+              <div className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 pointer-events-auto">
               <button
                 type="button"
                 onClick={onReset}
-                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                className="min-h-11 rounded-full border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700"
               >
                 Reset
               </button>
@@ -367,11 +388,12 @@ function EventFilterBar(props) {
                   setIsMobileOpen(false);
                 }}
                 disabled={!canApply}
-                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FiSliders />
                 Apply Filters
               </button>
+              </div>
             </div>
           </div>
         </div>

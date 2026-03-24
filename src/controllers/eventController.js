@@ -58,6 +58,28 @@ const fetchMySubmissions = asyncHandler(async (req, res) => {
   });
 });
 
+const fetchFeaturedEvents = asyncHandler(async (req, res) => {
+  const result = await eventService.fetchFeaturedEvents({
+    city: req.validated.query.city,
+    limit: req.validated.query.limit
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result
+  });
+});
+
+const trackEventClick = asyncHandler(async (req, res) => {
+  const ok = await eventService.trackEventClick(Number(req.params.id));
+  res.status(200).json({ success: true, data: { updated: ok } });
+});
+
+const trackEventView = asyncHandler(async (req, res) => {
+  const ok = await eventService.trackEventView(Number(req.params.id));
+  res.status(200).json({ success: true, data: { updated: ok } });
+});
+
 const editOwnEvent = asyncHandler(async (req, res) => {
   await eventService.editOwnEvent(Number(req.params.id), req.user.id, req.validated.body);
   res.status(200).json({
@@ -82,5 +104,8 @@ module.exports = {
   fetchEventById,
   fetchMySubmissions,
   editOwnEvent,
-  deleteOwnEvent
+  deleteOwnEvent,
+  fetchFeaturedEvents,
+  trackEventClick,
+  trackEventView
 };

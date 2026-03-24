@@ -1,6 +1,6 @@
-# City Events & Lifestyle Hub Frontend
+# Yay! Tickets Frontend
 
-React + Vite + Tailwind frontend for City Events & Lifestyle Hub.
+React + Vite + Tailwind frontend for Yay! Tickets.
 
 ## Stack
 

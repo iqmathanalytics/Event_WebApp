@@ -7,7 +7,7 @@ function OrganizerRoute({ children }) {
     return <Navigate to="/staff-login" replace />;
   }
   if (!isOrganizer) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard/user" replace />;
   }
   return children;
 }

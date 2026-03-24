@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   Bar,
   BarChart,
@@ -17,7 +18,7 @@ import {
 } from "recharts";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
-import { FiCalendar, FiClipboard, FiMapPin, FiTrendingUp, FiUsers } from "react-icons/fi";
+import { FiCalendar, FiClipboard, FiInfo, FiMapPin, FiTrendingUp, FiUsers } from "react-icons/fi";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
 import { categories } from "../utils/filterOptions";
@@ -27,6 +28,7 @@ import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
 import FilterPopupField from "../components/FilterPopupField";
 import OrganizerSidebar from "../components/OrganizerSidebar";
 import useCityFilter from "../hooks/useCityFilter";
+import useAuth from "../hooks/useAuth";
 
 const initialForm = {
   title: "",
@@ -136,7 +138,22 @@ function parseDateValue(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function FormField({ label, hint, example, className = "", children }) {
+  return (
+    <div className={`block ${className}`}>
+      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
+      <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-slate-500">
+        <FiInfo className="text-slate-400" />
+        {hint}
+        {example ? <span className="text-slate-400">Example: {example}</span> : null}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 function OrganizerDashboardPage() {
+  const { user } = useAuth();
   const { cities } = useCityFilter();
   const [activeSection, setActiveSection] = useState("overview");
   const [rows, setRows] = useState([]);
@@ -157,11 +174,16 @@ function OrganizerDashboardPage() {
   const [bookingEventQuery, setBookingEventQuery] = useState("");
   const bookingFilterRef = useRef(null);
   const [activeBookingPanel, setActiveBookingPanel] = useState(null);
+  const formPanelRef = useRef(null);
+  const [activeFormPanel, setActiveFormPanel] = useState(null);
 
   useEffect(() => {
     const onDocClick = (event) => {
       if (!bookingFilterRef.current?.contains(event.target)) {
         setActiveBookingPanel(null);
+      }
+      if (!formPanelRef.current?.contains(event.target)) {
+        setActiveFormPanel(null);
       }
     };
     window.addEventListener("click", onDocClick);
@@ -169,10 +191,30 @@ function OrganizerDashboardPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().slice(0, 10);
     const totalEventsCreated = rows.length;
     const totalBookingsReceived = overviewBookings.length;
-    const upcomingEvents = rows.filter((item) => String(item.event_date).slice(0, 10) >= today).length;
+
+    const isUpcomingEvent = (item) => {
+      const scheduleType = item.schedule_type || "single";
+      if (scheduleType === "range") {
+        const end = String(item.event_end_date || "").slice(0, 10);
+        return Boolean(end) && end >= todayStr;
+      }
+      if (scheduleType === "multiple") {
+        const dates = Array.isArray(item.event_dates) ? item.event_dates : [];
+        if (dates.length) {
+          return dates.some((d) => String(d).slice(0, 10) >= todayStr);
+        }
+        // Fallback: if dates are missing, use the primary event_date.
+      }
+      const start = String(item.event_date || "").slice(0, 10);
+      return Boolean(start) && start >= todayStr;
+    };
+
+    const upcomingEvents = rows.filter(isUpcomingEvent).length;
     const totalAttendees = overviewBookings.reduce(
       (sum, item) => sum + Number(item.attendee_count || 0),
       0
@@ -260,6 +302,7 @@ function OrganizerDashboardPage() {
 
   const closeForm = () => {
     setIsFormOpen(false);
+    setActiveFormPanel(null);
     resetForm();
   };
 
@@ -269,9 +312,10 @@ function OrganizerDashboardPage() {
       setError("");
       const response = await fetchMyEvents();
       setRows(response?.data || []);
-    } catch (_err) {
+    } catch (err) {
       setRows([]);
-      setError("Could not load your events. Please try again.");
+      const apiMessage = err?.response?.data?.message;
+      setError(apiMessage || "Could not load your events. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -453,6 +497,17 @@ function OrganizerDashboardPage() {
     return bookingEventOptions.filter((item) => String(item.title || "").toLowerCase().includes(query));
   }, [bookingEventOptions, bookingEventQuery]);
 
+  const showBackToUserDashboard = user?.role === "user" && (user?.organizer_enabled === 1 || user?.role === "organizer");
+  const scheduleTypeLabel =
+    form.schedule_type === "multiple"
+      ? "Multiple Dates Event"
+      : form.schedule_type === "range"
+        ? "Date Range Event"
+        : "Single Date Event";
+  const selectedCityLabel = cities.find((city) => String(city.value) === String(form.city_id))?.label || "Select City";
+  const selectedCategoryLabel =
+    categories.find((category) => String(category.value) === String(form.category_id))?.label || "Select Category";
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -470,15 +525,25 @@ function OrganizerDashboardPage() {
               Track event performance, booking activity, and submissions in one place.
             </p>
           </div>
-          {activeSection === "my-events" ? (
-            <button
-              type="button"
-              onClick={openCreate}
-              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
-            >
-              Create New Event
-            </button>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {showBackToUserDashboard ? (
+              <Link
+                to="/dashboard/user"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-soft transition hover:bg-slate-50"
+              >
+                Back to User Dashboard
+              </Link>
+            ) : null}
+            {activeSection === "my-events" ? (
+              <button
+                type="button"
+                onClick={openCreate}
+                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
+              >
+                Create New Event
+              </button>
+            ) : null}
+          </div>
         </header>
 
         {error ? (
@@ -649,7 +714,42 @@ function OrganizerDashboardPage() {
                 </div>
               ) : null}
               {!loading && rows.length > 0 ? (
-                <div className="mt-3 overflow-x-auto">
+                <>
+                  <div className="mt-3 space-y-2 md:hidden">
+                    {rows.map((item) => (
+                      <article key={`m-org-event-${item.id}`} className="rounded-xl border border-slate-200 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                          <span className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${getStatusBadgeClass(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
+                          <p><span className="font-semibold">Date:</span> {formatDateUS(item.event_date)}</p>
+                          <p><span className="font-semibold">City:</span> {item.city_name || "-"}</p>
+                          <p className="col-span-2"><span className="font-semibold">Price:</span> {formatCurrency(item.price || 0)}</p>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status, item.review_note)}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(item)}
+                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDelete(item)}
+                            className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                <div className="mt-3 hidden overflow-x-auto md:block">
                   <table className="min-w-full text-left text-sm">
                     <thead className="border-b border-slate-200 text-slate-600">
                       <tr>
@@ -699,6 +799,7 @@ function OrganizerDashboardPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               ) : null}
             </motion.section>
           ) : null}
@@ -813,7 +914,35 @@ function OrganizerDashboardPage() {
                   }
                 />
               </div>
-              <div className="mt-3 overflow-x-auto">
+              <div className="mt-3 space-y-2 md:hidden">
+                {loadingBookingRows ? (
+                  <p className="rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-500">Loading bookings...</p>
+                ) : bookingRows.length === 0 ? (
+                  <p className="rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-500">
+                    No bookings match the selected filters.
+                  </p>
+                ) : (
+                  bookingRows.map((item) => (
+                    <article key={`m-org-book-${item.id}`} className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-sm font-semibold text-slate-900">{item.event_title}</p>
+                      <p className="text-xs text-slate-600">{item.name} • {item.email}</p>
+                      <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
+                        <p><span className="font-semibold">Phone:</span> {item.phone}</p>
+                        <p><span className="font-semibold">Guests:</span> {item.attendee_count}</p>
+                        <p className="col-span-2">
+                          <span className="font-semibold">Dates:</span>{" "}
+                          {Array.isArray(item.selected_dates) && item.selected_dates.length
+                            ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
+                            : "-"}
+                        </p>
+                        <p><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
+                        <p><span className="font-semibold">Booked:</span> {formatDateUS(item.booking_date)}</p>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+              <div className="mt-3 hidden overflow-x-auto md:block">
                 <table className="min-w-full text-left text-sm">
                   <thead className="border-b border-slate-200 text-slate-600">
                     <tr>
@@ -871,7 +1000,7 @@ function OrganizerDashboardPage() {
       {isFormOpen
         ? createPortal(
             <div className="fixed inset-0 z-[90] flex items-start justify-center bg-slate-900/45 p-4 sm:items-center">
-              <div className="hide-scrollbar max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl">
+              <div className="popup-modal hide-scrollbar max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl">
                 <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
                   <div>
                     <h3 className="text-lg font-semibold">{editingEvent ? "Edit Event Listing" : "Create New Event Listing"}</h3>
@@ -884,7 +1013,7 @@ function OrganizerDashboardPage() {
                   </button>
                 </div>
 
-                <form noValidate onSubmit={submitForm} className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+                <form ref={formPanelRef} noValidate onSubmit={submitForm} className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
               {error ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 sm:col-span-2">
                   {error}
@@ -895,43 +1024,79 @@ function OrganizerDashboardPage() {
                   {success}
                 </div>
               ) : null}
-              <input
-                required
-                placeholder="Title"
-                value={form.title}
-                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
-              />
-              <textarea
-                required
-                rows={4}
-                placeholder="Description"
-                value={form.description}
-                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
-              />
-              <select
-                value={form.schedule_type}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    schedule_type: e.target.value
-                  }))
-                }
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
-              >
-                <option value="single">Single Date Event</option>
-                <option value="multiple">Multiple Dates Event</option>
-                <option value="range">Date Range Event</option>
-              </select>
-              {form.schedule_type === "single" ? (
+              <FormField label="Event Title" hint="Use a clear title attendees can instantly understand." example="Summer Startup Mixer" className="sm:col-span-2">
                 <input
-                  type="date"
                   required
-                  value={form.event_date}
-                  onChange={(e) => setForm((prev) => ({ ...prev, event_date: e.target.value }))}
-                  className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  value={form.title}
+                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
+              </FormField>
+              <FormField label="Description" hint="Describe the experience, audience, and key value." example="Founder networking with live panel and Q&A." className="sm:col-span-2">
+                <textarea
+                  required
+                  rows={4}
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Schedule Type" hint="Select how attendees can pick event dates." className="sm:col-span-2">
+                <FilterPopupField
+                  label="Schedule"
+                  value={scheduleTypeLabel}
+                  isActive={activeFormPanel === "schedule"}
+                  onToggle={(e) => {
+                    e.stopPropagation();
+                    setActiveFormPanel((prev) => (prev === "schedule" ? null : "schedule"));
+                  }}
+                  usePortal={false}
+                  panelClassName="w-full min-w-[260px]"
+                  panelContent={
+                    <div className="space-y-1">
+                      {[
+                        { value: "single", label: "Single Date Event" },
+                        { value: "multiple", label: "Multiple Dates Event" },
+                        { value: "range", label: "Date Range Event" }
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, schedule_type: item.value }));
+                            setActiveFormPanel(null);
+                          }}
+                          className="flex w-full items-center rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              </FormField>
+              {form.schedule_type === "single" ? (
+                <FormField label="Event Date" hint="Choose the primary date for this event." className="sm:col-span-2">
+                  <FilterPopupField
+                    label="Date"
+                    value={form.event_date ? formatDateUS(form.event_date) : "Select event date"}
+                    isActive={activeFormPanel === "event_date"}
+                    onToggle={(e) => {
+                      e.stopPropagation();
+                      setActiveFormPanel((prev) => (prev === "event_date" ? null : "event_date"));
+                    }}
+                    usePortal={false}
+                    panelClassName="w-fit max-w-[calc(100vw-2rem)]"
+                    panelContent={
+                      <AirbnbDatePickerPanel
+                        value={form.event_date}
+                        onChange={(next) => setForm((prev) => ({ ...prev, event_date: next }))}
+                        closeOnSelect
+                        onClose={() => setActiveFormPanel(null)}
+                      />
+                    }
+                  />
+                </FormField>
               ) : null}
               {form.schedule_type === "multiple" ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
@@ -990,133 +1155,226 @@ function OrganizerDashboardPage() {
               ) : null}
               {form.schedule_type === "range" ? (
                 <>
-                  <input
-                    type="date"
-                    required
-                    value={form.event_start_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, event_start_date: e.target.value }))}
-                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                  />
-                  <input
-                    type="date"
-                    required
-                    value={form.event_end_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, event_end_date: e.target.value }))}
-                    className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                  />
+                  <FormField label="Start Date" hint="Beginning date of the event range.">
+                    <FilterPopupField
+                      label="Start Date"
+                      value={form.event_start_date ? formatDateUS(form.event_start_date) : "Select start date"}
+                      isActive={activeFormPanel === "event_start_date"}
+                      onToggle={(e) => {
+                        e.stopPropagation();
+                        setActiveFormPanel((prev) => (prev === "event_start_date" ? null : "event_start_date"));
+                      }}
+                      usePortal={false}
+                      panelClassName="w-fit max-w-[calc(100vw-2rem)]"
+                      panelContent={
+                        <AirbnbDatePickerPanel
+                          value={form.event_start_date}
+                          onChange={(next) => setForm((prev) => ({ ...prev, event_start_date: next }))}
+                          closeOnSelect
+                          onClose={() => setActiveFormPanel(null)}
+                        />
+                      }
+                    />
+                  </FormField>
+                  <FormField label="End Date" hint="Ending date of the event range.">
+                    <FilterPopupField
+                      label="End Date"
+                      value={form.event_end_date ? formatDateUS(form.event_end_date) : "Select end date"}
+                      isActive={activeFormPanel === "event_end_date"}
+                      onToggle={(e) => {
+                        e.stopPropagation();
+                        setActiveFormPanel((prev) => (prev === "event_end_date" ? null : "event_end_date"));
+                      }}
+                      usePortal={false}
+                      panelClassName="w-fit max-w-[calc(100vw-2rem)]"
+                      panelContent={
+                        <AirbnbDatePickerPanel
+                          value={form.event_end_date}
+                          onChange={(next) => setForm((prev) => ({ ...prev, event_end_date: next }))}
+                          closeOnSelect
+                          onClose={() => setActiveFormPanel(null)}
+                        />
+                      }
+                    />
+                  </FormField>
                 </>
               ) : null}
-              <input
-                type="time"
-                value={form.event_time}
-                onChange={(e) => setForm((prev) => ({ ...prev, event_time: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
+              <FormField label="Event Time" hint="Optional event start time." example="18:30">
+                <input
+                  type="time"
+                  value={form.event_time}
+                  onChange={(e) => setForm((prev) => ({ ...prev, event_time: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                 <p className="text-sm font-semibold text-slate-900">Event Location</p>
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <input
-                    required
-                    placeholder="Venue Name"
-                    value={form.venue_name}
-                    onChange={(e) => setForm((prev) => ({ ...prev, venue_name: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm sm:col-span-2"
-                  />
-                  <input
-                    placeholder="Venue Address"
-                    value={form.venue_address}
-                    onChange={(e) => setForm((prev) => ({ ...prev, venue_address: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm sm:col-span-2"
-                  />
-                  <input
-                    type="url"
-                    placeholder="Google Maps Link"
-                    value={form.google_maps_link}
-                    onChange={(e) => setForm((prev) => ({ ...prev, google_maps_link: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm sm:col-span-2"
-                  />
+                  <FormField label="Venue Name" hint="Name of the venue where event is hosted." example="Downtown Convention Center" className="sm:col-span-2">
+                    <input
+                      required
+                      value={form.venue_name}
+                      onChange={(e) => setForm((prev) => ({ ...prev, venue_name: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField label="Venue Address" hint="Street address for map and navigation." example="456 Market Street, San Francisco" className="sm:col-span-2">
+                    <input
+                      value={form.venue_address}
+                      onChange={(e) => setForm((prev) => ({ ...prev, venue_address: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField label="Google Maps Link" hint="Optional direct map URL for the event location." example="https://maps.google.com/..." className="sm:col-span-2">
+                    <input
+                      type="url"
+                      value={form.google_maps_link}
+                      onChange={(e) => setForm((prev) => ({ ...prev, google_maps_link: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
                 </div>
               </div>
-              <select
-                required
-                value={form.city_id}
-                onChange={(e) => setForm((prev) => ({ ...prev, city_id: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              >
-                <option value="">Select City</option>
-                {cities.map((city) => (
-                  <option key={city.value} value={city.value}>
-                    {city.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                required
-                value={form.category_id}
-                onChange={(e) => setForm((prev) => ({ ...prev, category_id: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              >
-                <option value="">Select Category</option>
-                {categories.map((category) => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="url"
-                placeholder="Ticket Link"
-                value={form.ticket_link}
-                onChange={(e) => setForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Price"
-                value={form.price}
-                onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
-              <input
-                type="number"
-                min="1"
-                max="168"
-                placeholder="Duration (Hours)"
-                value={form.duration_hours}
-                onChange={(e) => setForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
-              <select
-                value={form.age_limit}
-                onChange={(e) => setForm((prev) => ({ ...prev, age_limit: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              >
-                <option value="All Ages">All Ages</option>
-                <option value="5 yrs +">5 yrs +</option>
-                <option value="12 yrs +">12 yrs +</option>
-                <option value="18 yrs +">18 yrs +</option>
-              </select>
-              <input
-                placeholder="Languages (comma separated)"
-                value={form.languages}
-                onChange={(e) => setForm((prev) => ({ ...prev, languages: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
-              />
-              <input
-                placeholder="Genres (comma separated)"
-                value={form.genres}
-                onChange={(e) => setForm((prev) => ({ ...prev, genres: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
-              />
-              <input
-                type="url"
-                placeholder="Image Upload URL"
-                value={form.image_url}
-                onChange={(e) => setForm((prev) => ({ ...prev, image_url: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
-              />
+              <FormField label="City" hint="City where this event is being held.">
+                <FilterPopupField
+                  label="City"
+                  value={selectedCityLabel}
+                  isActive={activeFormPanel === "city"}
+                  onToggle={(e) => {
+                    e.stopPropagation();
+                    setActiveFormPanel((prev) => (prev === "city" ? null : "city"));
+                  }}
+                  usePortal={false}
+                  panelClassName="w-full min-w-[240px]"
+                  panelContent={
+                    <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
+                      {cities.map((city) => (
+                        <button
+                          key={city.value}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, city_id: String(city.value) }));
+                            setActiveFormPanel(null);
+                          }}
+                          className="flex w-full items-center rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                        >
+                          {city.label}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              </FormField>
+              <FormField label="Category" hint="Choose the best matching event category.">
+                <FilterPopupField
+                  label="Category"
+                  value={selectedCategoryLabel}
+                  isActive={activeFormPanel === "category"}
+                  onToggle={(e) => {
+                    e.stopPropagation();
+                    setActiveFormPanel((prev) => (prev === "category" ? null : "category"));
+                  }}
+                  usePortal={false}
+                  panelClassName="w-full min-w-[240px]"
+                  panelContent={
+                    <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
+                      {categories.map((category) => (
+                        <button
+                          key={category.value}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, category_id: String(category.value) }));
+                            setActiveFormPanel(null);
+                          }}
+                          className="flex w-full items-center rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                        >
+                          {category.label}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              </FormField>
+              <FormField label="Ticket Link" hint="Optional URL to your external ticketing page." example="https://tickets.example.com/event-123">
+                <input
+                  type="url"
+                  value={form.ticket_link}
+                  onChange={(e) => setForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Price (USD)" hint="Enter ticket price per person." example="29.99">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Duration (Hours)" hint="Total event duration in hours." example="4">
+                <input
+                  type="number"
+                  min="1"
+                  max="168"
+                  value={form.duration_hours}
+                  onChange={(e) => setForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Age Limit" hint="Set attendee age guidance for safety and clarity.">
+                <FilterPopupField
+                  label="Age"
+                  value={form.age_limit || "All Ages"}
+                  isActive={activeFormPanel === "age_limit"}
+                  onToggle={(e) => {
+                    e.stopPropagation();
+                    setActiveFormPanel((prev) => (prev === "age_limit" ? null : "age_limit"));
+                  }}
+                  usePortal={false}
+                  panelClassName="w-full min-w-[220px]"
+                  panelContent={
+                    <div className="space-y-0.5">
+                      {["All Ages", "5 yrs +", "12 yrs +", "18 yrs +"].map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, age_limit: item }));
+                            setActiveFormPanel(null);
+                          }}
+                          className="flex w-full items-center rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              </FormField>
+              <FormField label="Languages" hint="List spoken languages separated by commas." example="English, Spanish" className="sm:col-span-2">
+                <input
+                  value={form.languages}
+                  onChange={(e) => setForm((prev) => ({ ...prev, languages: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Genres" hint="Add genres or themes separated by commas." example="Jazz, Soul, R&B" className="sm:col-span-2">
+                <input
+                  value={form.genres}
+                  onChange={(e) => setForm((prev) => ({ ...prev, genres: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Image URL" hint="Add a high-quality banner image link." example="https://images.example.com/event.jpg" className="sm:col-span-2">
+                <input
+                  type="url"
+                  value={form.image_url}
+                  onChange={(e) => setForm((prev) => ({ ...prev, image_url: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                 <p className="text-sm font-semibold text-slate-900">Event Highlights</p>
                 <p className="mt-1 text-xs text-slate-500">Select all highlights that apply to this event.</p>

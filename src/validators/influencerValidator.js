@@ -14,4 +14,47 @@ const fetchInfluencersSchema = z.object({
   params: z.object({}).passthrough()
 });
 
-module.exports = { fetchInfluencersSchema };
+const submitInfluencerSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(2).max(160),
+    bio: z.string().trim().min(10).max(2000),
+    city_id: z.coerce.number().int().positive(),
+    category_id: z.coerce.number().int().positive(),
+    instagram: z.string().trim().max(255).optional(),
+    youtube: z.string().trim().max(255).optional(),
+    contact_email: z.string().trim().email(),
+    profile_image_url: z.string().trim().url().optional()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
+const myInfluencerSubmissionsSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
+const editOwnInfluencerSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(2).max(160),
+    bio: z.string().trim().min(10).max(2000),
+    city_id: z.coerce.number().int().positive(),
+    category_id: z.coerce.number().int().positive(),
+    instagram: z.string().trim().max(255).optional(),
+    youtube: z.string().trim().max(255).optional(),
+    contact_email: z.string().trim().email(),
+    profile_image_url: z.string().trim().url().optional()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+module.exports = {
+  fetchInfluencersSchema,
+  submitInfluencerSchema,
+  myInfluencerSubmissionsSchema,
+  editOwnInfluencerSchema
+};

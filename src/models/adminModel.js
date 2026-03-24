@@ -39,7 +39,64 @@ async function getAnalyticsCounts() {
   };
 }
 
+async function listAdminNotifications({ adminId, limit = 25 }) {
+  const [rows] = await pool.query(
+    `SELECT id, type, entity_type, entity_id, title, message, is_read, created_at
+     FROM admin_notifications
+     WHERE target_admin_id IS NULL OR target_admin_id = ?
+     ORDER BY created_at DESC
+     LIMIT ?`,
+    [adminId, Number(limit)]
+  );
+  return rows;
+}
+
+async function countUnreadAdminNotifications({ adminId }) {
+  const [[row]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM admin_notifications
+     WHERE (target_admin_id IS NULL OR target_admin_id = ?) AND is_read = 0`,
+    [adminId]
+  );
+  return Number(row?.total || 0);
+}
+
+async function markAllAdminNotificationsRead({ adminId }) {
+  const [result] = await pool.query(
+    `UPDATE admin_notifications
+     SET is_read = 1
+     WHERE (target_admin_id IS NULL OR target_admin_id = ?) AND is_read = 0`,
+    [adminId]
+  );
+  return result.affectedRows;
+}
+
+async function purgeReadNotificationsOlderThan({ adminId, minutes = 5 }) {
+  const [result] = await pool.query(
+    `DELETE FROM admin_notifications
+     WHERE (target_admin_id IS NULL OR target_admin_id = ?)
+       AND is_read = 1
+       AND created_at < (NOW() - INTERVAL ? MINUTE)`,
+    [adminId, Number(minutes)]
+  );
+  return result.affectedRows;
+}
+
+async function deleteAdminNotificationById({ adminId, notificationId }) {
+  const [result] = await pool.query(
+    `DELETE FROM admin_notifications
+     WHERE id = ? AND (target_admin_id IS NULL OR target_admin_id = ?)`,
+    [notificationId, adminId]
+  );
+  return result.affectedRows > 0;
+}
+
 module.exports = {
   createAdminNotification,
-  getAnalyticsCounts
+  getAnalyticsCounts,
+  listAdminNotifications,
+  countUnreadAdminNotifications,
+  markAllAdminNotificationsRead,
+  purgeReadNotificationsOlderThan,
+  deleteAdminNotificationById
 };

@@ -4,13 +4,14 @@ import DashboardLayout from "./layouts/DashboardLayout";
 import HomePage from "./pages/HomePage";
 import EventsPage from "./pages/EventsPage";
 import EventDetailsPage from "./pages/EventDetailsPage";
+import DealDetailsPage from "./pages/DealDetailsPage";
 import InfluencersPage from "./pages/InfluencersPage";
 import DealsPage from "./pages/DealsPage";
-import ServicesPage from "./pages/ServicesPage";
 import LoginPage from "./pages/LoginPage";
 import StaffLoginPage from "./pages/StaffLoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import UserDashboardPage from "./pages/UserDashboardPage";
+import UserSubmissionsPage from "./pages/UserSubmissionsPage";
 import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ContactPage from "./pages/ContactPage";
@@ -20,11 +21,13 @@ import AdminRoute from "./components/AdminRoute";
 import UserRoute from "./components/UserRoute";
 import OrganizerRoute from "./components/OrganizerRoute";
 import AnimatedBackground from "./components/AnimatedBackground";
+import ScrollToTop from "./components/ScrollToTop";
 
 function App() {
   return (
     <div className="relative isolate min-h-screen overflow-x-hidden">
       <AnimatedBackground />
+      <ScrollToTop />
       <div className="relative z-[2]">
         <Routes>
           <Route element={<MainLayout />}>
@@ -33,7 +36,7 @@ function App() {
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/influencers" element={<InfluencersPage />} />
             <Route path="/deals" element={<DealsPage />} />
-            <Route path="/services" element={<ServicesPage />} />
+            <Route path="/deals/:id" element={<DealDetailsPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/newsletter" element={<NewsletterPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -49,6 +52,7 @@ function App() {
             }
           >
             <Route path="/dashboard/user" element={<UserDashboardPage />} />
+            <Route path="/dashboard/user/submissions" element={<UserSubmissionsPage />} />
           </Route>
 
           <Route

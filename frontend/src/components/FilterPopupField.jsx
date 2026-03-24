@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { FiCalendar, FiChevronDown } from "react-icons/fi";
 
 function FilterPopupField({
   label,
@@ -15,6 +16,7 @@ function FilterPopupField({
   const panelRef = useRef(null);
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 8 });
   const [portalWidth, setPortalWidth] = useState(null);
+  const showDateIcon = /date|when/i.test(String(label || ""));
 
   const updatePortalPosition = useCallback(() => {
     if (!usePortal || !isActive || !triggerRef.current) {
@@ -102,8 +104,20 @@ function FilterPopupField({
           isActive ? "bg-slate-100 ring-1 ring-slate-200" : "hover:bg-slate-50"
         }`}
       >
-        <p className="text-xs font-semibold text-slate-900">{label}</p>
-        <p className="truncate pt-0.5 text-sm text-slate-600">{value}</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="inline-flex items-center gap-1 text-xs font-semibold text-slate-900">
+              {showDateIcon ? <FiCalendar size={12} className="text-slate-500" aria-hidden="true" /> : null}
+              {label}
+            </p>
+            <p className="truncate pt-0.5 text-sm text-slate-600">{value}</p>
+          </div>
+          <FiChevronDown
+            className={`shrink-0 text-slate-500 transition-transform duration-200 ${isActive ? "rotate-180" : ""}`}
+            size={16}
+            aria-hidden="true"
+          />
+        </div>
       </button>
 
       {usePortal ? (

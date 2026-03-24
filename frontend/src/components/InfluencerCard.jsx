@@ -6,7 +6,7 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite }) {
     <motion.article
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+      className="group relative flex h-full min-h-[22.5rem] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
     >
       <button
         type="button"
@@ -21,18 +21,20 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite }) {
       <img
         src={item.image || "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=1200"}
         alt={item.name}
+        loading="lazy"
+        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
         className="aspect-[4/3] w-full object-cover"
       />
-      <div className="space-y-1.5 p-4">
+      <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
             {item.category}
           </span>
           <span className="truncate text-xs text-slate-500">{item.city}</span>
         </div>
-        <h3 className="line-clamp-1 text-[15px] font-semibold text-slate-900">{item.name}</h3>
-        <p className="text-sm text-slate-500">{item.city}</p>
-        <p className="text-sm text-slate-500">{item.followers} followers</p>
+        <h3 className="line-clamp-1 text-sm font-semibold text-slate-900 sm:text-[15px]">{item.name}</h3>
+        <p className="text-xs text-slate-500 sm:text-sm">{item.city}</p>
+        <p className="mt-auto pt-1 text-xs text-slate-500 sm:text-sm">{item.followers} followers</p>
       </div>
     </motion.article>
   );

@@ -1,0 +1,7 @@
+SET NAMES utf8mb4;
+
+ALTER TABLE influencers
+  ADD COLUMN IF NOT EXISTS review_note VARCHAR(500) NULL AFTER status;
+
+ALTER TABLE deals
+  ADD COLUMN IF NOT EXISTS review_note VARCHAR(500) NULL AFTER status;

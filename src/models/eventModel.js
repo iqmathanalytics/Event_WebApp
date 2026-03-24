@@ -135,7 +135,25 @@ async function findEventById(id) {
 
 async function findPublicEventById(id) {
   const [rows] = await pool.query(
-    `SELECT e.*, c.name AS city_name, cat.name AS category_name, u.name AS organizer_name
+    `SELECT
+       e.*,
+       c.name AS city_name,
+       cat.name AS category_name,
+       u.name AS organizer_name,
+       (SELECT COUNT(*) FROM event_bookings eb WHERE eb.event_id = e.id) AS booking_count,
+       (
+         SELECT COUNT(*)
+         FROM events e2
+         WHERE e2.status = 'approved'
+           AND e2.city_id = e.city_id
+           AND e2.category_id = e.category_id
+       ) AS category_event_count,
+       (
+         CASE
+           WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
+           ELSE 0
+         END
+       ) AS recent_engagement_score
      FROM events e
      LEFT JOIN cities c ON c.id = e.city_id
      LEFT JOIN categories cat ON cat.id = e.category_id
@@ -231,6 +249,17 @@ async function listEvents({ filters, pagination }) {
   const whereValues = [];
   const selectValues = [];
 
+  // Default: hide expired events unless caller provided explicit date/month filters.
+  if (filters.futureOnly) {
+    conditions.push(
+      `(
+        (e.schedule_type = 'range' AND e.event_end_date >= CURDATE())
+        OR (e.schedule_type = 'multiple' AND e.event_date >= CURDATE())
+        OR ((e.schedule_type = 'single' OR e.schedule_type IS NULL) AND e.event_date >= CURDATE())
+      )`
+    );
+  }
+
   if (filters.status) {
     conditions.push("e.status = ?");
     whereValues.push(filters.status);
@@ -306,7 +335,29 @@ async function listEvents({ filters, pagination }) {
   );
 
   const [rows] = await pool.query(
-    `SELECT e.*, c.name AS city_name, cat.name AS category_name, ${relevanceSelect}
+    `SELECT
+       e.*,
+       c.name AS city_name,
+       cat.name AS category_name,
+       (
+         SELECT COUNT(*)
+         FROM event_bookings eb
+         WHERE eb.event_id = e.id
+       ) AS booking_count,
+       (
+         SELECT COUNT(*)
+         FROM events e2
+         WHERE e2.status = 'approved'
+           AND e2.city_id = e.city_id
+           AND e2.category_id = e.category_id
+       ) AS category_event_count,
+       (
+         CASE
+           WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
+           ELSE 0
+         END
+       ) AS recent_engagement_score,
+       ${relevanceSelect}
      FROM events e
      LEFT JOIN cities c ON c.id = e.city_id
      LEFT JOIN categories cat ON cat.id = e.category_id
@@ -319,6 +370,66 @@ async function listEvents({ filters, pagination }) {
   return { total: countRows[0].total, rows: rows.map(normalizeEventRow) };
 }
 
+async function listFeaturedEvents({ cityId, limit = 6 }) {
+  const values = [];
+  const cityClause = cityId ? "AND e.city_id = ?" : "";
+  if (cityId) {
+    values.push(cityId);
+  }
+  values.push(limit);
+
+  const [rows] = await pool.query(
+    `SELECT
+       e.*,
+       c.name AS city_name,
+       cat.name AS category_name,
+       (
+         SELECT COUNT(*) FROM event_bookings eb WHERE eb.event_id = e.id
+       ) AS booking_count,
+       (
+         SELECT COUNT(*)
+         FROM events e2
+         WHERE e2.status = 'approved'
+           AND e2.city_id = e.city_id
+           AND e2.category_id = e.category_id
+       ) AS category_event_count
+      ,
+       (
+         CASE
+           WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
+           ELSE 0
+         END
+       ) AS recent_engagement_score
+     FROM events e
+     LEFT JOIN cities c ON c.id = e.city_id
+     LEFT JOIN categories cat ON cat.id = e.category_id
+     WHERE e.status = 'approved'
+       AND e.event_date >= CURDATE()
+       ${cityClause}
+     ORDER BY e.popularity_score DESC
+     LIMIT ?`,
+    values
+  );
+
+  return rows.map(normalizeEventRow);
+}
+
+async function incrementEventPopularity({ eventId, delta, clickDelta = 0, viewDelta = 0 }) {
+  const safeDelta = Number(delta) || 0;
+  const safeClick = Number(clickDelta) || 0;
+  const safeView = Number(viewDelta) || 0;
+  const [result] = await pool.query(
+    `UPDATE events
+     SET popularity_score = popularity_score + ?,
+         click_count = click_count + ?,
+         view_count = view_count + ?,
+         updated_at = NOW()
+     WHERE id = ? AND status = 'approved'`,
+    [safeDelta, safeClick, safeView, eventId]
+  );
+  return result.affectedRows > 0;
+}
+
 module.exports = {
   createEvent,
   updateEventStatus,
@@ -327,5 +438,7 @@ module.exports = {
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
-  deleteEventByOrganizer
+  deleteEventByOrganizer,
+  listFeaturedEvents,
+  incrementEventPopularity
 };

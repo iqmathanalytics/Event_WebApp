@@ -2,7 +2,33 @@ const { pool } = require("../config/db");
 const ApiError = require("../utils/ApiError");
 const { getDateRange, getMonthRange } = require("../utils/dateRange");
 const bcrypt = require("bcryptjs");
-const { findUserByEmail, createUser, listUsersByRole, deactivateUserById } = require("../models/userModel");
+const {
+  findUserByEmail,
+  createUser,
+  findUserById,
+  listAllUsers,
+  listUsersByRole,
+  listUsersByOrganizerEnabled,
+  updateUserCapabilitiesById,
+  deactivateUserById,
+  activateUserById,
+  deleteUserById
+} = require("../models/userModel");
+const { getPagination } = require("../utils/pagination");
+const {
+  listSubscribersPaginated,
+  getAllSubscribersForExport,
+  deleteSubscriberByEmail
+} = require("../models/newsletterModel");
+const { listMessagesPaginated, getAllMessagesForExport } = require("../models/contactModel");
+const { syncMailchimpSubscriber } = require("../utils/emailIntegrations");
+const {
+  listAdminNotifications,
+  countUnreadAdminNotifications,
+  markAllAdminNotificationsRead,
+  purgeReadNotificationsOlderThan,
+  deleteAdminNotificationById
+} = require("../models/adminModel");
 
 async function getModerationQueue() {
   const [rows] = await pool.query(
@@ -96,12 +122,36 @@ async function getAnalytics(filters = {}) {
     `SELECT COUNT(*) AS active_deals FROM deals WHERE ${dealConditions.join(" AND ")}`,
     dealValues
   );
+  const influencerConditions = ["status = 'approved'"];
+  const influencerValues = [];
+  if (cityId) {
+    influencerConditions.push("city_id = ?");
+    influencerValues.push(cityId);
+  }
+  if (categoryId) {
+    influencerConditions.push("category_id = ?");
+    influencerValues.push(categoryId);
+  }
+  buildDateClause({
+    dateStart,
+    dateEnd,
+    monthStart,
+    monthEnd,
+    column: "created_at",
+    values: influencerValues,
+    conditions: influencerConditions
+  });
+  const [[totalInfluencers]] = await pool.query(
+    `SELECT COUNT(*) AS total_influencers FROM influencers WHERE ${influencerConditions.join(" AND ")}`,
+    influencerValues
+  );
 
   return {
     total_users: users.total_users,
     total_events: events.total_events,
     pending_events: pendingEvents.pending_events,
-    active_deals: activeDeals.active_deals
+    active_deals: activeDeals.active_deals,
+    total_influencers: totalInfluencers.total_influencers
   };
 }
 
@@ -110,7 +160,7 @@ function resolveTable(type) {
     events: "events",
     deals: "deals",
     influencers: "influencers",
-    services: "services"
+    dealers: "dealer_profiles"
   };
   const table = mapping[type];
   if (!table) {
@@ -186,10 +236,20 @@ async function updateListingStatus({ type, id, status, note, adminId }) {
 
   const [result] = await pool.query(
     `UPDATE ${table}
-     SET status = ?, updated_at = NOW()
+     SET status = ?, review_note = ?, updated_at = NOW()
      WHERE id = ?`,
-    [status, id]
-  );
+    [status, note || null, id]
+  ).catch(async (err) => {
+    if (err?.code !== "ER_BAD_FIELD_ERROR") {
+      throw err;
+    }
+    return pool.query(
+      `UPDATE ${table}
+       SET status = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [status, id]
+    );
+  });
   return result.affectedRows > 0;
 }
 
@@ -218,11 +278,22 @@ function resolveEditableColumns(type) {
       "languages",
       "genres",
       "event_highlights",
+      "one_of_a_kind_manual",
       "price_per_day"
     ],
     deals: ["title", "description", "city_id", "category_id", "original_price", "discounted_price", "expiry_date"],
-    influencers: ["name", "bio", "city_id", "category_id"],
-    services: ["title", "description", "city_id", "category_id", "price_min", "price_max"]
+    influencers: ["name", "bio", "city_id", "category_id", "contact_email", "profile_image_url"],
+    dealers: [
+      "name",
+      "business_email",
+      "business_mobile",
+      "location_text",
+      "city_id",
+      "category_id",
+      "bio",
+      "website_or_social_link",
+      "profile_image_url"
+    ]
   };
   return mapping[type] || [];
 }
@@ -282,12 +353,15 @@ async function createStaffUser({ name, email, mobile_number, password, role }) {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const { userRole, organizerEnabled } = role === "organizer" ? { userRole: "user", organizerEnabled: true } : { userRole: "admin", organizerEnabled: false };
+
   const userId = await createUser({
     name,
     email,
     mobileNumber: mobile_number,
     passwordHash,
-    role
+    role: userRole,
+    organizerEnabled
   });
 
   return { userId };
@@ -297,7 +371,14 @@ async function fetchTeamUsers(role) {
   if (!["organizer", "admin"].includes(role)) {
     throw new ApiError(400, "Invalid role");
   }
-  return listUsersByRole(role);
+  if (role === "admin") {
+    return listUsersByRole("admin");
+  }
+  return listUsersByOrganizerEnabled();
+}
+
+async function fetchAllUsers() {
+  return listAllUsers();
 }
 
 async function deactivateAccount(userId) {
@@ -305,6 +386,221 @@ async function deactivateAccount(userId) {
   if (!updated) {
     throw new ApiError(404, "User not found");
   }
+}
+
+async function activateAccount(userId) {
+  const updated = await activateUserById(userId);
+  if (!updated) {
+    throw new ApiError(404, "User not found");
+  }
+}
+
+async function removeUserAccount(userId) {
+  if (Number(userId) === 1) {
+    throw new ApiError(400, "Master admin account cannot be deleted");
+  }
+  const target = await findUserById(userId);
+  const deleted = await deleteUserById(userId);
+  if (!deleted) {
+    throw new ApiError(404, "User not found");
+  }
+  await deleteSubscriberByEmail(target?.email).catch(() => {});
+}
+
+async function updateTeamUserCapabilities({ userId, capabilities }) {
+  const updated = await updateUserCapabilitiesById({
+    id: userId,
+    can_post_events: capabilities.can_post_events,
+    can_create_influencer_profile: capabilities.can_create_influencer_profile,
+    can_post_deals: capabilities.can_post_deals
+  });
+  if (!updated) {
+    throw new ApiError(404, "User not found");
+  }
+}
+
+async function listNewsletterSubscribers(query = {}) {
+  const { page, limit, offset } = getPagination(query);
+  const { rows, total } = await listSubscribersPaginated({ offset, limit });
+  return { rows, total, page, limit };
+}
+
+async function getNewsletterSubscribersExportRows() {
+  return getAllSubscribersForExport();
+}
+
+async function listContactMessages(query = {}) {
+  const { page, limit, offset } = getPagination(query);
+  const { rows, total } = await listMessagesPaginated({ offset, limit });
+  return { rows, total, page, limit };
+}
+
+async function getContactMessagesExportRows() {
+  return getAllMessagesForExport();
+}
+
+function splitNameFallback(fullName = "") {
+  const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts.slice(0, -1).join(" ") || parts[0] || "",
+    lastName: parts.length > 1 ? parts[parts.length - 1] : ""
+  };
+}
+
+async function syncNewsletterSubscribersToMailchimp() {
+  const rows = await getAllSubscribersForExport();
+  let synced = 0;
+  let skipped = 0;
+  let failed = 0;
+  const failures = [];
+
+  for (const row of rows) {
+    const email = String(row.email || "").trim().toLowerCase();
+    if (!email) {
+      skipped += 1;
+      continue;
+    }
+
+    let firstName = String(row.first_name || "").trim();
+    let lastName = String(row.last_name || "").trim();
+    if (!firstName && !lastName) {
+      const split = splitNameFallback(String(row.user_name || ""));
+      firstName = split.firstName;
+      lastName = split.lastName;
+    }
+    const cityName = String(row.city_name || "").trim();
+    const phoneNumber = String(row.mobile_number || "").trim();
+
+    const result = await syncMailchimpSubscriber({
+      email,
+      firstName,
+      lastName,
+      cityName,
+      phoneNumber
+    });
+
+    if (result?.synced) {
+      synced += 1;
+    } else if (result?.skipped) {
+      skipped += 1;
+    } else {
+      failed += 1;
+      failures.push({
+        email,
+        error: result?.error || "Unknown Mailchimp error"
+      });
+    }
+  }
+
+  return {
+    total: rows.length,
+    synced,
+    skipped,
+    failed,
+    failures: failures.slice(0, 20)
+  };
+}
+
+async function getAdminNotifications({ adminId, limit = 25 }) {
+  await purgeReadNotificationsOlderThan({ adminId, minutes: 5 });
+  const [rows, unread] = await Promise.all([
+    listAdminNotifications({ adminId, limit }),
+    countUnreadAdminNotifications({ adminId })
+  ]);
+  const [[pendingEvents]] = await pool.query(
+    "SELECT COUNT(*) AS total FROM events WHERE status = 'pending'"
+  );
+  const [[pendingDeals]] = await pool.query(
+    "SELECT COUNT(*) AS total FROM deals WHERE status = 'pending'"
+  );
+  const [[pendingInfluencers]] = await pool.query(
+    "SELECT COUNT(*) AS total FROM influencers WHERE status = 'pending'"
+  );
+  const [[pendingDealers]] = await pool.query(
+    "SELECT COUNT(*) AS total FROM dealer_profiles WHERE status = 'pending'"
+  );
+  const [[newContacts]] = await pool.query(
+    "SELECT COUNT(*) AS total FROM contact_messages WHERE status = 'new'"
+  );
+
+  const summary = [];
+  if (Number(pendingEvents.total || 0) > 0) {
+    summary.push({
+      id: "summary-pending-events",
+      type: "summary",
+      entity_type: "events",
+      entity_id: null,
+      title: "Pending event approvals",
+      message: `${pendingEvents.total} event submissions waiting for review`,
+      is_read: 0,
+      created_at: new Date().toISOString()
+    });
+  }
+  if (Number(pendingDeals.total || 0) > 0) {
+    summary.push({
+      id: "summary-pending-deals",
+      type: "summary",
+      entity_type: "deals",
+      entity_id: null,
+      title: "Pending deal approvals",
+      message: `${pendingDeals.total} deal submissions waiting for review`,
+      is_read: 0,
+      created_at: new Date().toISOString()
+    });
+  }
+  if (Number(pendingInfluencers.total || 0) > 0) {
+    summary.push({
+      id: "summary-pending-influencers",
+      type: "summary",
+      entity_type: "influencers",
+      entity_id: null,
+      title: "Pending influencer approvals",
+      message: `${pendingInfluencers.total} influencer profiles waiting for review`,
+      is_read: 0,
+      created_at: new Date().toISOString()
+    });
+  }
+  if (Number(pendingDealers.total || 0) > 0) {
+    summary.push({
+      id: "summary-pending-dealers",
+      type: "summary",
+      entity_type: "dealers",
+      entity_id: null,
+      title: "Pending dealer approvals",
+      message: `${pendingDealers.total} dealer profiles waiting for review`,
+      is_read: 0,
+      created_at: new Date().toISOString()
+    });
+  }
+  if (Number(newContacts.total || 0) > 0) {
+    summary.push({
+      id: "summary-new-contacts",
+      type: "summary",
+      entity_type: "contact",
+      entity_id: null,
+      title: "New contact messages",
+      message: `${newContacts.total} new contact requests need attention`,
+      is_read: 0,
+      created_at: new Date().toISOString()
+    });
+  }
+
+  return { rows: [...summary, ...rows], unread: Number(unread || 0) };
+}
+
+async function markAdminNotificationsRead({ adminId }) {
+  await markAllAdminNotificationsRead({ adminId });
+  const unread = await countUnreadAdminNotifications({ adminId });
+  return { unread: Number(unread || 0) };
+}
+
+async function deleteAdminNotification({ adminId, notificationId }) {
+  const deleted = await deleteAdminNotificationById({ adminId, notificationId });
+  if (!deleted) {
+    throw new ApiError(404, "Notification not found");
+  }
+  const unread = await countUnreadAdminNotifications({ adminId });
+  return { unread: Number(unread || 0) };
 }
 
 module.exports = {
@@ -316,5 +612,17 @@ module.exports = {
   deleteListing,
   createStaffUser,
   fetchTeamUsers,
-  deactivateAccount
+  fetchAllUsers,
+  updateTeamUserCapabilities,
+  deactivateAccount,
+  activateAccount,
+  removeUserAccount,
+  listNewsletterSubscribers,
+  getNewsletterSubscribersExportRows,
+  listContactMessages,
+  getContactMessagesExportRows,
+  syncNewsletterSubscribersToMailchimp,
+  getAdminNotifications,
+  markAdminNotificationsRead,
+  deleteAdminNotification
 };

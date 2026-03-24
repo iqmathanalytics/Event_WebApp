@@ -1,36 +1,11 @@
+# Render Blueprint — set secrets (DB_*, JWT_*, etc.) in the Render dashboard or here as sync: false.
 services:
   - type: web
-    name: city-events-lifestyle-hub-api
-    env: node
-    plan: starter
+    name: yay-tickets-api
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: .
     buildCommand: npm install
     startCommand: npm start
-    autoDeploy: true
     healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        value: 4000
-      - key: DB_USER
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_NAME
-        sync: false
-      - key: DB_SSL
-        value: "true"
-      - key: JWT_ACCESS_SECRET
-        sync: false
-      - key: JWT_ACCESS_EXPIRES_IN
-        value: 15m
-      - key: JWT_REFRESH_SECRET
-        sync: false
-      - key: JWT_REFRESH_EXPIRES_IN
-        value: 7d
-      - key: CORS_ORIGIN
-        sync: false

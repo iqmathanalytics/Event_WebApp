@@ -2,51 +2,68 @@ const express = require("express");
 const eventController = require("../controllers/eventController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
-const roleMiddleware = require("../middleware/roleMiddleware");
+const organizerAccessMiddleware = require("../middleware/organizerAccessMiddleware");
 const validateRequest = require("../middleware/validateRequest");
 const {
   submitEventSchema,
   moderateEventSchema,
   fetchEventsSchema,
   fetchEventByIdSchema,
+  fetchFeaturedEventsSchema,
   editOwnEventSchema,
-  deleteOwnEventSchema
+  deleteOwnEventSchema,
+  trackEventAnalyticsSchema
 } = require("../validators/eventValidator");
 
 const router = express.Router();
 
 router.get("/", validateRequest(fetchEventsSchema), eventController.fetchEvents);
+router.get(
+  "/featured",
+  validateRequest(fetchFeaturedEventsSchema),
+  eventController.fetchFeaturedEvents
+);
+router.post(
+  "/:id/track-click",
+  validateRequest(trackEventAnalyticsSchema),
+  eventController.trackEventClick
+);
+router.post(
+  "/:id/track-view",
+  validateRequest(trackEventAnalyticsSchema),
+  eventController.trackEventView
+);
 router.post(
   "/",
   authMiddleware,
-  roleMiddleware("organizer"),
+  organizerAccessMiddleware,
   validateRequest(submitEventSchema),
   eventController.submitEvent
 );
 router.get(
   "/my-events",
   authMiddleware,
-  roleMiddleware("organizer"),
+  organizerAccessMiddleware,
   eventController.fetchMySubmissions
 );
 router.get(
   "/my-submissions",
   authMiddleware,
-  roleMiddleware("organizer"),
+  organizerAccessMiddleware,
   eventController.fetchMySubmissions
 );
 router.get("/:id", validateRequest(fetchEventByIdSchema), eventController.fetchEventById);
 router.put(
   "/:id",
   authMiddleware,
-  roleMiddleware("organizer"),
+  organizerAccessMiddleware,
   validateRequest(editOwnEventSchema),
   eventController.editOwnEvent
 );
 router.delete(
   "/:id",
   authMiddleware,
-  roleMiddleware("organizer"),
+  organizerAccessMiddleware,
   validateRequest(deleteOwnEventSchema),
   eventController.deleteOwnEvent
 );

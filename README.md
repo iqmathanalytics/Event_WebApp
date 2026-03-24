@@ -1,6 +1,6 @@
-# City Events & Lifestyle Hub - Backend
+# Yay! Tickets - Backend
 
-Production-grade Node.js + Express backend for the City Events & Lifestyle Hub platform.
+Production-grade Node.js + Express backend for the Yay! Tickets platform.
 
 ## Tech
 

@@ -1,4 +1,5 @@
 @import "react-datepicker/dist/react-datepicker.css";
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -13,10 +14,63 @@ body,
 body {
   @apply text-slate-900 antialiased;
   background-color: #f7f9fc;
+  overflow-x: hidden;
 }
 
 .container-page {
   @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+
+@media (max-width: 767px) {
+  .container-page {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  touch-action: manipulation;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-height: 44px;
+}
+
+.mobile-safe-main {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
+.mobile-bottom-nav {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(0.55rem + env(safe-area-inset-bottom));
+  z-index: 55;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 1rem;
+  padding: 0.45rem;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 1023px) {
+  .footer-safe-bottom {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 .airbnb-calendar {
@@ -195,4 +249,209 @@ body {
 
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* Unified popup form controls styled to match main filter UI language */
+.popup-modal input:not([type="checkbox"]):not([type="radio"]),
+.popup-modal select,
+.popup-modal textarea {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.popup-modal input::placeholder,
+.popup-modal textarea::placeholder {
+  color: #94a3b8;
+}
+
+.popup-modal input:focus,
+.popup-modal select:focus,
+.popup-modal textarea:focus {
+  outline: none;
+  border-color: #cbd5e1;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+}
+
+.popup-modal select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #64748b 50%),
+    linear-gradient(135deg, #64748b 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 2.25rem;
+}
+
+.popup-modal input[type="date"],
+.popup-modal input[type="time"] {
+  color-scheme: light;
+}
+
+@keyframes yayHeroFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes yayHeroBangBounce {
+  0%,
+  84%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  88% {
+    transform: translateY(-5px) rotate(5deg);
+  }
+  92% {
+    transform: translateY(-3px) rotate(-5deg);
+  }
+  96% {
+    transform: translateY(-5px) rotate(4deg);
+  }
+}
+
+@keyframes yayHeroGradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes yayHeroColorDrift {
+  0%,
+  100% {
+    filter: hue-rotate(0deg) saturate(1.03);
+  }
+  50% {
+    filter: hue-rotate(16deg) saturate(1.1);
+  }
+}
+
+@keyframes yayHeroGlowPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 20px rgba(167, 139, 250, 0.45)) drop-shadow(0 0 24px rgba(96, 165, 250, 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 30px rgba(167, 139, 250, 0.6)) drop-shadow(0 0 30px rgba(96, 165, 250, 0.5));
+  }
+}
+
+@keyframes yayHeroWordFloat {
+  0%,
+  100% {
+    transform: translateY(0) scaleX(1) scaleY(1);
+  }
+  50% {
+    transform: translateY(-2px) scaleX(1.03) scaleY(0.97);
+  }
+}
+
+.yay-hero-logo {
+  background-size: 220% 220%;
+  display: flex;
+  align-items: flex-end;
+  transform: scaleX(0.85);
+  transform-origin: left center;
+  text-shadow: 0 0 15px rgba(167, 139, 250, 0.5);
+  animation:
+    yayHeroFadeIn 0.8s ease-out both,
+    yayHeroGlowPulse 2s ease-in-out infinite,
+    yayHeroGradientShift 6s ease-in-out infinite,
+    yayHeroColorDrift 5.5s ease-in-out infinite;
+}
+
+.yay-hero-gradient-text {
+  background-image: linear-gradient(180deg, #c4b5fd 0%, #a78bfa 100%);
+  background-size: 220% 220%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: yayHeroGradientShift 6s ease-in-out infinite;
+}
+
+.yay-hero-word {
+  animation: yayHeroWordFloat 3.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.yay-hero-strong {
+  font-weight: 800;
+}
+
+.yay-hero-soft {
+  font-weight: 600;
+}
+
+.yay-hero-logo {
+  position: relative;
+}
+
+.yay-hero-bang {
+  margin-left: 0.02em;
+  margin-right: 0.06em;
+  font-weight: 800;
+  color: #ec4899;
+  text-shadow: 0 0 15px rgba(236, 72, 153, 0.72), 0 0 24px rgba(167, 139, 250, 0.5);
+  animation: yayHeroBangBounce 4s ease-in-out infinite;
+  transform-origin: center bottom;
+  will-change: transform;
+}
+
+.hero-brand-logo-mobile-only {
+  width: 50vw !important;
+  max-width: 20rem !important;
+  font-size: 2.5rem !important;
+  transform: scaleX(0.94) !important;
+}
+
+@media (min-width: 640px) {
+  .hero-brand-logo-mobile-only {
+    width: auto !important;
+    max-width: none !important;
+    font-size: 2.65rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hero-brand-logo-mobile-only {
+    font-size: 3.5rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .popup-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 1.25rem 1.25rem 0 0 !important;
+  }
+
+  .popup-modal .popup-actions {
+    position: sticky;
+    bottom: 0;
+    background: linear-gradient(to top, #ffffff 65%, rgba(255, 255, 255, 0.88));
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    z-index: 2;
+  }
 }

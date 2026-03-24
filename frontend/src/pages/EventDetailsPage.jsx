@@ -1,10 +1,9 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FiCalendar, FiClock, FiExternalLink, FiMapPin, FiMinus, FiPlus, FiUser } from "react-icons/fi";
+import { FiCalendar, FiClock, FiMapPin, FiUser } from "react-icons/fi";
 import { CheckCircle, Clock, Globe, Music, Users } from "lucide-react";
-import { fetchEventById } from "../services/eventService";
-import { createBooking } from "../services/bookingService";
+import { fetchEventById, trackEventView } from "../services/eventService";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import useAuth from "../hooks/useAuth";
 
@@ -49,21 +48,11 @@ function getEmbedMapUrl(googleMapsLink, venueName, venueAddress) {
 
 function EventDetailsPage() {
   const { id } = useParams();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [attendeeCount, setAttendeeCount] = useState(1);
-  const [selectedDates, setSelectedDates] = useState([]);
-  const [showBookingForm, setShowBookingForm] = useState(false);
-  const [bookingForm, setBookingForm] = useState({
-    name: "",
-    email: "",
-    phone: ""
-  });
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingMessage, setBookingMessage] = useState("");
-  const [bookingError, setBookingError] = useState("");
+  const [trackedView, setTrackedView] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -95,50 +84,14 @@ function EventDetailsPage() {
   }, [id]);
 
   useEffect(() => {
-    setBookingForm({
-      name: user?.name || "",
-      email: user?.email || "",
-      phone: user?.mobile_number || ""
-    });
-  }, [user]);
-
-  useEffect(() => {
-    if (event?.event_date) {
-      const available = getAvailableDates(event);
-      setSelectedDates(available.length ? [available[0]] : [String(event.event_date).slice(0, 10)]);
+    if (!id || trackedView) {
+      return;
     }
-  }, [event]);
+    // Fire-and-forget analytics. Backend will ignore unapproved events.
+    void trackEventView(id).finally(() => setTrackedView(true));
+  }, [id, trackedView]);
 
-  const availableDates = event ? getAvailableDates(event) : [];
   const pricePerDay = Number(event?.price || 0);
-  const totalDays = selectedDates.length || 1;
-  const subtotal = pricePerDay * totalDays;
-  const totalAmount = subtotal * attendeeCount;
-
-  const submitBooking = async (e) => {
-    e.preventDefault();
-    setBookingError("");
-    setBookingMessage("");
-    try {
-      setBookingLoading(true);
-      await createBooking({
-        event_id: Number(event.id),
-        attendee_count: Number(attendeeCount),
-        selected_dates: selectedDates,
-        booking_date: selectedDates[0] || String(event.event_date).slice(0, 10),
-        name: bookingForm.name,
-        email: bookingForm.email,
-        phone: bookingForm.phone
-      });
-      setShowBookingForm(false);
-      setBookingMessage("Booking request submitted successfully.");
-    } catch (err) {
-      const apiMessage = err?.response?.data?.message;
-      setBookingError(apiMessage || "Could not reserve tickets. Please check your details.");
-    } finally {
-      setBookingLoading(false);
-    }
-  };
 
   if (loading) {
     return <p className="text-sm text-slate-500">Loading event details...</p>;
@@ -158,6 +111,10 @@ function EventDetailsPage() {
   const highlights = parseHighlights(event.event_highlights);
   const venueName = event.venue_name || event.venue || "Venue to be announced";
   const mapEmbedUrl = getEmbedMapUrl(event.google_maps_link, venueName, event.venue_address);
+  const isGuest = !isAuthenticated;
+  const fullDescription = event.description || "No event description provided yet.";
+  const partialDescription =
+    fullDescription.length > 240 ? `${fullDescription.slice(0, 240).trim()}...` : fullDescription;
 
   return (
     <motion.div
@@ -172,10 +129,10 @@ function EventDetailsPage() {
         className="aspect-[16/7] w-full rounded-3xl object-cover"
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.7fr_1fr]">
+      <div className="grid grid-cols-1 gap-5">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="mb-2 text-sm text-slate-500">{event.city_name || "City"}</p>
-          <h1 className="text-3xl font-bold leading-tight text-slate-900">{event.title}</h1>
+          <h1 className="text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">{event.title}</h1>
 
           <div className="mt-4 grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
             <p className="inline-flex items-center gap-2">
@@ -199,7 +156,7 @@ function EventDetailsPage() {
           <div className="mt-5 border-t border-slate-100 pt-5">
             <h2 className="text-base font-semibold text-slate-900">About this event</h2>
             <p className="mt-2 text-sm leading-6 text-slate-700">
-              {event.description || "No event description provided yet."}
+              {isGuest ? partialDescription : fullDescription}
             </p>
           </div>
 
@@ -222,7 +179,7 @@ function EventDetailsPage() {
             </p>
           </div>
 
-          {highlights.length > 0 ? (
+          {!isGuest && highlights.length > 0 ? (
             <div className="mt-5 border-t border-slate-100 pt-5">
               <h2 className="text-base font-semibold text-slate-900">Event Highlights</h2>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -239,240 +196,116 @@ function EventDetailsPage() {
             </div>
           ) : null}
 
-          <div className="mt-5 border-t border-slate-100 pt-5">
-            <h2 className="text-base font-semibold text-slate-900">Location</h2>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">{venueName}</p>
-              {event.venue_address ? <p>{event.venue_address}</p> : null}
-              {!event.venue_address ? (
-                <p className="text-slate-500">Address not provided.</p>
+          {!isGuest ? (
+            <div className="mt-5 border-t border-slate-100 pt-5">
+              <h2 className="text-base font-semibold text-slate-900">Location</h2>
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">{venueName}</p>
+                {event.venue_address ? <p>{event.venue_address}</p> : null}
+                {!event.venue_address ? (
+                  <p className="text-slate-500">Address not provided.</p>
+                ) : null}
+              </div>
+
+              {mapEmbedUrl ? (
+                <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                  <iframe
+                    title="Event location map"
+                    src={mapEmbedUrl}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="h-64 w-full md:h-72"
+                    allowFullScreen
+                  />
+                </div>
               ) : null}
             </div>
+          ) : null}
 
-            {mapEmbedUrl ? (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                <iframe
-                  title="Event location map"
-                  src={mapEmbedUrl}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  className="h-64 w-full md:h-72"
-                  allowFullScreen
-                />
+          {isGuest ? (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <h2 className="text-base font-semibold text-slate-900">View More</h2>
+              <p className="mt-2 text-sm text-slate-700">
+                Login or register to view complete event details, highlights, and location information.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  to="/login"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                >
+                  Login to View More
+                </Link>
+                <Link
+                  to="/register"
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Register
+                </Link>
               </div>
-            ) : null}
+            </div>
+          ) : null}
+
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Reserve Tickets</p>
+                <p className="text-sm text-slate-600">
+                  {isGuest
+                    ? "Login or register to continue with ticket reservation."
+                    : "Continue to the organizer ticket link to reserve your spot."}
+                </p>
+              </div>
+              {!isAuthenticated ? (
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                >
+                  Reserve Tickets
+                </Link>
+              ) : event.ticket_link ? (
+                <a
+                  href={event.ticket_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                >
+                  Reserve Tickets
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex items-center justify-center rounded-full bg-slate-300 px-4 py-2 text-sm font-semibold text-slate-600"
+                >
+                  Reserve Tickets
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Price from {formatCurrency(pricePerDay)}</p>
           </div>
 
           <Link to="/events" className="mt-5 inline-block text-sm font-semibold text-brand-600">
             Browse More Events
           </Link>
         </div>
-
-        <motion.aside
-          initial={{ opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-          className="sticky top-28 h-fit rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Booking</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{formatCurrency(pricePerDay)}</p>
-          <p className="mt-1 text-sm text-slate-500">per day / per guest</p>
-
-          <div className="mt-4 space-y-3">
-            <div>
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Select Date{event.schedule_type === "single" ? "" : "(s)"}
-              </span>
-              <div className="hide-scrollbar max-h-40 space-y-1.5 overflow-y-auto pr-1">
-                {availableDates.map((dateItem) => {
-                  const isSelected = selectedDates.includes(dateItem);
-                  return (
-                    <button
-                      key={dateItem}
-                      type="button"
-                      onClick={() => {
-                        if (event.schedule_type === "single") {
-                          setSelectedDates([dateItem]);
-                          return;
-                        }
-                        setSelectedDates((prev) => {
-                          if (prev.includes(dateItem)) {
-                            const next = prev.filter((d) => d !== dateItem);
-                            return next.length ? next : [dateItem];
-                          }
-                          return [...prev, dateItem].sort();
-                        });
-                      }}
-                      className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm ${
-                        isSelected
-                          ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      <span>{formatSimpleDate(dateItem)}</span>
-                      <span className="text-xs font-semibold">{isSelected ? "Selected" : "Select"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Guests / Attendees
-              </span>
-              <div className="flex items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2">
-                <button
-                  type="button"
-                  onClick={() => setAttendeeCount((prev) => Math.max(1, prev - 1))}
-                  className="grid h-8 w-8 place-content-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
-                >
-                  <FiMinus />
-                </button>
-                <p className="text-sm font-semibold text-slate-900">
-                  {attendeeCount} {attendeeCount === 1 ? "Guest" : "Guests"}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setAttendeeCount((prev) => Math.min(50, prev + 1))}
-                  className="grid h-8 w-8 place-content-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
-                >
-                  <FiPlus />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <span className="mt-4 inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-            {event.category_name || "General"}
-          </span>
-
-          {!isAuthenticated ? (
-            <Link
-              to="/login"
-              className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-            >
-              Login to Reserve Tickets
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowBookingForm((prev) => !prev)}
-              className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-            >
-              {showBookingForm ? "Close Booking Form" : "Reserve Tickets"}
-            </button>
-          )}
-
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            <p className="font-semibold text-slate-900">Price Breakdown</p>
-            <p className="mt-1">
-              {formatCurrency(pricePerDay)} x {totalDays} {totalDays === 1 ? "day" : "days"} x {attendeeCount}{" "}
-              {attendeeCount === 1 ? "guest" : "guests"}
-            </p>
-            <p className="mt-1">
-              Selected dates:{" "}
-              <span className="font-medium">
-                {selectedDates.length ? selectedDates.map((d) => formatSimpleDate(d)).join(", ") : "None"}
-              </span>
-            </p>
-            <p className="mt-2 text-base font-bold text-slate-900">Total: {formatCurrency(totalAmount)}</p>
-          </div>
-
-          {showBookingForm ? (
-            <motion.form
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              onSubmit={submitBooking}
-              className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3"
-            >
-              <input
-                required
-                placeholder="Name"
-                value={bookingForm.name}
-                onChange={(e) => setBookingForm((prev) => ({ ...prev, name: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
-              <input
-                required
-                type="email"
-                placeholder="Email"
-                value={bookingForm.email}
-                onChange={(e) => setBookingForm((prev) => ({ ...prev, email: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
-              <input
-                required
-                placeholder="Phone number"
-                value={bookingForm.phone}
-                onChange={(e) => setBookingForm((prev) => ({ ...prev, phone: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={bookingLoading}
-                className="w-full rounded-full bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
-              >
-                {bookingLoading ? "Reserving..." : "Confirm Reservation"}
-              </button>
-            </motion.form>
-          ) : null}
-
-          {bookingMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{bookingMessage}</p> : null}
-          {bookingError ? <p className="mt-3 text-sm font-medium text-rose-600">{bookingError}</p> : null}
-
-          <p className="mt-4 text-xs text-slate-500">You won&apos;t be charged yet</p>
-          {event.ticket_link ? (
-            <a
-              href={event.ticket_link}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              <FiExternalLink />
-              Open Ticket Link
-            </a>
-          ) : null}
-        </motion.aside>
       </div>
     </motion.div>
   );
 }
 
-function getAvailableDates(event) {
-  if (!event) {
-    return [];
-  }
-  if (event.schedule_type === "multiple" && Array.isArray(event.event_dates) && event.event_dates.length) {
-    return [...event.event_dates].sort();
-  }
-  if (event.schedule_type === "range" && event.event_start_date && event.event_end_date) {
-    const dates = [];
-    const start = new Date(`${String(event.event_start_date).slice(0, 10)}T00:00:00`);
-    const end = new Date(`${String(event.event_end_date).slice(0, 10)}T00:00:00`);
-    while (start <= end && dates.length < 366) {
-      dates.push(start.toISOString().slice(0, 10));
-      start.setDate(start.getDate() + 1);
-    }
-    return dates;
-  }
-  return event.event_date ? [String(event.event_date).slice(0, 10)] : [];
-}
-
-function formatSimpleDate(value) {
-  return formatDateUS(String(value).slice(0, 10));
-}
-
 function formatEventScheduleLabel(event) {
-  const available = getAvailableDates(event);
-  if (event.schedule_type === "range" && available.length) {
-    return `${formatSimpleDate(available[0])} - ${formatSimpleDate(available[available.length - 1])}`;
+  const toDate = (value) => formatDateUS(String(value || "").slice(0, 10));
+  if (event.schedule_type === "range" && event.event_start_date && event.event_end_date) {
+    return `${toDate(event.event_start_date)} - ${toDate(event.event_end_date)}`;
   }
-  if (event.schedule_type === "multiple" && available.length > 1) {
-    return `${available.length} dates available`;
+  const dates = Array.isArray(event.event_dates) ? event.event_dates : [];
+  if (event.schedule_type === "multiple" && dates.length > 1) {
+    return `${dates.length} dates available`;
   }
-  return available[0] ? formatSimpleDate(available[0]) : formatDateUS(event?.event_date || "");
+  if (event.schedule_type === "multiple" && dates.length === 1) {
+    return toDate(dates[0]);
+  }
+  return toDate(event?.event_date || "");
 }
 
 export default EventDetailsPage;

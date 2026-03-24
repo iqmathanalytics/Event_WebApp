@@ -8,11 +8,32 @@ CREATE TABLE IF NOT EXISTS users (
   mobile_number VARCHAR(20) NULL,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('user','organizer','admin') NOT NULL DEFAULT 'user',
+  organizer_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  can_post_events TINYINT(1) NOT NULL DEFAULT 1,
+  can_create_influencer_profile TINYINT(1) NOT NULL DEFAULT 1,
+  can_post_deals TINYINT(1) NOT NULL DEFAULT 1,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS user_onboarding_profiles (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  first_name VARCHAR(80) NOT NULL,
+  last_name VARCHAR(80) NOT NULL,
+  mobile_number VARCHAR(20) NULL,
+  city_id BIGINT UNSIGNED NULL,
+  interests_json JSON NULL,
+  wants_influencer TINYINT(1) NOT NULL DEFAULT 0,
+  wants_deal TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_onboarding_profiles_user (user_id),
+  KEY idx_user_onboarding_profiles_city (city_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS cities (
@@ -62,6 +83,7 @@ CREATE TABLE IF NOT EXISTS events (
   languages VARCHAR(255) NULL,
   genres VARCHAR(255) NULL,
   event_highlights TEXT NULL,
+  one_of_a_kind_manual TINYINT(1) NOT NULL DEFAULT 0,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   popularity_score INT NOT NULL DEFAULT 0,
   reviewed_by BIGINT UNSIGNED NULL,
@@ -80,10 +102,12 @@ CREATE TABLE IF NOT EXISTS influencers (
   city_id BIGINT UNSIGNED NOT NULL,
   category_id BIGINT UNSIGNED NULL,
   social_links JSON NULL,
+  contact_email VARCHAR(190) NULL,
   profile_image_url VARCHAR(500) NULL,
   followers_count INT NOT NULL DEFAULT 0,
   is_verified TINYINT(1) NOT NULL DEFAULT 0,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  review_note VARCHAR(500) NULL,
   created_by BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -103,8 +127,13 @@ CREATE TABLE IF NOT EXISTS deals (
   is_premium TINYINT(1) NOT NULL DEFAULT 0,
   expiry_date DATE NOT NULL,
   deal_link VARCHAR(500) NULL,
+  promo_code VARCHAR(80) NULL,
   image_url VARCHAR(500) NULL,
+  offer_type ENUM('percentage_off','flat_off','bogo','bundle_price','free_item','custom') NOT NULL DEFAULT 'percentage_off',
+  offer_meta_json TEXT NULL,
+  terms_text TEXT NULL,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  review_note VARCHAR(500) NULL,
   popularity_score INT NOT NULL DEFAULT 0,
   created_by BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -170,6 +199,27 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS dealer_profiles (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  created_by BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(180) NOT NULL,
+  business_email VARCHAR(190) NOT NULL,
+  business_mobile VARCHAR(25) NOT NULL,
+  location_text VARCHAR(255) NOT NULL,
+  city_id BIGINT UNSIGNED NULL,
+  category_id BIGINT UNSIGNED NOT NULL,
+  bio TEXT NULL,
+  website_or_social_link VARCHAR(500) NULL,
+  profile_image_url VARCHAR(500) NULL,
+  status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  review_note VARCHAR(500) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_dealer_profiles_status (status, created_at),
+  KEY idx_dealer_profiles_creator (created_by, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS admin_notifications (

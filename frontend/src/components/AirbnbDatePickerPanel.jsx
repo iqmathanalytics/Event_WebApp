@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import DatePicker from "react-datepicker";
 import { FiCalendar } from "react-icons/fi";
 
@@ -25,9 +26,26 @@ function AirbnbDatePickerPanel({
   minDate,
   heading = "Pick your date",
   closeOnSelect = true,
-  onClose
+  onClose,
+  monthsShownDesktop = 2,
+  monthsShownMobile = 1
 }) {
   const selectedDate = parseDateValue(value);
+  const [isMobileViewport, setIsMobileViewport] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const onResize = () => setIsMobileViewport(window.innerWidth < 768);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const monthsShown = isMobileViewport ? monthsShownMobile : monthsShownDesktop;
 
   return (
     <>
@@ -50,7 +68,7 @@ function AirbnbDatePickerPanel({
               }
             }}
             inline
-            monthsShown={2}
+            monthsShown={monthsShown}
             minDate={minDate}
             calendarClassName="airbnb-calendar"
             dayClassName={() => "airbnb-day"}

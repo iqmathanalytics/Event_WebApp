@@ -8,11 +8,62 @@ const {
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
-  deleteEventByOrganizer
+  deleteEventByOrganizer,
+  listFeaturedEvents,
+  incrementEventPopularity
 } = require("../models/eventModel");
 const { getPagination } = require("../utils/pagination");
 const { getMonthRange } = require("../utils/dateRange");
 const { getPrimaryEventDate, normalizeDateList, parseDateOnly } = require("../utils/eventSchedule");
+
+const EVENT_TAG_RULES = Object.freeze({
+  hotSellingMinBookings: 5,
+  trendingMinRecentEngagement: 20,
+  trendingMinTotalEngagement: 30,
+  rareCategoryMaxEvents: 2
+});
+
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function attachDynamicEventTags(event) {
+  const bookingCount = toNumber(event.booking_count);
+  const clickCount = toNumber(event.click_count);
+  const viewCount = toNumber(event.view_count);
+  const recentEngagement = toNumber(event.recent_engagement_score);
+  const totalEngagement = clickCount + viewCount;
+  const categoryEventCount = toNumber(event.category_event_count);
+  const manualOneOfAKind =
+    event.one_of_a_kind_manual === 1 ||
+    event.one_of_a_kind_manual === true ||
+    String(event.one_of_a_kind_manual || "0") === "1";
+
+  const tags = [];
+  if (bookingCount >= EVENT_TAG_RULES.hotSellingMinBookings) {
+    tags.push("Hot Selling");
+  }
+  if (
+    recentEngagement >= EVENT_TAG_RULES.trendingMinRecentEngagement ||
+    totalEngagement >= EVENT_TAG_RULES.trendingMinTotalEngagement
+  ) {
+    tags.push("Trending");
+  }
+  if (
+    manualOneOfAKind ||
+    categoryEventCount <= EVENT_TAG_RULES.rareCategoryMaxEvents ||
+    event.schedule_type === "multiple" ||
+    event.schedule_type === "range"
+  ) {
+    tags.push("One of a Kind");
+  }
+
+  return {
+    ...event,
+    tags
+  };
+}
 
 function normalizeEventSchedulePayload(payload) {
   const scheduleType = payload.schedule_type || "single";
@@ -116,8 +167,10 @@ async function fetchEvents(query) {
   const pagination = getPagination(query);
   const search = query.q || query.search || null;
   const { monthStart, monthEnd } = getMonthRange(query.month || null);
+  const status = query.status || "approved";
+
   const filters = {
-    status: query.status || "approved",
+    status,
     cityId: query.city ? Number(query.city) : null,
     categoryId: query.category ? Number(query.category) : null,
     date: query.date || null,
@@ -128,12 +181,16 @@ async function fetchEvents(query) {
     priceMax: query.price_max ? Number(query.price_max) : null,
     q: search,
     sortBy: query.sort || "newest",
-    sortOrder: query.sort_order || "asc"
+    sortOrder: query.sort_order || "asc",
+    // Hide expired events by default for approved events unless user explicitly filters by date/month.
+    futureOnly: status === "approved" && !query.date && !query.month
   };
 
   const data = await listEvents({ filters, pagination });
+  const rows = (data.rows || []).map(attachDynamicEventTags);
   return {
     ...data,
+    rows,
     page: pagination.page,
     limit: pagination.limit
   };
@@ -144,10 +201,10 @@ async function fetchEventById(eventId) {
   if (!event) {
     throw new ApiError(404, "Event not found");
   }
-  return {
+  return attachDynamicEventTags({
     ...event,
     display_date: getPrimaryEventDate(event)
-  };
+  });
 }
 
 async function fetchMySubmissions(userId) {
@@ -191,6 +248,21 @@ async function deleteOwnEvent(eventId, organizerId) {
   }
 }
 
+async function fetchFeaturedEvents({ city, limit }) {
+  const cityId = city ? Number(city) : null;
+  const rows = await listFeaturedEvents({ cityId, limit: Number(limit) || 6 });
+  return rows.map(attachDynamicEventTags);
+}
+
+async function trackEventClick(eventId) {
+  // Store clicks/views into popularity_score as a lightweight analytics store.
+  return incrementEventPopularity({ eventId, delta: 1, clickDelta: 1, viewDelta: 0 });
+}
+
+async function trackEventView(eventId) {
+  return incrementEventPopularity({ eventId, delta: 2, clickDelta: 0, viewDelta: 1 });
+}
+
 module.exports = {
   submitEvent,
   approveEvent,
@@ -199,5 +271,8 @@ module.exports = {
   fetchEventById,
   fetchMySubmissions,
   editOwnEvent,
-  deleteOwnEvent
+  deleteOwnEvent,
+  fetchFeaturedEvents,
+  trackEventClick,
+  trackEventView
 };

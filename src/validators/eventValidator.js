@@ -110,6 +110,23 @@ const fetchEventByIdSchema = z.object({
   })
 });
 
+const fetchFeaturedEventsSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    city: z.string().regex(/^\d+$/).optional(),
+    limit: z.string().regex(/^\d+$/).optional()
+  }),
+  params: z.object({}).passthrough()
+});
+
+const trackEventAnalyticsSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
 const editOwnEventBodySchema = z
   .object({
     title: z.string().min(3).max(220).optional(),
@@ -180,6 +197,8 @@ module.exports = {
   moderateEventSchema,
   fetchEventsSchema,
   fetchEventByIdSchema,
+  fetchFeaturedEventsSchema,
   editOwnEventSchema,
-  deleteOwnEventSchema
+  deleteOwnEventSchema,
+  trackEventAnalyticsSchema
 };

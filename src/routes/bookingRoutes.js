@@ -1,7 +1,7 @@
 const express = require("express");
 const bookingController = require("../controllers/bookingController");
 const authMiddleware = require("../middleware/authMiddleware");
-const roleMiddleware = require("../middleware/roleMiddleware");
+const organizerAccessMiddleware = require("../middleware/organizerAccessMiddleware");
 const validateRequest = require("../middleware/validateRequest");
 const {
   createBookingSchema,
@@ -14,14 +14,14 @@ router.post("/", authMiddleware, validateRequest(createBookingSchema), bookingCo
 router.get(
   "/organizer",
   authMiddleware,
-  roleMiddleware("organizer"),
+  organizerAccessMiddleware,
   validateRequest(organizerBookingsSchema),
   bookingController.listOrganizerBookings
 );
 router.get(
   "/organizer/export",
   authMiddleware,
-  roleMiddleware("organizer"),
+  organizerAccessMiddleware,
   validateRequest(organizerBookingsSchema),
   bookingController.exportOrganizerBookings
 );

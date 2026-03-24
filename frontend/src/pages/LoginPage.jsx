@@ -37,8 +37,11 @@ function LoginPage() {
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-soft"
     >
+      <div className="mb-3 flex justify-center">
+        <img src="/branding/yay-tickets-logo.png" alt="Yay! Tickets" className="h-10 w-auto object-contain" />
+      </div>
       <h1 className="text-2xl font-bold">User Sign In</h1>
-      <p className="mt-1 text-sm text-slate-600">Access your City Events & Lifestyle Hub user account.</p>
+      <p className="mt-1 text-sm text-slate-600">Access your Yay! Tickets user account.</p>
       <form onSubmit={onSubmit} className="mt-5 space-y-4">
         <input
           type="email"

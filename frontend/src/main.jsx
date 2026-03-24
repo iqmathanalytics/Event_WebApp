@@ -15,3 +15,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </AuthProvider>
   </BrowserRouter>
 );
+
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  });
+}

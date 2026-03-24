@@ -62,8 +62,11 @@ export function AuthProvider({ children }) {
       refreshToken,
       isAuthenticated: Boolean(accessToken && user),
       isAdmin: user?.role === "admin",
-      isOrganizer: user?.role === "organizer",
+      isOrganizer: Boolean(user?.organizer_enabled) || user?.role === "organizer",
       isUser: user?.role === "user",
+      canPostEvents: Boolean(user?.can_post_events),
+      canCreateInfluencerProfile: Boolean(user?.can_create_influencer_profile),
+      canPostDeals: Boolean(user?.can_post_deals),
       login,
       logout
     }),

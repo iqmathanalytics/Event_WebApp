@@ -1,13 +1,91 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import InfluencerCard from "../components/InfluencerCard";
 import EventFilterBar from "../components/EventFilterBar";
-import { fetchInfluencers } from "../services/listingService";
+import {
+  createInfluencerProfile,
+  fetchInfluencers,
+  fetchMyInfluencerSubmissions
+} from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
+import useAuth from "../hooks/useAuth";
+import { Link } from "react-router-dom";
+import { createPortal } from "react-dom";
+import { FiInfo } from "react-icons/fi";
+import { categories } from "../utils/filterOptions";
+
+function FormField({ label, hint, example, className = "", children }) {
+  return (
+    <div className={`block ${className}`}>
+      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
+      <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-slate-500">
+        <FiInfo className="text-slate-400" />
+        {hint}
+        {example ? <span className="text-slate-400">Example: {example}</span> : null}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function SubmissionModal({ title, onClose, onSubmit, children, submitLoading }) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        key="influencer-submit-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="fixed inset-0 z-[220] bg-slate-950/65 backdrop-blur-[1px]"
+        onClick={onClose}
+      />
+      <div className="fixed inset-0 z-[221] flex items-center justify-center p-3 sm:p-5">
+        <motion.form
+          key="influencer-submit-modal"
+          onSubmit={onSubmit}
+          initial={{ opacity: 0, y: 20, scale: 0.985 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 16, scale: 0.985 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          onClick={(e) => e.stopPropagation()}
+          className="popup-modal flex h-[min(90vh,820px)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+        >
+          <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
+            <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          </div>
+          <div className="hide-scrollbar flex-1 overflow-y-auto px-5 py-4">{children}</div>
+          <div className="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitLoading}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitLoading ? "Submitting..." : "Submit for Approval"}
+            </button>
+          </div>
+        </motion.form>
+      </div>
+    </AnimatePresence>,
+    document.body
+  );
+}
 
 function InfluencersPage() {
-  const { selectedCity, setSelectedCity } = useCityFilter();
+  const { selectedCity, setSelectedCity, cities } = useCityFilter();
+  const { isAuthenticated, canCreateInfluencerProfile } = useAuth();
   const [query, setQuery] = useState("");
   const [city, setCity] = useState(selectedCity || "");
   const [category, setCategory] = useState("");
@@ -26,6 +104,22 @@ function InfluencersPage() {
   });
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [submitForm, setSubmitForm] = useState({
+    name: "",
+    bio: "",
+    city_id: "",
+    category_id: "",
+    instagram: "",
+    youtube: "",
+    contact_email: "",
+    profile_image_url: ""
+  });
+  const [mySubmissions, setMySubmissions] = useState([]);
+  const [loadingMySubmissions, setLoadingMySubmissions] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
   const canApply =
     query !== appliedFilters.query ||
@@ -35,6 +129,19 @@ function InfluencersPage() {
     priceMin !== appliedFilters.priceMin ||
     priceMax !== appliedFilters.priceMax ||
     sortBy !== appliedFilters.sortBy;
+  const hasPendingInfluencer = mySubmissions.some((row) => row.status === "pending");
+  const hasAnyInfluencerSubmission = mySubmissions.length > 0;
+
+  useEffect(() => {
+    if (!submitOpen) {
+      return undefined;
+    }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [submitOpen]);
 
   const applyFilters = () => {
     setAppliedFilters({
@@ -114,6 +221,35 @@ function InfluencersPage() {
     };
   }, [appliedFilters]);
 
+  useEffect(() => {
+    let active = true;
+    async function loadMySubmissions() {
+      if (!isAuthenticated) {
+        setMySubmissions([]);
+        return;
+      }
+      try {
+        setLoadingMySubmissions(true);
+        const response = await fetchMyInfluencerSubmissions();
+        if (active) {
+          setMySubmissions(response?.data || []);
+        }
+      } catch (_err) {
+        if (active) {
+          setMySubmissions([]);
+        }
+      } finally {
+        if (active) {
+          setLoadingMySubmissions(false);
+        }
+      }
+    }
+    loadMySubmissions();
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -122,8 +258,43 @@ function InfluencersPage() {
       className="space-y-5"
     >
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold sm:text-4xl">Influencers</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Influencers</h1>
         <p className="text-sm text-slate-600">Discover local creators and lifestyle experts by city, category, and audience reach.</p>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Create your influencer profile</p>
+            <p className="text-sm text-slate-600">Submit your profile for admin approval before it is published.</p>
+          </div>
+          {!isAuthenticated ? (
+            <Link to="/login" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+              Login to Submit
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled={!canCreateInfluencerProfile || hasAnyInfluencerSubmission || loadingMySubmissions}
+              onClick={() => {
+                setSubmitError("");
+                setSubmitMessage("");
+                setSubmitOpen(true);
+              }}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Submit Influencer Profile
+            </button>
+          )}
+        </div>
+        {isAuthenticated && !canCreateInfluencerProfile ? (
+          <p className="mt-2 text-sm text-rose-600">Influencer profile capability is disabled for your account.</p>
+        ) : null}
+        {isAuthenticated && canCreateInfluencerProfile && hasAnyInfluencerSubmission ? (
+          <p className="mt-2 text-sm text-amber-700">
+            You already submitted an influencer profile. To make changes, edit your submission from your user dashboard.
+          </p>
+        ) : null}
+        {submitMessage ? <p className="mt-2 text-sm font-medium text-emerald-700">{submitMessage}</p> : null}
       </div>
       <EventFilterBar
         query={query}
@@ -140,6 +311,10 @@ function InfluencersPage() {
         setPriceMax={setPriceMax}
         sortBy={sortBy}
         setSortBy={setSortBy}
+        showDate={false}
+        showPrice={false}
+        searchPlaceholder="Search influencers"
+        mobileTitle="Filter Influencers"
         onApply={applyFilters}
         onReset={resetFilters}
         canApply={canApply}
@@ -177,6 +352,96 @@ function InfluencersPage() {
             ))
           : null}
       </div>
+
+      {submitOpen ? (
+        <SubmissionModal
+          title="Submit Influencer Profile"
+          onClose={() => setSubmitOpen(false)}
+          submitLoading={submitLoading}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setSubmitError("");
+            try {
+              setSubmitLoading(true);
+              await createInfluencerProfile({
+                ...submitForm,
+                city_id: Number(submitForm.city_id),
+                category_id: Number(submitForm.category_id)
+              });
+              setSubmitOpen(false);
+              setSubmitForm({
+                name: "",
+                bio: "",
+                city_id: "",
+                category_id: "",
+                instagram: "",
+                youtube: "",
+                contact_email: "",
+                profile_image_url: ""
+              });
+              setSubmitMessage("Profile submitted. It will be visible after admin approval.");
+              const refreshed = await fetchMyInfluencerSubmissions();
+              setMySubmissions(refreshed?.data || []);
+            } catch (err) {
+              setSubmitError(err?.response?.data?.message || "Could not submit influencer profile.");
+            } finally {
+              setSubmitLoading(false);
+            }
+          }}
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Profile Name" hint="Enter your public creator or brand name." example="Ava Luxe" className="sm:col-span-2">
+              <input required value={submitForm.name} onChange={(e) => setSubmitForm((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </FormField>
+            <FormField label="Bio" hint="Write a short summary of your niche and audience." example="Fashion and lifestyle creator in New York." className="sm:col-span-2">
+              <textarea required value={submitForm.bio} onChange={(e) => setSubmitForm((p) => ({ ...p, bio: e.target.value }))} rows={4} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </FormField>
+            <FormField label="City" hint="Choose your primary operating city.">
+              <select
+                required
+                value={submitForm.city_id}
+                onChange={(e) => setSubmitForm((p) => ({ ...p, city_id: e.target.value }))}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select City</option>
+                {cities.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Category" hint="Select the content category that fits your profile.">
+              <select
+                required
+                value={submitForm.category_id}
+                onChange={(e) => setSubmitForm((p) => ({ ...p, category_id: e.target.value }))}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select Category</option>
+                {categories.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Instagram URL" hint="Paste your Instagram profile link." example="https://instagram.com/yourhandle">
+              <input type="url" value={submitForm.instagram} onChange={(e) => setSubmitForm((p) => ({ ...p, instagram: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </FormField>
+            <FormField label="YouTube URL" hint="Paste your channel or profile link." example="https://youtube.com/@yourchannel">
+              <input type="url" value={submitForm.youtube} onChange={(e) => setSubmitForm((p) => ({ ...p, youtube: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </FormField>
+            <FormField label="Contact Email" hint="Use an email where brands can contact you." example="creator@example.com">
+              <input required type="email" value={submitForm.contact_email} onChange={(e) => setSubmitForm((p) => ({ ...p, contact_email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </FormField>
+            <FormField label="Profile Image URL" hint="Add a high-quality profile image link." example="https://images.example.com/profile.jpg">
+              <input type="url" value={submitForm.profile_image_url} onChange={(e) => setSubmitForm((p) => ({ ...p, profile_image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </FormField>
+          </div>
+          {submitError ? <p className="mt-3 text-sm text-rose-600">{submitError}</p> : null}
+        </SubmissionModal>
+      ) : null}
     </motion.div>
   );
 }

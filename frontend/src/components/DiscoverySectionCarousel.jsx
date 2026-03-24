@@ -23,18 +23,18 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
       transition={{ duration: 0.35, ease: "easeOut" }}
       className="space-y-4"
     >
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold sm:text-2xl">{title}</h2>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="min-w-0 flex-1 truncate text-lg font-bold sm:text-xl lg:text-2xl">{title}</h2>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {actionHref ? (
-            <Link to={actionHref} className="text-sm font-semibold text-brand-600">
+            <Link to={actionHref} className="whitespace-nowrap text-xs font-semibold text-brand-600 sm:text-sm">
               {actionLabel}
             </Link>
           ) : null}
           <button
             type="button"
             onClick={() => scrollByAmount(-1)}
-            className="grid h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+            className="hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid"
             aria-label={`Scroll ${title} left`}
           >
             <FiChevronLeft />
@@ -42,7 +42,7 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
           <button
             type="button"
             onClick={() => scrollByAmount(1)}
-            className="grid h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+            className="hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid"
             aria-label={`Scroll ${title} right`}
           >
             <FiChevronRight />

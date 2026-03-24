@@ -6,6 +6,19 @@ function makeFavoriteKey(listingType, listingId) {
   return `${listingType}:${listingId}`;
 }
 
+function redirectToAuthForFavorites() {
+  if (typeof window === "undefined" || !window.location) {
+    return;
+  }
+  const next = `${window.location.pathname || "/"}${window.location.search || ""}`;
+  const goLogin = window.confirm(
+    "Please login or sign up to save favorites.\n\nClick OK for Login, or Cancel for Sign Up."
+  );
+  window.location.href = goLogin
+    ? `/login?next=${encodeURIComponent(next)}`
+    : `/register?next=${encodeURIComponent(next)}`;
+}
+
 function useFavorites() {
   const { isAuthenticated } = useAuth();
   const [favorites, setFavorites] = useState([]);
@@ -40,31 +53,39 @@ function useFavorites() {
   const toggleFavorite = useCallback(
     async ({ listingType, listingId }) => {
       if (!isAuthenticated) {
+        redirectToAuthForFavorites();
         return { requiresAuth: true };
       }
+      try {
+        const key = makeFavoriteKey(listingType, listingId);
+        const exists = favoriteKeys.has(key);
 
-      const key = makeFavoriteKey(listingType, listingId);
-      const exists = favoriteKeys.has(key);
+        if (exists) {
+          await deleteFavorite({
+            listing_type: listingType,
+            listing_id: listingId
+          });
+          setFavorites((prev) =>
+            prev.filter(
+              (item) => !(item.listing_type === listingType && Number(item.listing_id) === Number(listingId))
+            )
+          );
+        } else {
+          await createFavorite({
+            listing_type: listingType,
+            listing_id: listingId
+          });
+          await loadFavorites();
+        }
 
-      if (exists) {
-        await deleteFavorite({
-          listing_type: listingType,
-          listing_id: listingId
-        });
-        setFavorites((prev) =>
-          prev.filter(
-            (item) => !(item.listing_type === listingType && Number(item.listing_id) === Number(listingId))
-          )
-        );
-      } else {
-        await createFavorite({
-          listing_type: listingType,
-          listing_id: listingId
-        });
-        await loadFavorites();
+        return { requiresAuth: false };
+      } catch (err) {
+        if (err?.response?.status === 401) {
+          redirectToAuthForFavorites();
+          return { requiresAuth: true };
+        }
+        throw err;
       }
-
-      return { requiresAuth: false };
     },
     [favoriteKeys, isAuthenticated, loadFavorites]
   );

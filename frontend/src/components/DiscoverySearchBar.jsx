@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { FiMapPin, FiNavigation, FiSearch, FiTag } from "react-icons/fi";
+import { FiCalendar, FiChevronDown, FiMapPin, FiNavigation, FiRotateCcw, FiSearch, FiSliders, FiTag } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { categories } from "../utils/filterOptions";
@@ -15,6 +15,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
   const whereButtonRef = useRef(null);
   const whenButtonRef = useRef(null);
   const categoryButtonRef = useRef(null);
+  const priceButtonRef = useRef(null);
   const priceInputRef = useRef(null);
   const panelRef = useRef(null);
   const [activePanel, setActivePanel] = useState(null);
@@ -22,6 +23,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
   const [city, setCity] = useState(selectedCity || "");
   const [date, setDate] = useState("");
   const [category, setCategory] = useState("");
+  const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [cityQuery, setCityQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
@@ -75,13 +77,14 @@ function DiscoverySearchBar({ onCriteriaChange }) {
   }, []);
 
   const updatePanelPosition = useCallback(() => {
-    if (!activePanel || !["where", "when", "category"].includes(activePanel)) {
+    if (!activePanel || !["where", "when", "category", "price"].includes(activePanel)) {
       return;
     }
     const triggerMap = {
       where: whereButtonRef.current,
       when: whenButtonRef.current,
-      category: categoryButtonRef.current
+      category: categoryButtonRef.current,
+      price: priceButtonRef.current
     };
     const trigger = triggerMap[activePanel];
     if (!trigger) {
@@ -90,13 +93,14 @@ function DiscoverySearchBar({ onCriteriaChange }) {
 
     const triggerRect = trigger.getBoundingClientRect();
     const panelRect = panelRef.current?.getBoundingClientRect();
-    const fallbackWidth = activePanel === "when" ? 760 : 360;
-    const fallbackHeight = activePanel === "when" ? 380 : 360;
+    const fallbackWidth = activePanel === "when" ? 760 : activePanel === "price" ? 360 : 360;
+    const fallbackHeight = activePanel === "when" ? 380 : activePanel === "price" ? 220 : 360;
     const panelWidth = panelRect?.width || fallbackWidth;
     const panelHeight = panelRect?.height || fallbackHeight;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const spacing = 8;
+    const spacingWhenOpenUp = 3;
 
     let left = triggerRect.left;
     if (left + panelWidth > viewportWidth - spacing) {
@@ -104,7 +108,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
     }
 
     const belowTop = triggerRect.bottom + spacing;
-    const aboveTop = triggerRect.top - panelHeight - spacing;
+    const aboveTop = triggerRect.top - panelHeight - spacingWhenOpenUp;
     const shouldOpenUp = belowTop + panelHeight > viewportHeight - spacing && aboveTop >= spacing;
     const top = shouldOpenUp
       ? aboveTop
@@ -114,7 +118,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
   }, [activePanel]);
 
   useLayoutEffect(() => {
-    if (!activePanel || !["where", "when", "category"].includes(activePanel)) {
+    if (!activePanel || !["where", "when", "category", "price"].includes(activePanel)) {
       return;
     }
 
@@ -132,7 +136,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
 
   useEffect(() => {
     const openPanel = (panel) => {
-      setActivePanel(panel === "price" ? null : panel);
+      setActivePanel(panel);
       window.setTimeout(() => {
         if (panel === "where") {
           whereButtonRef.current?.focus();
@@ -173,6 +177,9 @@ function DiscoverySearchBar({ onCriteriaChange }) {
     if (category) {
       params.set("category", category);
     }
+    if (priceMin) {
+      params.set("price_min", priceMin);
+    }
     if (priceMax) {
       params.set("price_max", priceMax);
     }
@@ -183,9 +190,19 @@ function DiscoverySearchBar({ onCriteriaChange }) {
   const selectedCityLabel = cities.find((item) => item.value === city)?.label || "All Cities";
   const selectedDateLabel = date ? formatDateUS(date) : "Any date";
   const selectedCategoryLabel = categories.find((item) => item.value === category)?.label || "Any category";
-  const selectedPriceLabel = priceMax ? `Up to $${priceMax}` : "Any price";
+  const selectedPriceLabel =
+    priceMin && priceMax
+      ? `$${priceMin} - $${priceMax}`
+      : priceMax
+        ? `Up to $${priceMax}`
+        : priceMin
+          ? `From $${priceMin}`
+          : "Any price";
+  const activeFilterCount = [city, date, category, priceMin, priceMax].filter(Boolean).length;
   const fieldBase =
-    "w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-2xl px-4 py-3 text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300";
+    "flex h-full min-h-[44px] w-full min-w-0 flex-col justify-center whitespace-nowrap overflow-hidden text-ellipsis rounded-xl px-2.5 py-1.5 text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 sm:min-h-[48px] sm:rounded-2xl sm:px-3 sm:py-2 md:min-h-[54px] md:px-4 md:py-2.5";
+  const desktopLabelClass = "text-xs font-semibold leading-none text-slate-900";
+  const desktopValueClass = "truncate pt-0.5 text-sm leading-5 text-slate-600";
   const panelBase = "z-[220] rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl";
 
   useEffect(() => {
@@ -197,13 +214,40 @@ function DiscoverySearchBar({ onCriteriaChange }) {
     });
   }, [onCriteriaChange, selectedCategoryLabel, selectedCityLabel, selectedDateLabel, selectedPriceLabel]);
 
+  const resetMobileFilters = () => {
+    setSelectedCity("");
+    setCity("");
+    setDate("");
+    setCategory("");
+    setPriceMin("");
+    setPriceMax("");
+    setActivePanel(null);
+  };
+
   return (
     <section ref={containerRef} className="relative">
-      <div className="relative md:h-[72px]">
-        <div className="pointer-events-none absolute inset-0 rounded-[2rem] border border-slate-200 bg-white shadow-soft" />
-        <div className="relative flex h-full items-center p-2">
-          <div className="grid w-full grid-cols-1 gap-1 md:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
-            <div className="relative min-w-0">
+      <div className="mb-1.5 flex items-center justify-between px-1 lg:hidden">
+        <h3 className="text-lg font-bold text-white sm:text-xl">Find Events</h3>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-600">
+            {activeFilterCount} filters
+          </span>
+          <button
+            type="button"
+            onClick={resetMobileFilters}
+            className="grid h-7 w-7 place-content-center rounded-full border border-slate-300 bg-white text-slate-600"
+            aria-label="Reset filters"
+            title="Reset filters"
+          >
+            <FiRotateCcw size={12} />
+          </button>
+        </div>
+      </div>
+      <div className="relative lg:h-[72px]">
+        <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] border border-slate-200 bg-white shadow-soft sm:rounded-[2rem]" />
+        <div className="relative flex h-full items-start p-1 pt-1.5 md:p-2 lg:items-center">
+          <div className="grid w-full grid-cols-2 gap-0.5 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto] lg:gap-1">
+            <div className="relative col-span-2 min-w-0 lg:col-span-1">
               <button
                 ref={whereButtonRef}
                 type="button"
@@ -215,8 +259,20 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                   setActivePanel((prev) => (prev === "where" ? null : "where"));
                 }}
               >
-                <p className="text-xs font-semibold text-slate-900">Where</p>
-                <p className="truncate pt-0.5 text-sm text-slate-600">{selectedCityLabel}</p>
+                <div className="flex items-center gap-2 lg:hidden">
+                  <span className="grid h-9 w-9 place-content-center rounded-xl bg-rose-50 text-rose-500">
+                    <FiMapPin size={14} />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Where</p>
+                    <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedCityLabel}</p>
+                  </span>
+                  <FiChevronDown className="text-rose-500" size={14} />
+                </div>
+                <div className="hidden lg:block">
+                  <p className={desktopLabelClass}>Where</p>
+                  <p className={desktopValueClass}>{selectedCityLabel}</p>
+                </div>
               </button>
 
               {activePanel === "where"
@@ -231,7 +287,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
                     style={{ position: "fixed", top: panelPosition.top, left: panelPosition.left }}
-                    className={`${panelBase} w-[22rem] max-w-[calc(100vw-2rem)]`}
+                    className={`${panelBase} w-[18rem] max-w-[calc(100vw-3.5rem)] sm:w-[19.5rem] sm:max-w-[calc(100vw-3rem)] lg:w-[22rem] lg:max-w-[calc(100vw-2rem)]`}
                   >
                     <label className="mb-2 block">
                       <span className="sr-only">Search cities</span>
@@ -303,8 +359,19 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                   activePanel === "when" ? "bg-slate-100 ring-1 ring-slate-200" : "hover:bg-slate-50"
                 }`}
               >
-                <p className="text-xs font-semibold text-slate-900">When</p>
-                <p className="truncate pt-0.5 text-sm text-slate-600">{selectedDateLabel}</p>
+                <div className="flex items-center gap-2 lg:hidden">
+                  <span className="grid h-9 w-9 place-content-center rounded-xl bg-indigo-50 text-indigo-500">
+                    <FiCalendar size={14} />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">When</p>
+                    <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedDateLabel}</p>
+                  </span>
+                </div>
+                <div className="hidden lg:block">
+                  <p className={desktopLabelClass}>When</p>
+                  <p className={desktopValueClass}>{selectedDateLabel}</p>
+                </div>
               </button>
 
               {activePanel === "when"
@@ -325,6 +392,8 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                       value={date}
                       onChange={setDate}
                       minDate={new Date()}
+                      monthsShownDesktop={2}
+                      monthsShownMobile={1}
                       closeOnSelect
                       onClose={() => setActivePanel(null)}
                     />
@@ -344,8 +413,19 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                   activePanel === "category" ? "bg-slate-100 ring-1 ring-slate-200" : "hover:bg-slate-50"
                 }`}
               >
-                <p className="text-xs font-semibold text-slate-900">Category</p>
-                <p className="truncate pt-0.5 text-sm text-slate-600">{selectedCategoryLabel}</p>
+                <div className="flex items-center gap-2 lg:hidden">
+                  <span className="grid h-9 w-9 place-content-center rounded-xl bg-amber-50 text-amber-500">
+                    <FiSliders size={14} />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Category</p>
+                    <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedCategoryLabel}</p>
+                  </span>
+                </div>
+                <div className="hidden lg:block">
+                  <p className={desktopLabelClass}>Category</p>
+                  <p className={desktopValueClass}>{selectedCategoryLabel}</p>
+                </div>
               </button>
 
               {activePanel === "category"
@@ -360,7 +440,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
                     style={{ position: "fixed", top: panelPosition.top, left: panelPosition.left }}
-                    className={`${panelBase} w-[22rem] max-w-[calc(100vw-2rem)]`}
+                    className={`${panelBase} w-[18rem] max-w-[calc(100vw-3.5rem)] sm:w-[19.5rem] sm:max-w-[calc(100vw-3rem)] lg:w-[22rem] lg:max-w-[calc(100vw-2rem)]`}
                   >
                     <label className="mb-2 block">
                       <span className="sr-only">Search categories</span>
@@ -414,28 +494,102 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                 : null}
             </div>
 
-            <label className="min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-2xl px-4 py-3 transition hover:bg-slate-50">
-              <p className="text-xs font-semibold text-slate-900">Price</p>
-              <input
-                ref={priceInputRef}
-                type="number"
-                min="0"
-                value={priceMax}
-                onChange={(e) => setPriceMax(e.target.value)}
-                placeholder="Set max budget"
-                className="w-full bg-transparent pt-0.5 text-sm text-slate-700 caret-slate-900 placeholder:text-slate-400 outline-none"
-              />
-            </label>
+            <button
+              ref={priceButtonRef}
+              type="button"
+              onClick={() => setActivePanel((prev) => (prev === "price" ? null : "price"))}
+              className={`col-span-2 flex h-full min-h-[44px] min-w-0 flex-col justify-center whitespace-nowrap overflow-hidden rounded-xl px-2.5 py-1.5 text-left transition sm:min-h-[48px] sm:rounded-2xl sm:px-3 sm:py-2 md:min-h-[54px] md:px-4 md:py-2.5 lg:col-span-1 ${
+                activePanel === "price" ? "bg-slate-100 ring-1 ring-slate-200" : "hover:bg-slate-50"
+              }`}
+            >
+              <div className="hidden lg:flex lg:h-full lg:flex-col lg:justify-center">
+                <p className={desktopLabelClass}>Price</p>
+                <p className={desktopValueClass}>{selectedPriceLabel}</p>
+              </div>
+              <div className="flex items-center gap-2 lg:hidden">
+                <span className="grid h-9 w-9 place-content-center rounded-xl bg-emerald-50 text-emerald-600">$</span>
+                <span className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Budget</p>
+                  <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedPriceLabel}</p>
+                </span>
+                <FiChevronDown className="text-emerald-600" size={14} />
+              </div>
+            </button>
 
-            <div className="flex min-w-0 items-center justify-end px-2 py-1 max-md:justify-stretch">
+            {activePanel === "price"
+              ? createPortal(
+                  <motion.div
+                    key="price-panel"
+                    ref={panelRef}
+                    data-discovery-panel-portal="true"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    style={{ position: "fixed", top: panelPosition.top, left: panelPosition.left }}
+                    className="z-[230] w-[22rem] max-w-[calc(100vw-2rem)] rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl"
+                  >
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Price range</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Min
+                        <input
+                          ref={priceInputRef}
+                          type="number"
+                          min="0"
+                          value={priceMin}
+                          onChange={(e) => setPriceMin(e.target.value)}
+                          placeholder="0"
+                          className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Max
+                        <input
+                          type="number"
+                          min="0"
+                          value={priceMax}
+                          onChange={(e) => setPriceMax(e.target.value)}
+                          placeholder="5000"
+                          className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-3 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPriceMin("");
+                          setPriceMax("");
+                        }}
+                        className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivePanel(null)}
+                        className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </motion.div>,
+                  document.body
+                )
+              : null}
+
+            <div className="col-span-2 flex h-full min-w-0 items-center justify-end px-1 pt-0.5 pb-0 lg:col-span-1 lg:min-w-[112px] lg:justify-end lg:py-1">
               <button
                 type="button"
                 onClick={onSearch}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow transition hover:bg-brand-700 max-md:w-full"
+                className="inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-rose-600 px-3 py-2 text-sm font-semibold text-white shadow transition hover:from-fuchsia-600 hover:to-rose-700 sm:min-h-[44px] sm:text-base lg:w-auto lg:bg-brand-600 lg:px-5 lg:py-3 lg:text-sm lg:hover:bg-brand-700"
                 aria-label="Search discovery listings"
               >
-                <FiSearch size={16} />
-                Search
+                <FiSearch size={14} />
+                Search Events
               </button>
             </div>
           </div>

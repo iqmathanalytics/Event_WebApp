@@ -8,8 +8,7 @@ import useCityFilter from "../hooks/useCityFilter";
 const navItems = [
   { to: "/events", label: "Events" },
   { to: "/influencers", label: "Influencers" },
-  { to: "/deals", label: "Deals" },
-  { to: "/services", label: "Services" }
+  { to: "/deals", label: "Deals" }
 ];
 
 function Navbar({
@@ -100,10 +99,15 @@ function Navbar({
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 backdrop-blur-md"
     >
-      <div className="container-page flex h-20 items-center justify-between gap-3">
-        <Link to="/" className="flex items-center gap-2 text-sm font-extrabold tracking-wide text-brand-600 sm:text-base">
-          <span className="grid h-8 w-8 place-content-center rounded-full bg-brand-50 text-brand-600">C</span>
-          <span className="hidden sm:inline">City Events Hub</span>
+      <div className="container-page flex h-16 items-center justify-between gap-3 sm:h-20">
+        <Link to="/" className="flex items-center gap-2.5 text-sm font-extrabold tracking-wide text-brand-600 sm:text-base">
+          <img
+            src="/branding/yay-tickets-logo.png"
+            alt="Yay! Tickets"
+            className="h-8 w-auto max-w-[128px] object-contain sm:h-9 sm:max-w-[140px]"
+            loading="eager"
+          />
+          <span className="hidden sm:inline">Yay! Tickets</span>
         </Link>
 
         <nav className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm lg:flex">
@@ -204,7 +208,7 @@ function Navbar({
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
               <Link
-                to={isAdmin ? "/dashboard/admin" : isOrganizer ? "/dashboard/organizer" : "/dashboard/user"}
+                to={isAdmin ? "/dashboard/admin" : "/dashboard/user"}
                 className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
               >
                 Dashboard
@@ -265,19 +269,19 @@ function Navbar({
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
         className="pointer-events-none absolute inset-x-0 top-full mt-[10px]"
       >
-        <div className="container-page flex justify-center">
+        <div className="container-page flex justify-center max-lg:px-0">
           <div
-            className={`relative hidden h-12 w-fit max-w-[88vw] items-center gap-2 px-2 py-1 lg:inline-flex ${
+            className={`relative hidden h-12 w-fit max-w-[88vw] items-center gap-1.5 px-1 py-1 lg:inline-flex ${
               showCompactSearch ? "pointer-events-auto" : "pointer-events-none"
             }`}
             style={{ willChange: "transform, opacity" }}
           >
             <div className="pointer-events-none absolute inset-0 rounded-full border border-slate-200 bg-white shadow-lg ring-1 ring-black/5" />
-            <div className="relative flex h-full items-center gap-2 pr-1">
+            <div className="relative flex h-full items-center gap-1.5 pr-0.5">
               <button
                 type="button"
                 onClick={() => reopenHeroSearch("where")}
-                className="truncate rounded-full px-3 py-1 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
+                className="truncate rounded-full px-2.5 py-1 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
               >
                 {homeSearchSummary.cityLabel}
               </button>
@@ -285,7 +289,7 @@ function Navbar({
               <button
                 type="button"
                 onClick={() => reopenHeroSearch("when")}
-                className="truncate rounded-full px-2 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+                className="truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
               >
                 {homeSearchSummary.dateLabel}
               </button>
@@ -293,7 +297,7 @@ function Navbar({
               <button
                 type="button"
                 onClick={() => reopenHeroSearch("category")}
-                className="truncate rounded-full px-2 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+                className="truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
               >
                 {homeSearchSummary.categoryLabel}
               </button>
@@ -311,118 +315,156 @@ function Navbar({
           <button
             type="button"
             onClick={() => reopenHeroSearch("where")}
-            className={`relative inline-flex h-11 w-[min(92vw,28rem)] items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-lg ring-1 ring-black/5 lg:hidden ${
+            className={`relative inline-flex h-11 w-[calc(100vw-24px)] max-w-none items-center gap-2 rounded-full border border-slate-200 bg-white px-2 text-sm font-medium text-slate-700 shadow-lg ring-1 ring-black/5 md:w-[min(calc(100vw-36px),44rem)] lg:hidden ${
               showCompactSearch ? "pointer-events-auto" : "pointer-events-none"
             }`}
             style={{ willChange: "transform, opacity" }}
           >
-            <FiSearch className="shrink-0 text-slate-600" />
-            <span className="truncate">{compactSummary}</span>
+            <span className="min-w-0 flex-1 truncate pr-2">{compactSummary}</span>
+            <span className="ml-auto grid h-8 w-8 shrink-0 place-content-center rounded-full bg-rose-500 text-white shadow-sm">
+              <FiSearch className="h-4 w-4" />
+            </span>
           </button>
         </div>
       </motion.div>
 
       {isMenuOpen ? (
-        <div className="border-t border-slate-200 bg-white lg:hidden">
-          <div className="container-page space-y-3 py-4">
-            <nav className="grid grid-cols-2 gap-2">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setIsMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `rounded-xl border px-3 py-2 text-center text-sm font-medium ${
-                      isActive ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-700"
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-
-            <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">City Filter</p>
-              <input
-                type="text"
-                value={cityMenuQuery}
-                onChange={(e) => setCityMenuQuery(e.target.value)}
-                placeholder="Search cities"
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setSelectedCity("")}
-                className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
-                  !selectedCity ? "bg-white font-semibold text-slate-900" : "text-slate-700 hover:bg-white"
-                }`}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <FiMapPin className="text-slate-400" />
-                  All Cities
-                </span>
-              </button>
-              {filteredCities.map((city) => (
+        <div className="absolute inset-x-0 top-full z-40 px-2.5 pt-2 lg:hidden">
+          <div className="mx-auto w-full max-w-[25.5rem] overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-2xl sm:max-w-[26.5rem]">
+            <div className="rounded-t-[1.35rem] border-b border-slate-800/30 bg-slate-900 px-3 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Navigation</p>
+                  <p className="text-xl font-bold leading-none text-white">Quick Menu</p>
+                </div>
                 <button
-                  key={city.value}
                   type="button"
-                  onClick={() => setSelectedCity(city.value)}
-                  className={`w-full rounded-xl px-3 py-2 text-left text-sm ${
-                    selectedCity === city.value
-                      ? "bg-white font-semibold text-slate-900"
-                      : "text-slate-700 hover:bg-white"
-                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <FiMapPin className="text-slate-400" />
-                    {city.label}
-                  </span>
+                  Close
                 </button>
-              ))}
-              {filteredCities.length === 0 ? <p className="px-1 text-sm text-slate-500">No cities found.</p> : null}
+              </div>
+
+              <nav className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-white/10 p-1.5">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `rounded-lg px-3 py-2 text-center text-xs font-semibold ${
+                        isActive ? "bg-fuchsia-500 text-white" : "text-slate-200"
+                      }`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
             </div>
+            <div className="hide-scrollbar max-h-[70vh] space-y-3 overflow-y-auto p-3">
+              <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">City Filter</p>
+                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
+                    {selectedCity ? "1 selected" : "All selected"}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={cityMenuQuery}
+                  onChange={(e) => setCityMenuQuery(e.target.value)}
+                  placeholder="Search cities"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none"
+                />
+                <div className="hide-scrollbar max-h-[132px] space-y-1 overflow-y-auto pr-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCity("")}
+                    className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
+                      !selectedCity
+                        ? "border-fuchsia-200 bg-fuchsia-50 font-semibold text-fuchsia-700"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-2.5">
+                      <span className="grid h-7 w-7 place-content-center rounded-md bg-white text-fuchsia-500">
+                        <FiMapPin />
+                      </span>
+                      <span>
+                        <p className="font-semibold">All Cities</p>
+                        <p className="text-[10px] text-slate-500">Show listings from all cities</p>
+                      </span>
+                    </span>
+                  </button>
+                  {filteredCities.map((city) => (
+                    <button
+                      key={city.value}
+                      type="button"
+                      onClick={() => setSelectedCity(city.value)}
+                      className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
+                        selectedCity === city.value
+                          ? "border-fuchsia-200 bg-fuchsia-50 font-semibold text-fuchsia-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-2.5">
+                        <span className="grid h-7 w-7 place-content-center rounded-md bg-slate-100 text-slate-500">
+                          <FiMapPin />
+                        </span>
+                        <span>
+                          <p className="font-semibold">{city.label}</p>
+                          <p className="text-[10px] text-slate-500">Popular destination</p>
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                  {filteredCities.length === 0 ? <p className="px-1 text-xs text-slate-500">No cities found.</p> : null}
+                </div>
+              </div>
 
-            {isAuthenticated ? (
-              <div className="grid grid-cols-2 gap-2">
-                <Link
-                  to={isAdmin ? "/dashboard/admin" : isOrganizer ? "/dashboard/organizer" : "/dashboard/user"}
-                  onClick={() => setIsMenuOpen(false)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700"
-                >
-                  Dashboard
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    logout();
-                    setIsMenuOpen(false);
-                  }}
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <div className="grid gap-2">
-                <Link
-                  to="/login"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                >
-                  <FiUser />
-                  Sign In
-                </Link>
-                <Link
-                  to="/staff-login"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-900 px-4 py-2 text-sm font-semibold text-slate-900"
-                >
-                  <FiShield />
-                  Staff Portal
-                </Link>
-              </div>
-            )}
+              {isAuthenticated ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    to={isAdmin ? "/dashboard/admin" : "/dashboard/user"}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="rounded-lg border border-slate-300 px-3.5 py-2 text-center text-xs font-semibold text-slate-700"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Link
+                    to="/login"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white"
+                  >
+                    <FiUser />
+                    Sign In
+                  </Link>
+                  <Link
+                    to="/staff-login"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-900"
+                  >
+                    <FiShield />
+                    Staff Portal
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
