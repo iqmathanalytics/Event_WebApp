@@ -32,7 +32,9 @@ const submitEventBodySchema = z
     age_limit: ageLimitEnum.optional(),
     languages: z.string().max(255).optional(),
     genres: z.string().max(255).optional(),
-    event_highlights: highlightsSchema
+    event_highlights: highlightsSchema,
+    is_yay_deal_event: z.boolean().optional(),
+    deal_event_discount_code: z.string().max(80).optional()
   })
   .superRefine((data, ctx) => {
     const scheduleType = data.schedule_type || "single";
@@ -151,9 +153,22 @@ const editOwnEventBodySchema = z
     age_limit: ageLimitEnum.optional(),
     languages: z.string().max(255).optional(),
     genres: z.string().max(255).optional(),
-    event_highlights: highlightsSchema
+    event_highlights: highlightsSchema,
+    is_yay_deal_event: z.boolean().optional(),
+    deal_event_discount_code: z.string().max(80).optional()
   })
   .superRefine((data, ctx) => {
+    if (data.is_yay_deal_event === true) {
+      const code = String(data.deal_event_discount_code || "").trim();
+      if (!code) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["deal_event_discount_code"],
+          message: "Discount code is required for Yay! Deal events"
+        });
+      }
+    }
+
     if (!data.schedule_type) {
       return;
     }

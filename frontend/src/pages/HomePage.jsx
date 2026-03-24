@@ -14,6 +14,19 @@ import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
 import { formatDateUS } from "../utils/format";
+import { pickHomeCarouselSix } from "../utils/homeCarouselCuration";
+
+function isYayDealEventRow(item) {
+  return (
+    item?.is_yay_deal_event === 1 ||
+    item?.is_yay_deal_event === true ||
+    String(item?.is_yay_deal_event || "") === "1"
+  );
+}
+
+function isPremiumDealRow(item) {
+  return item?.is_premium === 1 || item?.is_premium === true;
+}
 
 function HomePage() {
   const { setHomeSearchSummary, setIsHeroSearchVisible } = useOutletContext();
@@ -37,7 +50,7 @@ function HomePage() {
         setLoadingEvents(true);
         const response = await fetchFeaturedEvents({
           city: selectedCity || undefined,
-          limit: 6
+          limit: 60
         });
         if (active) {
           const now = Date.now();
@@ -69,7 +82,8 @@ function HomePage() {
             })
             .filter((ev) => ev.countdownLabel !== null);
 
-          setTrendingEvents(enriched);
+          const curated = pickHomeCarouselSix(enriched, { isPremium: isYayDealEventRow });
+          setTrendingEvents(curated);
         }
       } catch (_err) {
         if (active) {
@@ -111,11 +125,9 @@ function HomePage() {
           return;
         }
         setLiveInfluencers((influencerResponse?.data || []).slice(0, 12));
-        const allDeals = dealsResponse?.data || [];
-        const visibleDeals = isAuthenticated
-          ? allDeals
-          : allDeals.filter((item) => !(item.is_premium === 1 || item.is_premium === true));
-        setLiveDeals(visibleDeals.slice(0, 12));
+        const dealPool = (dealsResponse?.data || []).slice(0, 120);
+        const curatedDeals = pickHomeCarouselSix(dealPool, { isPremium: isPremiumDealRow });
+        setLiveDeals(curatedDeals);
       } catch (_err) {
         if (active) {
           setLiveInfluencers([]);
@@ -132,7 +144,7 @@ function HomePage() {
     return () => {
       active = false;
     };
-  }, [selectedCity, isAuthenticated]);
+  }, [selectedCity]);
 
   useEffect(() => {
     const node = heroSearchRef.current;
@@ -208,7 +220,7 @@ function HomePage() {
 
       <DiscoverySectionCarousel title={`Trending Events ${citySuffix}`} actionHref="/events">
         {loadingEvents
-          ? Array.from({ length: 4 }).map((_, idx) => (
+          ? Array.from({ length: 6 }).map((_, idx) => (
               <div
                 key={`event-skeleton-${idx}`}
                 className="h-[290px] min-w-[260px] animate-pulse rounded-3xl border border-slate-200 bg-white"
@@ -227,6 +239,12 @@ function HomePage() {
                     price: item.price,
                     image: item.image_url
                   }}
+                  isYayDealEvent={
+                    item.is_yay_deal_event === 1 ||
+                    item.is_yay_deal_event === true ||
+                    String(item.is_yay_deal_event || "") === "1"
+                  }
+                  showPremiumBadge={isAuthenticated}
                   isFavorite={isFavorite("event", item.id)}
                   tags={item.tags || []}
                   countdownLabel={item.countdownLabel}
@@ -271,7 +289,7 @@ function HomePage() {
 
       <DiscoverySectionCarousel title={`Top Deals ${citySuffix}`} actionHref="/deals">
         {loadingDeals
-          ? Array.from({ length: 4 }).map((_, idx) => (
+          ? Array.from({ length: 6 }).map((_, idx) => (
               <div
                 key={`deal-skeleton-${idx}`}
                 className="h-[290px] min-w-[260px] animate-pulse rounded-3xl border border-slate-200 bg-white"

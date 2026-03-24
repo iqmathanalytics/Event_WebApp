@@ -82,6 +82,8 @@ const editListingSchema = z.object({
     event_highlights: z.array(z.string().min(1).max(100)).optional(),
     one_of_a_kind_manual: z.union([z.boolean(), z.coerce.number().int().min(0).max(1)]).optional(),
     price_per_day: z.coerce.number().min(0).optional(),
+    is_yay_deal_event: z.boolean().optional(),
+    deal_event_discount_code: z.union([z.string().max(80), z.null()]).optional(),
     expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     website_or_social_link: z.string().url().max(500).optional(),
     profile_image_url: z.string().url().max(500).optional()

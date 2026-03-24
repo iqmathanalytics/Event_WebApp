@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FiEdit2, FiInfo, FiUser } from "react-icons/fi";
+import { FiEdit2, FiInfo, FiKey, FiUser } from "react-icons/fi";
 import useFavorites from "../hooks/useFavorites";
 import useAuth from "../hooks/useAuth";
 import { fetchMyBookings } from "../services/bookingService";
@@ -11,7 +11,8 @@ import {
   fetchMyInfluencerSubmissions
 } from "../services/listingService";
 import { formatCurrency, formatDateUS } from "../utils/format";
-import { enableOrganizer, fetchMyProfile, updateMyProfile } from "../services/userService";
+import { refreshAccessToken } from "../services/authService";
+import { changeMyPassword, enableOrganizer, fetchMyProfile, updateMyProfile } from "../services/userService";
 import { categories, cities } from "../utils/filterOptions";
 
 const interestOptions = [
@@ -122,6 +123,15 @@ function UserDashboardPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: ""
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
   const canOrganize = Number(user?.organizer_enabled) === 1;
   const profileInitial = String(profile?.name || user?.name || "U").trim().charAt(0).toUpperCase();
   const currentTabIndex = Math.max(
@@ -235,7 +245,7 @@ function UserDashboardPage() {
   }, [profile]);
 
   useEffect(() => {
-    if (!showProfileEditor) {
+    if (!showProfileEditor && !showPasswordModal) {
       return undefined;
     }
     const prevBody = document.body.style.overflow;
@@ -246,7 +256,7 @@ function UserDashboardPage() {
       document.body.style.overflow = prevBody;
       document.documentElement.style.overflow = prevHtml;
     };
-  }, [showProfileEditor]);
+  }, [showProfileEditor, showPasswordModal]);
 
   const renderInPortal = (node) => {
     if (typeof document === "undefined") {
@@ -354,29 +364,45 @@ function UserDashboardPage() {
       <p className="text-sm text-slate-600">Track your bookings, saved listings, and account activity in one place.</p>
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-xl font-bold text-white">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-xl font-bold text-white">
               {profileInitial || <FiUser className="h-6 w-6" />}
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-base font-semibold text-slate-900">{profile?.name || user?.name || "User"}</p>
               <p className="text-sm text-slate-600">{profile?.email || user?.email}</p>
               <p className="text-xs text-slate-500">{profile?.mobile_number || "Add mobile number"}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setProfileError("");
-              setProfileMessage("");
-              setProfileEditorTab("basic");
-              setShowProfileEditor(true);
-            }}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            <FiEdit2 className="h-4 w-4" />
-            Edit Profile
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setPasswordError("");
+                setPasswordMessage("");
+                setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+                setShowPasswordModal(true);
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              title="Change password"
+            >
+              <FiKey className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">Password</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileError("");
+                setProfileMessage("");
+                setProfileEditorTab("basic");
+                setShowProfileEditor(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              <FiEdit2 className="h-4 w-4" />
+              Edit Profile
+            </button>
+          </div>
         </div>
         {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
       </section>
@@ -1031,6 +1057,113 @@ function UserDashboardPage() {
           </motion.div>
         </div>
       ) : null}
+
+      {showPasswordModal
+        ? renderInPortal(
+            <div className="fixed inset-0 z-[92] flex items-center justify-center bg-slate-900/50 px-3 py-4 sm:px-6">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-xl"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Change password</h3>
+                    <p className="mt-1 text-sm text-slate-600">Enter your current password, then your new password.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordModal(false)}
+                    className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100"
+                  >
+                    Close
+                  </button>
+                </div>
+                <form
+                  className="mt-4 space-y-3"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setPasswordError("");
+                    setPasswordMessage("");
+                    if (passwordForm.new_password !== passwordForm.confirm_password) {
+                      setPasswordError("New passwords do not match.");
+                      return;
+                    }
+                    if (passwordForm.new_password.length < 8) {
+                      setPasswordError("New password must be at least 8 characters.");
+                      return;
+                    }
+                    try {
+                      setPasswordSaving(true);
+                      await changeMyPassword({
+                        current_password: passwordForm.current_password,
+                        new_password: passwordForm.new_password
+                      });
+                      setPasswordMessage("Password updated successfully.");
+                      setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+                      window.setTimeout(() => {
+                        setShowPasswordModal(false);
+                        setPasswordMessage("");
+                      }, 1600);
+                    } catch (err) {
+                      setPasswordError(err?.response?.data?.message || "Could not update password.");
+                    } finally {
+                      setPasswordSaving(false);
+                    }
+                  }}
+                >
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Current password"
+                    value={passwordForm.current_password}
+                    onChange={(e) => setPasswordForm((s) => ({ ...s, current_password: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="New password (min 8 characters)"
+                    value={passwordForm.new_password}
+                    onChange={(e) => setPasswordForm((s) => ({ ...s, new_password: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    required
+                    minLength={8}
+                  />
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Confirm new password"
+                    value={passwordForm.confirm_password}
+                    onChange={(e) => setPasswordForm((s) => ({ ...s, confirm_password: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    required
+                  />
+                  {passwordError ? <p className="text-sm font-medium text-rose-600">{passwordError}</p> : null}
+                  {passwordMessage ? <p className="text-sm font-medium text-emerald-700">{passwordMessage}</p> : null}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordModal(false)}
+                      className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={passwordSaving}
+                      className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {passwordSaving ? "Updating..." : "Update password"}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )
+        : null}
 
       {showProfileEditor && activeCreatorModal === "influencer"
         ? renderInPortal(

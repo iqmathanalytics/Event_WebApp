@@ -4,6 +4,7 @@ import { FiHeart } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { trackDealClick } from "../services/listingService";
+import PremiumLockOverlay from "./PremiumLockOverlay";
 
 function resolveOfferChip(item) {
   let meta = {};
@@ -66,31 +67,11 @@ function DealCard({ item, isFavorite = false, onToggleFavorite, isPremium = fals
       transition={{ duration: 0.2, ease: "easeOut" }}
       className="group relative flex h-full min-h-[22.5rem] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
     >
-      {locked ? (
-        <div
-          className="absolute inset-0 z-20 flex items-center justify-center bg-white/30 backdrop-blur-sm"
-          aria-hidden="true"
-        />
-      ) : null}
+      {locked ? <PremiumLockOverlay variant="deal" /> : null}
 
       {showBadge ? (
         <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-900 shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
           Premium
-        </div>
-      ) : null}
-
-      {locked ? (
-        <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
-          <div className="w-full rounded-2xl bg-slate-900/80 p-4 text-center text-white shadow-lg">
-            <p className="text-sm font-semibold">Premium deal</p>
-            <p className="mt-1 text-xs text-white/80">Login to unlock full details and saving.</p>
-            <a
-              href="/login"
-              className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-rose-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
-            >
-              Login to Unlock
-            </a>
-          </div>
         </div>
       ) : null}
 

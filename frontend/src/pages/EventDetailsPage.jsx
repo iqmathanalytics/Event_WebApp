@@ -112,9 +112,19 @@ function EventDetailsPage() {
   const venueName = event.venue_name || event.venue || "Venue to be announced";
   const mapEmbedUrl = getEmbedMapUrl(event.google_maps_link, venueName, event.venue_address);
   const isGuest = !isAuthenticated;
+  const isYayDealEvent =
+    event.is_yay_deal_event === 1 ||
+    event.is_yay_deal_event === true ||
+    String(event.is_yay_deal_event || "") === "1";
+  const yayDealGuestLocked = isYayDealEvent && isGuest;
   const fullDescription = event.description || "No event description provided yet.";
   const partialDescription =
     fullDescription.length > 240 ? `${fullDescription.slice(0, 240).trim()}...` : fullDescription;
+  const aboutText = yayDealGuestLocked
+    ? "Login to unlock full Yay! Deal Event details, highlights, location, and your exclusive discount code."
+    : isGuest
+      ? partialDescription
+      : fullDescription;
 
   return (
     <motion.div
@@ -126,7 +136,7 @@ function EventDetailsPage() {
       <img
         src={event.image_url || "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1400"}
         alt={event.title}
-        className="aspect-[16/7] w-full rounded-3xl object-cover"
+        className={`aspect-[16/7] w-full rounded-3xl object-cover ${yayDealGuestLocked ? "blur-sm" : ""}`}
       />
 
       <div className="grid grid-cols-1 gap-5">
@@ -155,9 +165,7 @@ function EventDetailsPage() {
 
           <div className="mt-5 border-t border-slate-100 pt-5">
             <h2 className="text-base font-semibold text-slate-900">About this event</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-700">
-              {isGuest ? partialDescription : fullDescription}
-            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-700">{aboutText}</p>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 sm:grid-cols-2">
@@ -178,6 +186,35 @@ function EventDetailsPage() {
               {event.genres || "Genres not specified"}
             </p>
           </div>
+
+          {isYayDealEvent ? (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+              <p className="text-sm font-semibold text-slate-900">Yay! Deal Event — discount code</p>
+              {isGuest ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                    Code:
+                    <span className="relative ml-2 inline-flex min-w-[120px] items-center justify-center overflow-hidden rounded bg-slate-200 px-2 py-0.5">
+                      <span className="absolute inset-0 bg-slate-300/80 backdrop-blur-md" aria-hidden="true" />
+                      <span className="select-none font-bold tracking-[0.2em] text-slate-700 blur-sm">UNLOCK</span>
+                    </span>
+                  </span>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-600"
+                  >
+                    Login to Unlock
+                  </Link>
+                </div>
+              ) : event.deal_event_discount_code ? (
+                <p className="mt-2 inline-flex rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+                  Code: {event.deal_event_discount_code}
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-slate-600">No discount code was provided for this event.</p>
+              )}
+            </div>
+          ) : null}
 
           {!isGuest && highlights.length > 0 ? (
             <div className="mt-5 border-t border-slate-100 pt-5">

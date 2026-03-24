@@ -459,12 +459,21 @@ function AdminDashboardPage() {
     languages: item.languages || "",
     genres: item.genres || "",
     schedule_type: item.schedule_type || "single",
-    event_highlights: parseHighlights(item.event_highlights)
+    event_highlights: parseHighlights(item.event_highlights),
+    is_yay_deal_event:
+      item.is_yay_deal_event === 1 ||
+      item.is_yay_deal_event === true ||
+      String(item.is_yay_deal_event || "") === "1",
+    deal_event_discount_code: item.deal_event_discount_code || ""
   });
 
   const buildEventPayloadFromForm = (formValues) => {
     const payload = {};
     Object.entries(formValues).forEach(([key, value]) => {
+      if (key === "is_yay_deal_event") {
+        payload[key] = Boolean(value);
+        return;
+      }
       if (value === "" || value === null || value === undefined) {
         return;
       }
@@ -484,6 +493,13 @@ function AdminDashboardPage() {
     });
     if (payload.venue_name && !payload.venue) {
       payload.venue = payload.venue_name;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "is_yay_deal_event")) {
+      if (!payload.is_yay_deal_event) {
+        payload.deal_event_discount_code = null;
+      } else {
+        payload.deal_event_discount_code = String(formValues.deal_event_discount_code || "").trim() || null;
+      }
     }
     return payload;
   };
@@ -544,6 +560,14 @@ function AdminDashboardPage() {
     pushText("Genres", reviewForm.genres);
     if (Array.isArray(reviewForm.event_highlights) && reviewForm.event_highlights.length) {
       pushText("Event Highlights", reviewForm.event_highlights.join(", "));
+    }
+    items.push({
+      label: "Yay! Deal Event",
+      value: reviewForm.is_yay_deal_event ? "Yes" : "No",
+      type: "text"
+    });
+    if (reviewForm.is_yay_deal_event) {
+      pushText("Discount code", hasDisplayValue(reviewForm.deal_event_discount_code) ? reviewForm.deal_event_discount_code : "—");
     }
     pushLink("Google Maps", reviewForm.google_maps_link, "Open Map");
     pushLink("Ticket Link", reviewForm.ticket_link, "Open Ticket Page");
@@ -2110,6 +2134,40 @@ function AdminDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:col-span-2">
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editForm.is_yay_deal_event)}
+                        onChange={(e) =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            is_yay_deal_event: e.target.checked,
+                            deal_event_discount_code: e.target.checked ? prev.deal_event_discount_code : ""
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-amber-300 text-slate-900 focus:ring-amber-500"
+                      />
+                      <div>
+                        <span className="text-sm font-semibold text-slate-900">Yay! Deal Event</span>
+                        <p className="mt-1 text-xs text-slate-600">
+                          Premium deal-style listing; guests must log in to see the discount code on the public site.
+                        </p>
+                      </div>
+                    </label>
+                    {editForm.is_yay_deal_event ? (
+                      <FormField label="Discount code" hint="As submitted by the organizer." className="mt-4">
+                        <input
+                          value={editForm.deal_event_discount_code || ""}
+                          onChange={(e) =>
+                            setEditForm((prev) => ({ ...prev, deal_event_discount_code: e.target.value }))
+                          }
+                          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                          autoComplete="off"
+                        />
+                      </FormField>
+                    ) : null}
+                  </div>
                   <FormField label="Venue Name" hint="Venue where the event is hosted." example="Downtown Convention Center" className="sm:col-span-2">
                     <input
                       value={editForm.venue_name || ""}
@@ -2533,6 +2591,40 @@ function AdminDashboardPage() {
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:col-span-2">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(reviewForm.is_yay_deal_event)}
+                      onChange={(e) =>
+                        setReviewForm((prev) => ({
+                          ...prev,
+                          is_yay_deal_event: e.target.checked,
+                          deal_event_discount_code: e.target.checked ? prev.deal_event_discount_code : ""
+                        }))
+                      }
+                      className="mt-1 h-4 w-4 rounded border-amber-300 text-slate-900 focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="text-sm font-semibold text-slate-900">Yay! Deal Event</span>
+                      <p className="mt-1 text-xs text-slate-600">
+                        Premium deal-style listing; guests must log in to see the discount code on the public site.
+                      </p>
+                    </div>
+                  </label>
+                  {reviewForm.is_yay_deal_event ? (
+                    <FormField label="Discount code" hint="As submitted by the organizer." className="mt-4">
+                      <input
+                        value={reviewForm.deal_event_discount_code || ""}
+                        onChange={(e) =>
+                          setReviewForm((prev) => ({ ...prev, deal_event_discount_code: e.target.value }))
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                        autoComplete="off"
+                      />
+                    </FormField>
+                  ) : null}
+                </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                   <p className="text-sm font-semibold text-slate-900">Event Highlights</p>
                   <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2662,6 +2754,28 @@ function AdminDashboardPage() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Venue</p>
                     <p className="mt-1 text-sm text-slate-700">{viewListing.venue_name || viewListing.venue || "-"}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Yay! Deal Event</p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      {viewListing.is_yay_deal_event === 1 ||
+                      viewListing.is_yay_deal_event === true ||
+                      String(viewListing.is_yay_deal_event || "") === "1"
+                        ? "Yes"
+                        : "No"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Discount code</p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      {viewListing.is_yay_deal_event === 1 ||
+                      viewListing.is_yay_deal_event === true ||
+                      String(viewListing.is_yay_deal_event || "") === "1"
+                        ? hasDisplayValue(viewListing.deal_event_discount_code)
+                          ? viewListing.deal_event_discount_code
+                          : "—"
+                        : "—"}
+                    </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price</p>

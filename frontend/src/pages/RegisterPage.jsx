@@ -6,6 +6,7 @@ import { FiInfo } from "react-icons/fi";
 import { register as registerRequest } from "../services/authService";
 import useAuth from "../hooks/useAuth";
 import { categories, cities } from "../utils/filterOptions";
+import AuthBrandLogo from "../components/AuthBrandLogo";
 
 const interestOptions = [
   "Events",
@@ -147,7 +148,7 @@ function RegisterPage() {
       className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-soft"
     >
       <div className="mb-4 flex justify-center">
-        <img src="/branding/yay-tickets-logo.png" alt="Yay! Tickets" className="h-10 w-auto object-contain" />
+        <AuthBrandLogo />
       </div>
       <h1 className="text-2xl font-bold">Create your account</h1>
       <p className="mt-1 text-sm text-slate-600">Tell us a bit about you so we can personalize your city experience.</p>

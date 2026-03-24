@@ -23,6 +23,27 @@ const EVENT_TAG_RULES = Object.freeze({
   rareCategoryMaxEvents: 2
 });
 
+function isYayDealEventRow(row) {
+  return (
+    row?.is_yay_deal_event === 1 ||
+    row?.is_yay_deal_event === true ||
+    String(row?.is_yay_deal_event || "") === "1"
+  );
+}
+
+function sanitizePublicEventForViewer(event, viewerUser) {
+  if (!event) {
+    return event;
+  }
+  const authed = Boolean(viewerUser && viewerUser.id);
+  if (isYayDealEventRow(event) && !authed) {
+    const next = { ...event };
+    delete next.deal_event_discount_code;
+    return next;
+  }
+  return event;
+}
+
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -163,7 +184,7 @@ async function rejectEvent(eventId, adminId, note) {
   }
 }
 
-async function fetchEvents(query) {
+async function fetchEvents(query, viewerUser) {
   const pagination = getPagination(query);
   const search = query.q || query.search || null;
   const { monthStart, monthEnd } = getMonthRange(query.month || null);
@@ -187,7 +208,9 @@ async function fetchEvents(query) {
   };
 
   const data = await listEvents({ filters, pagination });
-  const rows = (data.rows || []).map(attachDynamicEventTags);
+  const rows = (data.rows || [])
+    .map(attachDynamicEventTags)
+    .map((row) => sanitizePublicEventForViewer(row, viewerUser));
   return {
     ...data,
     rows,
@@ -196,15 +219,16 @@ async function fetchEvents(query) {
   };
 }
 
-async function fetchEventById(eventId) {
+async function fetchEventById(eventId, viewerUser) {
   const event = await findPublicEventById(eventId);
   if (!event) {
     throw new ApiError(404, "Event not found");
   }
-  return attachDynamicEventTags({
+  const enriched = attachDynamicEventTags({
     ...event,
     display_date: getPrimaryEventDate(event)
   });
+  return sanitizePublicEventForViewer(enriched, viewerUser);
 }
 
 async function fetchMySubmissions(userId) {
@@ -220,10 +244,22 @@ async function editOwnEvent(eventId, organizerId, payload) {
     throw new ApiError(403, "You can only edit your own events");
   }
 
+  const normalizedPayload = normalizeEventSchedulePayload(payload);
+  if (
+    Object.prototype.hasOwnProperty.call(normalizedPayload, "is_yay_deal_event") &&
+    !(
+      normalizedPayload.is_yay_deal_event === true ||
+      normalizedPayload.is_yay_deal_event === 1 ||
+      String(normalizedPayload.is_yay_deal_event || "") === "1"
+    )
+  ) {
+    normalizedPayload.deal_event_discount_code = null;
+  }
+
   const updated = await updateEventByOrganizer({
     eventId,
     organizerId,
-    updates: normalizeEventSchedulePayload(payload)
+    updates: normalizedPayload
   });
   if (!updated) {
     throw new ApiError(400, "No valid fields provided for update");
@@ -248,10 +284,12 @@ async function deleteOwnEvent(eventId, organizerId) {
   }
 }
 
-async function fetchFeaturedEvents({ city, limit }) {
+async function fetchFeaturedEvents({ city, limit }, viewerUser) {
   const cityId = city ? Number(city) : null;
   const rows = await listFeaturedEvents({ cityId, limit: Number(limit) || 6 });
-  return rows.map(attachDynamicEventTags);
+  return rows
+    .map(attachDynamicEventTags)
+    .map((row) => sanitizePublicEventForViewer(row, viewerUser));
 }
 
 async function trackEventClick(eventId) {

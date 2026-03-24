@@ -15,3 +15,8 @@ export async function updateMyProfile(payload) {
   return response.data;
 }
 
+export async function changeMyPassword(payload) {
+  const response = await api.patch("/users/me/password", payload);
+  return response.data;
+}
+

@@ -310,6 +310,12 @@ function EventsPage() {
                   price: item.price,
                   image: item.image_url
                 }}
+                isYayDealEvent={
+                  item.is_yay_deal_event === 1 ||
+                  item.is_yay_deal_event === true ||
+                  String(item.is_yay_deal_event || "") === "1"
+                }
+                showPremiumBadge={isAuthenticated}
                 tags={item.tags || []}
                 isFavorite={isFavorite("event", item.id)}
                 onToggleFavorite={() =>

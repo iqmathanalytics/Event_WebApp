@@ -70,7 +70,9 @@ async function createEvent(payload) {
     languages,
     genres,
     event_highlights,
-    price_per_day
+    price_per_day,
+    is_yay_deal_event,
+    deal_event_discount_code
   } = payload;
 
   const highlightsValue = Array.isArray(event_highlights)
@@ -80,14 +82,21 @@ async function createEvent(payload) {
   const eventDatesValue = normalizedEventDates.length ? JSON.stringify(normalizedEventDates) : null;
   const scheduleType = schedule_type || "single";
   const perDayPrice = price_per_day !== undefined ? price_per_day : price;
+  const yayDeal =
+    is_yay_deal_event === true || is_yay_deal_event === 1 || String(is_yay_deal_event || "") === "1";
+  const discountCode =
+    yayDeal && deal_event_discount_code != null && String(deal_event_discount_code).trim()
+      ? String(deal_event_discount_code).trim()
+      : null;
 
   const [result] = await pool.query(
     `INSERT INTO events
       (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
        venue_name, venue_address, google_maps_link, organizer_id, ticket_link,
        image_url, price, duration_hours, age_limit, languages, genres, event_highlights,
+       is_yay_deal_event, deal_event_discount_code,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
     [
       title,
       description || null,
@@ -111,7 +120,9 @@ async function createEvent(payload) {
       age_limit || null,
       languages || null,
       genres || null,
-      highlightsValue
+      highlightsValue,
+      yayDeal ? 1 : 0,
+      yayDeal ? discountCode : null
     ]
   );
 
@@ -202,7 +213,9 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "age_limit",
     "languages",
     "genres",
-    "event_highlights"
+    "event_highlights",
+    "is_yay_deal_event",
+    "deal_event_discount_code"
   ];
 
   const entries = Object.entries(updates)
@@ -216,6 +229,16 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
       }
       if (key === "price_per_day") {
         return ["price", value];
+      }
+      if (key === "is_yay_deal_event") {
+        const on = value === true || value === 1 || String(value) === "1";
+        return [key, on ? 1 : 0];
+      }
+      if (key === "deal_event_discount_code") {
+        if (value == null || value === "") {
+          return [key, null];
+        }
+        return [key, String(value).trim()];
       }
       return [key, value];
     });

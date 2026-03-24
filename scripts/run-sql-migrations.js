@@ -16,7 +16,8 @@ const FILES = [
   "user_onboarding_profiles.sql",
   "dealer_profiles.sql",
   "influencer_deal_review_notes.sql",
-  "event_manual_one_of_a_kind_flag.sql"
+  "event_manual_one_of_a_kind_flag.sql",
+  "event_yay_deal_fields.sql"
 ];
 
 function buildSsl() {

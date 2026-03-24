@@ -11,12 +11,7 @@ function redirectToAuthForFavorites() {
     return;
   }
   const next = `${window.location.pathname || "/"}${window.location.search || ""}`;
-  const goLogin = window.confirm(
-    "Please login or sign up to save favorites.\n\nClick OK for Login, or Cancel for Sign Up."
-  );
-  window.location.href = goLogin
-    ? `/login?next=${encodeURIComponent(next)}`
-    : `/register?next=${encodeURIComponent(next)}`;
+  window.location.href = `/login?next=${encodeURIComponent(next)}`;
 }
 
 function useFavorites() {

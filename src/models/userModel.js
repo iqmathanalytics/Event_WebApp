@@ -132,6 +132,16 @@ async function updateUserProfileById({ id, name, email, mobile_number }) {
   return result.affectedRows > 0;
 }
 
+async function updatePasswordHashByUserId({ id, passwordHash }) {
+  const [result] = await pool.query(
+    `UPDATE users
+     SET password_hash = ?, updated_at = NOW()
+     WHERE id = ? AND is_active = 1`,
+    [passwordHash, id]
+  );
+  return result.affectedRows > 0;
+}
+
 async function listAllUsers() {
   const [rows] = await pool.query(
     `SELECT id, name, email, mobile_number, role, organizer_enabled, can_post_events, can_create_influencer_profile,
@@ -158,6 +168,7 @@ module.exports = {
   deactivateUserById,
   activateUserById,
   updateUserProfileById,
+  updatePasswordHashByUserId,
   listAllUsers,
   deleteUserById
 };

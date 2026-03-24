@@ -3,9 +3,22 @@ import { motion } from "framer-motion";
 import { FiHeart } from "react-icons/fi";
 import { formatCurrency } from "../utils/format";
 import { trackEventClick } from "../services/eventService";
+import useAuth from "../hooks/useAuth";
+import PremiumLockOverlay from "./PremiumLockOverlay";
 
-function EventCard({ item, isFavorite = false, onToggleFavorite, tags = [], countdownLabel }) {
+function EventCard({
+  item,
+  isFavorite = false,
+  onToggleFavorite,
+  tags = [],
+  countdownLabel,
+  isYayDealEvent = false,
+  showPremiumBadge = false
+}) {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const locked = Boolean(isYayDealEvent) && !isAuthenticated;
+  const showBadge = Boolean(showPremiumBadge) && Boolean(isYayDealEvent) && isAuthenticated;
   const dateTimeText = item.time ? `${item.date} • ${item.time}` : item.date;
   const visibleTags = tags.slice(0, 2);
   const overflowTags = tags.slice(2);
@@ -29,10 +42,20 @@ function EventCard({ item, isFavorite = false, onToggleFavorite, tags = [], coun
       transition={{ duration: 0.2, ease: "easeOut" }}
       className="group relative flex h-full min-h-[22.5rem] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
     >
+      {locked ? <PremiumLockOverlay variant="event" /> : null}
+
+      {showBadge ? (
+        <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-900 shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
+          Premium
+        </div>
+      ) : null}
+
       <button
         type="button"
         onClick={() => onToggleFavorite?.()}
-        className={`absolute right-3 top-3 z-10 grid h-9 w-9 place-content-center rounded-full bg-white/95 text-sm shadow transition ${
+        className={`absolute z-10 grid h-9 w-9 place-content-center rounded-full bg-white/95 text-sm shadow transition ${
+          showBadge ? "left-3 top-3" : "right-3 top-3"
+        } ${
           isFavorite ? "opacity-100 text-rose-600" : "opacity-100 text-slate-600 md:opacity-0 md:group-hover:opacity-100"
         }`}
         aria-label="Save event"
@@ -44,7 +67,7 @@ function EventCard({ item, isFavorite = false, onToggleFavorite, tags = [], coun
         alt={item.title}
         loading="lazy"
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-        className="aspect-[4/3] w-full object-cover"
+        className={`aspect-[4/3] w-full object-cover ${locked ? "blur-sm scale-105" : ""}`}
       />
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2">

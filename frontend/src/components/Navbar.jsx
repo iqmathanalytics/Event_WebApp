@@ -67,7 +67,6 @@ function Navbar({
 
   const isHomePage = location.pathname === "/";
   const showCompactSearch = isHomePage && !isHeroSearchVisible;
-  const compactSummary = `${homeSearchSummary.cityLabel} • ${homeSearchSummary.dateLabel} • ${homeSearchSummary.categoryLabel}`;
   const filteredCities = useMemo(() => {
     const query = cityMenuQuery.trim().toLowerCase();
     if (!query) {
@@ -271,60 +270,46 @@ function Navbar({
       >
         <div className="container-page flex justify-center max-lg:px-0">
           <div
-            className={`relative hidden h-12 w-fit max-w-[88vw] items-center gap-1.5 px-1 py-1 lg:inline-flex ${
+            className={`relative flex h-12 w-fit max-w-[88vw] items-center gap-1.5 px-1 py-1 ${
               showCompactSearch ? "pointer-events-auto" : "pointer-events-none"
             }`}
             style={{ willChange: "transform, opacity" }}
           >
             <div className="pointer-events-none absolute inset-0 rounded-full border border-slate-200 bg-white shadow-lg ring-1 ring-black/5" />
-            <div className="relative flex h-full items-center gap-1.5 pr-0.5">
+            <div className="relative flex h-full min-w-0 items-center gap-1.5 pr-0.5">
               <button
                 type="button"
                 onClick={() => reopenHeroSearch("where")}
-                className="truncate rounded-full px-2.5 py-1 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
+                className="min-w-0 truncate rounded-full px-2.5 py-1 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
               >
                 {homeSearchSummary.cityLabel}
               </button>
-              <span className="text-slate-300">|</span>
+              <span className="shrink-0 text-slate-300">|</span>
               <button
                 type="button"
                 onClick={() => reopenHeroSearch("when")}
-                className="truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+                className="min-w-0 truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
               >
                 {homeSearchSummary.dateLabel}
               </button>
-              <span className="text-slate-300">|</span>
+              <span className="shrink-0 text-slate-300">|</span>
               <button
                 type="button"
                 onClick={() => reopenHeroSearch("category")}
-                className="truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+                className="min-w-0 truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
               >
                 {homeSearchSummary.categoryLabel}
               </button>
               <button
                 type="button"
                 onClick={() => reopenHeroSearch("where")}
-                className="grid h-8 w-8 place-content-center rounded-full bg-rose-500 text-white shadow-sm"
+                className="grid h-8 w-8 shrink-0 place-content-center rounded-full bg-rose-500 text-white shadow-sm"
                 aria-label="Open home search"
               >
                 <FiSearch size={14} />
               </button>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => reopenHeroSearch("where")}
-            className={`relative inline-flex h-11 w-[calc(100vw-24px)] max-w-none items-center gap-2 rounded-full border border-slate-200 bg-white px-2 text-sm font-medium text-slate-700 shadow-lg ring-1 ring-black/5 md:w-[min(calc(100vw-36px),44rem)] lg:hidden ${
-              showCompactSearch ? "pointer-events-auto" : "pointer-events-none"
-            }`}
-            style={{ willChange: "transform, opacity" }}
-          >
-            <span className="min-w-0 flex-1 truncate pr-2">{compactSummary}</span>
-            <span className="ml-auto grid h-8 w-8 shrink-0 place-content-center rounded-full bg-rose-500 text-white shadow-sm">
-              <FiSearch className="h-4 w-4" />
-            </span>
-          </button>
         </div>
       </motion.div>
 

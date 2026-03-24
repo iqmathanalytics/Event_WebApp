@@ -279,7 +279,9 @@ function resolveEditableColumns(type) {
       "genres",
       "event_highlights",
       "one_of_a_kind_manual",
-      "price_per_day"
+      "price_per_day",
+      "is_yay_deal_event",
+      "deal_event_discount_code"
     ],
     deals: ["title", "description", "city_id", "category_id", "original_price", "discounted_price", "expiry_date"],
     influencers: ["name", "bio", "city_id", "category_id", "contact_email", "profile_image_url"],
@@ -319,6 +321,12 @@ async function editListing({ type, id, payload }) {
       }
       if (key === "price_per_day") {
         return ["price", value];
+      }
+      if (key === "is_yay_deal_event") {
+        return [key, value === true || value === 1 || String(value) === "1" ? 1 : 0];
+      }
+      if (key === "deal_event_discount_code") {
+        return [key, value == null || value === "" ? null : String(value).trim()];
       }
     }
     return [key, value];

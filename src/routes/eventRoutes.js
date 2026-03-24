@@ -3,6 +3,7 @@ const eventController = require("../controllers/eventController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 const organizerAccessMiddleware = require("../middleware/organizerAccessMiddleware");
+const optionalAuthMiddleware = require("../middleware/optionalAuthMiddleware");
 const validateRequest = require("../middleware/validateRequest");
 const {
   submitEventSchema,
@@ -17,9 +18,10 @@ const {
 
 const router = express.Router();
 
-router.get("/", validateRequest(fetchEventsSchema), eventController.fetchEvents);
+router.get("/", optionalAuthMiddleware, validateRequest(fetchEventsSchema), eventController.fetchEvents);
 router.get(
   "/featured",
+  optionalAuthMiddleware,
   validateRequest(fetchFeaturedEventsSchema),
   eventController.fetchFeaturedEvents
 );
@@ -52,7 +54,7 @@ router.get(
   organizerAccessMiddleware,
   eventController.fetchMySubmissions
 );
-router.get("/:id", validateRequest(fetchEventByIdSchema), eventController.fetchEventById);
+router.get("/:id", optionalAuthMiddleware, validateRequest(fetchEventByIdSchema), eventController.fetchEventById);
 router.put(
   "/:id",
   authMiddleware,

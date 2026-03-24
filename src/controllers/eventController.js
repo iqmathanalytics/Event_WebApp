@@ -35,7 +35,7 @@ const rejectEvent = asyncHandler(async (req, res) => {
 });
 
 const fetchEvents = asyncHandler(async (req, res) => {
-  const result = await eventService.fetchEvents(req.validated.query);
+  const result = await eventService.fetchEvents(req.validated.query, req.user);
   res.status(200).json({
     success: true,
     data: result
@@ -43,7 +43,7 @@ const fetchEvents = asyncHandler(async (req, res) => {
 });
 
 const fetchEventById = asyncHandler(async (req, res) => {
-  const result = await eventService.fetchEventById(Number(req.params.id));
+  const result = await eventService.fetchEventById(Number(req.params.id), req.user);
   res.status(200).json({
     success: true,
     data: result
@@ -59,10 +59,13 @@ const fetchMySubmissions = asyncHandler(async (req, res) => {
 });
 
 const fetchFeaturedEvents = asyncHandler(async (req, res) => {
-  const result = await eventService.fetchFeaturedEvents({
-    city: req.validated.query.city,
-    limit: req.validated.query.limit
-  });
+  const result = await eventService.fetchFeaturedEvents(
+    {
+      city: req.validated.query.city,
+      limit: req.validated.query.limit
+    },
+    req.user
+  );
 
   res.status(200).json({
     success: true,

@@ -51,7 +51,9 @@ const initialForm = {
   age_limit: "All Ages",
   languages: "",
   genres: "",
-  event_highlights: []
+  event_highlights: [],
+  is_yay_deal_event: false,
+  deal_event_discount_code: ""
 };
 
 const eventHighlightOptions = [
@@ -295,7 +297,12 @@ function OrganizerDashboardPage() {
       age_limit: event.age_limit || "All Ages",
       languages: event.languages || "",
       genres: event.genres || "",
-      event_highlights: parseHighlights(event.event_highlights)
+      event_highlights: parseHighlights(event.event_highlights),
+      is_yay_deal_event:
+        event.is_yay_deal_event === 1 ||
+        event.is_yay_deal_event === true ||
+        String(event.is_yay_deal_event || "") === "1",
+      deal_event_discount_code: event.deal_event_discount_code || ""
     });
     setIsFormOpen(true);
   };
@@ -394,6 +401,9 @@ function OrganizerDashboardPage() {
       if (!form.category_id) {
         throw new Error("Please select a category.");
       }
+      if (form.is_yay_deal_event && !String(form.deal_event_discount_code || "").trim()) {
+        throw new Error("Please enter a discount code for Yay! Deal events.");
+      }
 
       const venueMapsUrl = normalizeOptionalUrl(form.google_maps_link, "Google Maps");
       const ticketUrl = normalizeOptionalUrl(form.ticket_link, "ticket");
@@ -421,7 +431,11 @@ function OrganizerDashboardPage() {
         age_limit: form.age_limit || undefined,
         languages: form.languages.trim() || undefined,
         genres: form.genres.trim() || undefined,
-        event_highlights: form.event_highlights
+        event_highlights: form.event_highlights,
+        is_yay_deal_event: Boolean(form.is_yay_deal_event),
+        deal_event_discount_code: form.is_yay_deal_event
+          ? String(form.deal_event_discount_code || "").trim()
+          : undefined
       };
 
       if (editingEvent) {
@@ -1303,6 +1317,48 @@ function OrganizerDashboardPage() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:col-span-2">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.is_yay_deal_event)}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        is_yay_deal_event: e.target.checked,
+                        deal_event_discount_code: e.target.checked ? prev.deal_event_discount_code : ""
+                      }))
+                    }
+                    className="mt-1 h-4 w-4 rounded border-amber-300 text-slate-900 focus:ring-amber-500"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-slate-900">Yay! Deal Event</span>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Mark this as a premium deal-style listing. Guests will need to log in to see full details and the
+                      discount code on the public events page.
+                    </p>
+                  </div>
+                </label>
+                {form.is_yay_deal_event ? (
+                  <div className="mt-4">
+                    <FormField
+                      label="Discount code"
+                      hint="Shown to logged-in visitors on the event page (not visible to guests)."
+                      example="YAYSPRING20"
+                    >
+                      <input
+                        value={form.deal_event_discount_code}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, deal_event_discount_code: e.target.value }))
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                        placeholder="Enter code"
+                        autoComplete="off"
+                      />
+                    </FormField>
+                  </div>
+                ) : null}
+              </div>
               <FormField label="Price (USD)" hint="Enter ticket price per person." example="29.99">
                 <input
                   type="number"

@@ -1,5 +1,13 @@
+const bcrypt = require("bcryptjs");
 const asyncHandler = require("../utils/asyncHandler");
-const { enableOrganizerById, findUserByEmail, findUserById, updateUserProfileById } = require("../models/userModel");
+const ApiError = require("../utils/ApiError");
+const {
+  enableOrganizerById,
+  findUserByEmail,
+  findUserById,
+  updateUserProfileById,
+  updatePasswordHashByUserId
+} = require("../models/userModel");
 const {
   findUserOnboardingProfileByUserId,
   upsertUserOnboardingProfile
@@ -301,6 +309,31 @@ const updateMyProfile = asyncHandler(async (req, res) => {
   });
 });
 
+const changeMyPassword = asyncHandler(async (req, res) => {
+  const { current_password, new_password } = req.validated.body;
+  const me = await findUserById(req.user.id);
+  if (!me?.email) {
+    throw new ApiError(400, "Account not found");
+  }
+  const row = await findUserByEmail(me.email);
+  if (!row?.password_hash) {
+    throw new ApiError(400, "Cannot change password for this account");
+  }
+  const match = await bcrypt.compare(current_password, row.password_hash);
+  if (!match) {
+    throw new ApiError(401, "Current password is incorrect");
+  }
+  const passwordHash = await bcrypt.hash(new_password, 12);
+  const ok = await updatePasswordHashByUserId({ id: req.user.id, passwordHash });
+  if (!ok) {
+    throw new ApiError(400, "Could not update password");
+  }
+  res.status(200).json({
+    success: true,
+    message: "Password updated successfully"
+  });
+});
+
 function parseJsonArray(value) {
   if (!value) {
     return [];
@@ -316,4 +349,4 @@ function parseJsonArray(value) {
   }
 }
 
-module.exports = { getMe, getMyBookings, enableOrganizer, updateMyProfile };
+module.exports = { getMe, getMyBookings, enableOrganizer, updateMyProfile, changeMyPassword };

@@ -438,6 +438,137 @@ textarea {
   }
 }
 
+/* Premium lock cards (Yay! deal events + premium deals) */
+.premium-lock-panel {
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.94) 0%, rgba(49, 46, 129, 0.92) 45%, rgba(30, 27, 75, 0.96) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.07) inset,
+    0 22px 48px rgba(0, 0, 0, 0.5),
+    0 0 60px rgba(234, 88, 12, 0.18),
+    0 0 32px rgba(244, 63, 94, 0.12);
+}
+
+.premium-lock-panel:hover {
+  border-color: rgba(251, 191, 36, 0.65);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 26px 56px rgba(0, 0, 0, 0.55),
+    0 0 72px rgba(249, 115, 22, 0.28),
+    0 0 40px rgba(244, 63, 94, 0.2);
+}
+
+.premium-lock-flames {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 48%;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.premium-lock-flame {
+  position: absolute;
+  bottom: -42%;
+  width: 46%;
+  height: 110%;
+  border-radius: 50% 50% 35% 35%;
+  opacity: 0.72;
+  filter: blur(10px);
+  mix-blend-mode: screen;
+  animation: premium-flame-dance 0.75s ease-in-out infinite alternate;
+}
+
+.premium-lock-flame:nth-child(1) {
+  left: 2%;
+  background: radial-gradient(ellipse 75% 100% at 50% 100%, #fb923c, #ef4444 42%, transparent 72%);
+  animation-delay: 0s;
+}
+
+.premium-lock-flame:nth-child(2) {
+  left: 28%;
+  width: 48%;
+  background: radial-gradient(ellipse 70% 100% at 50% 100%, #fcd34d, #f97316 48%, transparent 74%);
+  animation-delay: 0.12s;
+}
+
+.premium-lock-flame:nth-child(3) {
+  right: 2%;
+  left: auto;
+  background: radial-gradient(ellipse 75% 100% at 50% 100%, #ea580c, #dc2626 40%, transparent 70%);
+  animation-delay: 0.24s;
+}
+
+@keyframes premium-flame-dance {
+  from {
+    transform: translateX(0) scaleY(1);
+    opacity: 0.58;
+  }
+  to {
+    transform: translateX(4px) scaleY(1.12) scaleX(1.04);
+    opacity: 0.88;
+  }
+}
+
+.premium-lock-title-shine,
+.premium-lock-title-shine-delayed {
+  background: linear-gradient(
+    90deg,
+    #fef3c7 0%,
+    #fffbeb 22%,
+    #fdba74 45%,
+    #fef08a 65%,
+    #fde68a 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: premium-title-shine 2.8s linear infinite;
+  filter: drop-shadow(0 2px 12px rgba(251, 191, 36, 0.35));
+}
+
+.premium-lock-title-shine-delayed {
+  animation-delay: 0.35s;
+}
+
+@keyframes premium-title-shine {
+  to {
+    background-position: 220% center;
+  }
+}
+
+.premium-lock-pulse-text {
+  animation: premium-cta-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes premium-cta-pulse {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.premium-lock-cta {
+  background: linear-gradient(92deg, #e11d48, #f97316, #fb7185, #e11d48);
+  background-size: 240% auto;
+  animation: premium-cta-gradient-shift 2.5s linear infinite;
+}
+
+.premium-lock-cta:hover {
+  animation-duration: 1.6s;
+}
+
+@keyframes premium-cta-gradient-shift {
+  to {
+    background-position: 240% center;
+  }
+}
+
 @media (max-width: 767px) {
   .popup-modal {
     width: 100% !important;

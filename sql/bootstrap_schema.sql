@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS events (
   genres VARCHAR(255) NULL,
   event_highlights TEXT NULL,
   one_of_a_kind_manual TINYINT(1) NOT NULL DEFAULT 0,
+  is_yay_deal_event TINYINT(1) NOT NULL DEFAULT 0,
+  deal_event_discount_code VARCHAR(80) NULL,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   popularity_score INT NOT NULL DEFAULT 0,
   reviewed_by BIGINT UNSIGNED NULL,
