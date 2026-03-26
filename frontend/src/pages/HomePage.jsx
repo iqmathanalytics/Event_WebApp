@@ -9,7 +9,7 @@ import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
 import HeroSlideshow from "../components/HeroSlideshow";
 import BrandHeroLogo from "../components/BrandHeroLogo";
 import { fetchFeaturedEvents } from "../services/eventService";
-import { fetchDeals, fetchInfluencers } from "../services/listingService";
+import { fetchDeals, fetchInfluencers, trackInfluencerClick } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
@@ -277,8 +277,11 @@ function HomePage() {
                       category: item.category_name || "Lifestyle",
                       city: item.city_name || "City",
                       followers: item.followers_count || 0,
+                      youtubeSubscribers: item.youtube_subscribers_count || 0,
+                      tags: item.tags || [],
                       image: item.profile_image_url
                     }}
+                    onViewDetails={(id) => trackInfluencerClick(id).catch(() => {})}
                   />
                 </div>
               ))

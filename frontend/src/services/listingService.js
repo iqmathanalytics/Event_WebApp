@@ -45,6 +45,33 @@ export async function updateInfluencerProfile(id, payload) {
   return response.data;
 }
 
+export async function fetchInfluencerDetails(id) {
+  const response = await api.get(`/influencers/${id}/details`);
+  return response.data;
+}
+
+export async function fetchInfluencerMedia(id) {
+  const response = await api.get(`/influencers/${id}/media`);
+  return response.data;
+}
+
+export async function uploadInfluencerMedia(id, imageUrls) {
+  const response = await api.post(`/influencers/${id}/media`, {
+    image_urls: imageUrls
+  });
+  return response.data;
+}
+
+export async function trackInfluencerView(id) {
+  const response = await api.post(`/influencers/${id}/track-view`);
+  return response.data;
+}
+
+export async function trackInfluencerClick(id) {
+  const response = await api.post(`/influencers/${id}/track-click`);
+  return response.data;
+}
+
 export async function createDeal(payload) {
   const response = await api.post("/deals", payload);
   return response.data;

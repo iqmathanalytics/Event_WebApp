@@ -5,7 +5,8 @@ import EventFilterBar from "../components/EventFilterBar";
 import {
   createInfluencerProfile,
   fetchInfluencers,
-  fetchMyInfluencerSubmissions
+  fetchMyInfluencerSubmissions,
+  trackInfluencerClick
 } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
@@ -114,6 +115,7 @@ function InfluencersPage() {
     city_id: "",
     category_id: "",
     instagram: "",
+    instagram_followers_count: "",
     youtube: "",
     contact_email: "",
     profile_image_url: ""
@@ -339,9 +341,12 @@ function InfluencersPage() {
                   category: item.category_name || "Lifestyle",
                   city: item.city_name || "City",
                   followers: item.followers_count || 0,
+                  youtubeSubscribers: item.youtube_subscribers_count || 0,
+                  tags: item.tags || [],
                   image: item.profile_image_url
                 }}
                 isFavorite={isFavorite("influencer", item.id)}
+                onViewDetails={(id) => trackInfluencerClick(id).catch(() => {})}
                 onToggleFavorite={() =>
                   toggleFavorite({
                     listingType: "influencer",
@@ -375,6 +380,7 @@ function InfluencersPage() {
                 city_id: "",
                 category_id: "",
                 instagram: "",
+                instagram_followers_count: "",
                 youtube: "",
                 contact_email: "",
                 profile_image_url: ""
@@ -428,6 +434,16 @@ function InfluencersPage() {
             </FormField>
             <FormField label="Instagram URL" hint="Paste your Instagram profile link." example="https://instagram.com/yourhandle">
               <input type="url" value={submitForm.instagram} onChange={(e) => setSubmitForm((p) => ({ ...p, instagram: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </FormField>
+            <FormField label="Instagram Followers Count" hint="Enter your Instagram follower count (numbers only)." example="12500">
+              <input
+                type="number"
+                min="0"
+                required
+                value={submitForm.instagram_followers_count}
+                onChange={(e) => setSubmitForm((p) => ({ ...p, instagram_followers_count: e.target.value }))}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
             </FormField>
             <FormField label="YouTube URL" hint="Paste your channel or profile link." example="https://youtube.com/@yourchannel">
               <input type="url" value={submitForm.youtube} onChange={(e) => setSubmitForm((p) => ({ ...p, youtube: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />

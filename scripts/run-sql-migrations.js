@@ -17,7 +17,10 @@ const FILES = [
   "dealer_profiles.sql",
   "influencer_deal_review_notes.sql",
   "event_manual_one_of_a_kind_flag.sql",
-  "event_yay_deal_fields.sql"
+  "event_yay_deal_fields.sql",
+  "google_oauth_users.sql",
+  "influencer_premium_gallery_and_metrics.sql",
+  "influencer_engagement_timestamp.sql"
 ];
 
 function buildSsl() {

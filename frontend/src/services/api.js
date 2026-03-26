@@ -48,6 +48,7 @@ api.interceptors.response.use(
     const isAuthRequest =
       requestUrl.includes("/auth/login") ||
       requestUrl.includes("/auth/register") ||
+      requestUrl.includes("/auth/google") ||
       requestUrl.includes("/auth/refresh-token");
 
     if (status === 401 && !isAuthRequest && originalRequest && !originalRequest.__isRetryRequest) {

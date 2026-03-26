@@ -9,7 +9,10 @@ async function createUser({
   organizerEnabled,
   canPostEvents,
   canCreateInfluencerProfile,
-  canPostDeals
+  canPostDeals,
+  authProvider,
+  googleId,
+  profileImageUrl
 }) {
   const enabled =
     organizerEnabled !== undefined ? Boolean(organizerEnabled) : String(role) === "organizer";
@@ -17,15 +20,19 @@ async function createUser({
   const canInfluencer =
     canCreateInfluencerProfile !== undefined ? Boolean(canCreateInfluencerProfile) : true;
   const canDeals = canPostDeals !== undefined ? Boolean(canPostDeals) : true;
+  const provider = authProvider || "local";
   const [result] = await pool.query(
     `INSERT INTO users
-      (name, email, mobile_number, password_hash, role, organizer_enabled, can_post_events, can_create_influencer_profile, can_post_deals, is_active, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
+      (name, email, mobile_number, password_hash, auth_provider, google_id, profile_image_url, role, organizer_enabled, can_post_events, can_create_influencer_profile, can_post_deals, is_active, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
     [
       name,
       email,
       mobileNumber || null,
-      passwordHash,
+      passwordHash ?? null,
+      provider,
+      googleId || null,
+      profileImageUrl || null,
       role || "user",
       enabled ? 1 : 0,
       canEvents ? 1 : 0,
@@ -38,8 +45,8 @@ async function createUser({
 
 async function findUserById(id) {
   const [rows] = await pool.query(
-    `SELECT id, name, email, mobile_number, role, organizer_enabled, can_post_events, can_create_influencer_profile,
-            can_post_deals, is_active, created_at
+    `SELECT id, name, email, mobile_number, auth_provider, google_id, profile_image_url, role, organizer_enabled,
+            can_post_events, can_create_influencer_profile, can_post_deals, is_active, created_at
      FROM users
      WHERE id = ? LIMIT 1`,
     [id]
@@ -52,6 +59,15 @@ async function findUserByEmail(email) {
     email
   ]);
   return rows[0] || null;
+}
+
+async function updateUserAfterGoogleSignIn({ id, googleId, profileImageUrl, displayName }) {
+  await pool.query(
+    `UPDATE users
+     SET google_id = ?, profile_image_url = ?, name = ?, updated_at = NOW()
+     WHERE id = ?`,
+    [googleId, profileImageUrl || null, displayName, id]
+  );
 }
 
 async function listUsersByRole(role) {
@@ -161,6 +177,7 @@ module.exports = {
   findUserByEmail,
   createUser,
   findUserById,
+  updateUserAfterGoogleSignIn,
   listUsersByRole,
   listUsersByOrganizerEnabled,
   enableOrganizerById,

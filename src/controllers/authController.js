@@ -37,9 +37,29 @@ const refreshToken = asyncHandler(async (req, res) => {
   });
 });
 
+const googleLoginUser = asyncHandler(async (req, res) => {
+  const result = await authService.loginWithGoogleIdToken(req.validated.body.idToken);
+  res.status(200).json({
+    success: true,
+    message: "Signed in with Google successfully.",
+    data: result
+  });
+});
+
+const googleRegisterUser = asyncHandler(async (req, res) => {
+  const result = await authService.registerWithGoogleIdToken(req.validated.body.idToken);
+  res.status(201).json({
+    success: true,
+    message: "Welcome! Finish setting up your profile to get started.",
+    data: result
+  });
+});
+
 module.exports = {
   register,
   loginUser,
   loginStaff,
-  refreshToken
+  refreshToken,
+  googleLoginUser,
+  googleRegisterUser
 };

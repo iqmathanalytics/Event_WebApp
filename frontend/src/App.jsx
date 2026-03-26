@@ -6,10 +6,12 @@ import EventsPage from "./pages/EventsPage";
 import EventDetailsPage from "./pages/EventDetailsPage";
 import DealDetailsPage from "./pages/DealDetailsPage";
 import InfluencersPage from "./pages/InfluencersPage";
+import InfluencerDetailsPage from "./pages/InfluencerDetailsPage";
 import DealsPage from "./pages/DealsPage";
 import LoginPage from "./pages/LoginPage";
 import StaffLoginPage from "./pages/StaffLoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import CompleteSignupPage from "./pages/CompleteSignupPage";
 import UserDashboardPage from "./pages/UserDashboardPage";
 import UserSubmissionsPage from "./pages/UserSubmissionsPage";
 import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
@@ -35,6 +37,7 @@ function App() {
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/influencers" element={<InfluencersPage />} />
+            <Route path="/influencers/:id" element={<InfluencerDetailsPage />} />
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/deals/:id" element={<DealDetailsPage />} />
             <Route path="/contact" element={<ContactPage />} />
@@ -42,6 +45,14 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/staff-login" element={<StaffLoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route
+              path="/complete-signup"
+              element={
+                <UserRoute>
+                  <CompleteSignupPage />
+                </UserRoute>
+              }
+            />
           </Route>
 
           <Route

@@ -120,11 +120,11 @@ function DealCard({ item, isFavorite = false, onToggleFavorite, isPremium = fals
                 </span>
               ))}
               {overflowTags.length ? (
-                <span className="relative">
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600 transition-colors group-hover:border-slate-300 group-hover:bg-slate-100">
+                <span className="relative group/tag">
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600 transition-colors group-hover/tag:border-slate-300 group-hover/tag:bg-slate-100">
                     +{overflowTags.length} more
                   </span>
-                  <span className="pointer-events-none absolute bottom-[120%] left-1/2 z-10 hidden w-max max-w-[220px] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/95 p-1.5 text-[10px] shadow-lg backdrop-blur-sm group-hover:flex">
+                  <span className="pointer-events-none absolute bottom-[120%] left-1/2 z-10 hidden w-max max-w-[220px] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/95 p-1.5 text-[10px] shadow-lg backdrop-blur-sm group-hover/tag:flex">
                     {overflowTags.map((tag) => (
                       <span key={`overflow-${tag}`} className={`rounded-full border px-1.5 py-0.5 font-semibold ${renderTag(tag)}`}>
                         {tag}

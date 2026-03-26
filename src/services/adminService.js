@@ -284,7 +284,17 @@ function resolveEditableColumns(type) {
       "deal_event_discount_code"
     ],
     deals: ["title", "description", "city_id", "category_id", "original_price", "discounted_price", "expiry_date"],
-    influencers: ["name", "bio", "city_id", "category_id", "contact_email", "profile_image_url"],
+    influencers: [
+      "name",
+      "bio",
+      "city_id",
+      "category_id",
+      "contact_email",
+      "profile_image_url",
+      "social_links",
+      "followers_count",
+      "youtube_subscribers_count"
+    ],
     dealers: [
       "name",
       "business_email",
@@ -303,7 +313,46 @@ function resolveEditableColumns(type) {
 async function editListing({ type, id, payload }) {
   const table = resolveTable(type);
   const allowedColumns = resolveEditableColumns(type);
-  const entries = Object.entries(payload).filter(
+
+  let normalizedPayload = payload;
+
+  // Influencer social links are stored inside `social_links` (JSON column).
+  // Admin UI edits `instagram`/`youtube`, so we map them into `social_links` here.
+  if (type === "influencers" && (Object.prototype.hasOwnProperty.call(payload, "instagram") || Object.prototype.hasOwnProperty.call(payload, "youtube"))) {
+    const hasInstagram = Object.prototype.hasOwnProperty.call(payload, "instagram");
+    const hasYoutube = Object.prototype.hasOwnProperty.call(payload, "youtube");
+
+    const [rows] = await pool.query(`SELECT social_links FROM influencers WHERE id = ? LIMIT 1`, [id]);
+    const existingRaw = rows?.[0]?.social_links;
+
+    let existingLinks = {};
+    if (existingRaw && typeof existingRaw === "string") {
+      try {
+        existingLinks = JSON.parse(existingRaw) || {};
+      } catch (_err) {
+        existingLinks = {};
+      }
+    } else if (existingRaw && typeof existingRaw === "object") {
+      existingLinks = existingRaw;
+    }
+
+    const instagramValue = hasInstagram ? payload.instagram : existingLinks.instagram || "";
+    const youtubeValue = hasYoutube ? payload.youtube : existingLinks.youtube || "";
+
+    normalizedPayload = {
+      ...payload,
+      social_links: JSON.stringify({
+        instagram: String(instagramValue || "").trim(),
+        youtube: String(youtubeValue || "").trim()
+      })
+    };
+
+    // Remove keys not present as DB columns.
+    delete normalizedPayload.instagram;
+    delete normalizedPayload.youtube;
+  }
+
+  const entries = Object.entries(normalizedPayload).filter(
     ([key, value]) => allowedColumns.includes(key) && value !== undefined
   );
 

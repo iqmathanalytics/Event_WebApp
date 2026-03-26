@@ -11,11 +11,7 @@ const baseItems = [
 
 function MobileBottomNav() {
   const { isAuthenticated, isAdmin, isOrganizer } = useAuth();
-  const profileTarget = isAdmin
-    ? "/dashboard/admin"
-    : isOrganizer
-      ? "/dashboard/organizer"
-      : "/dashboard/user";
+  const profileTarget = isAdmin ? "/dashboard/admin" : "/dashboard/user";
 
   const items = [
     ...baseItems,

@@ -523,55 +523,463 @@ function OrganizerDashboardPage() {
     categories.find((category) => String(category.value) === String(form.category_id))?.label || "Select Category";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, ease: "easeOut" }}
-      className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]"
-    >
-      <OrganizerSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
-
-      <section className="space-y-4">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Organizer Dashboard</h1>
-            <p className="text-sm text-slate-600">
-              Track event performance, booking activity, and submissions in one place.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+    <>
+      {/* Mobile + Tablet layout (does not affect desktop). */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, ease: "easeOut" }}
+        className="lg:hidden space-y-4"
+      >
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white shadow-soft">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">
+                Organizer dashboard
+              </p>
+              <h1 className="mt-2 text-xl font-bold leading-tight">
+                Manage events, bookings,
+                <span className="block text-white/85">and performance</span>
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-white/75">
+                Quick access to what matters most on mobile.
+              </p>
+            </div>
             {showBackToUserDashboard ? (
               <Link
                 to="/dashboard/user"
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-soft transition hover:bg-slate-50"
+                className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold ring-1 ring-white/15 hover:bg-white/15"
               >
-                Back to User Dashboard
+                Back
               </Link>
             ) : null}
-            {activeSection === "my-events" ? (
-              <button
-                type="button"
-                onClick={openCreate}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
-              >
-                Create New Event
-              </button>
-            ) : null}
           </div>
-        </header>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveSection("overview")}
+              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
+                activeSection === "overview"
+                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
+                  : "bg-white/10 hover:bg-white/15"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Overview</p>
+              <p className="mt-1 text-sm font-semibold">Stats</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection("my-events")}
+              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
+                activeSection === "my-events"
+                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
+                  : "bg-white/10 hover:bg-white/15"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">My events</p>
+              <p className="mt-1 text-sm font-semibold">{rows.length}</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection("bookings")}
+              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
+                activeSection === "bookings"
+                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
+                  : "bg-white/10 hover:bg-white/15"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Bookings</p>
+              <p className="mt-1 text-sm font-semibold">{overviewBookings.length}</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSection("my-events");
+                openCreate();
+              }}
+              className="rounded-2xl bg-white px-3 py-3 text-left font-semibold text-slate-900 ring-1 ring-white/30"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Create</p>
+              <p className="mt-1 text-sm font-bold">New event</p>
+            </button>
+          </div>
+        </section>
 
         {error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
             {error}
           </div>
         ) : null}
         {success ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
             {success}
           </div>
         ) : null}
 
         <AnimatePresence mode="wait">
+          {activeSection === "overview" ? (
+            <motion.section
+              key="m-overview"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total events</p>
+                  <p className="mt-1 text-2xl font-bold text-slate-900">{stats.totalEventsCreated}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upcoming</p>
+                  <p className="mt-1 text-2xl font-bold text-amber-700">{stats.upcomingEvents}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bookings</p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-700">{stats.totalBookingsReceived}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendees</p>
+                  <p className="mt-1 text-2xl font-bold text-brand-700">{stats.totalAttendees}</p>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Bookings trend</h3>
+                    <p className="mt-1 text-sm text-slate-600">A quick look at momentum.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={refreshData}
+                    className="rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                {loadingOverviewBookings ? (
+                  <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
+                ) : bookingsOverTimeData.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-500">No booking data available yet.</p>
+                ) : (
+                  <div className="mt-3 h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={bookingsOverTimeData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10, fill: "#64748b" }}
+                          interval="preserveStartEnd"
+                          tickMargin={8}
+                        />
+                        <YAxis allowDecimals={false} width={28} />
+                        <Tooltip
+                          formatter={(value) => [`${value}`, "Bookings"]}
+                          labelFormatter={(label) => `Date: ${label}`}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="count"
+                          stroke="#e11d48"
+                          strokeWidth={2}
+                          dot={{ r: 3, strokeWidth: 2, fill: "#ffffff", stroke: "#e11d48" }}
+                          activeDot={{ r: 5, strokeWidth: 2, fill: "#ffffff", stroke: "#0f172a" }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </motion.section>
+          ) : null}
+
+          {activeSection === "my-events" ? (
+            <motion.section
+              key="m-my-events"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">My events</h2>
+                  <p className="mt-1 text-sm text-slate-600">Create, edit, and track review status.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Create
+                </button>
+              </div>
+
+              {loading ? <p className="mt-3 text-sm text-slate-500">Loading your events...</p> : null}
+              {!loading && rows.length === 0 ? (
+                <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                  <p className="text-sm font-semibold text-slate-900">No events submitted yet.</p>
+                  <button
+                    type="button"
+                    onClick={openCreate}
+                    className="mt-3 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Create your first event
+                  </button>
+                </div>
+              ) : null}
+
+              {!loading && rows.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {rows.map((item) => (
+                    <article key={`m-org-event-card-${item.id}`} className="rounded-2xl border border-slate-200 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${getStatusBadgeClass(item.status)}`}>
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        <span className="font-semibold">Date:</span> {formatDateUS(item.event_date)}{" "}
+                        <span className="px-1 text-slate-300">•</span>
+                        <span className="font-semibold">City:</span> {item.city_name || "-"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status, item.review_note)}</p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(item)}
+                          className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDelete(item)}
+                          className="flex-1 rounded-full bg-rose-600 px-3 py-2 text-xs font-semibold text-white"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </motion.section>
+          ) : null}
+
+          {activeSection === "bookings" ? (
+            <motion.section
+              key="m-bookings"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Event bookings</h2>
+                  <p className="mt-1 text-sm text-slate-600">Filter and export your reservations.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => downloadBookings("csv")}
+                    className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                  >
+                    CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadBookings("excel")}
+                    className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                  >
+                    Excel
+                  </button>
+                </div>
+              </div>
+
+              <div
+                ref={bookingFilterRef}
+                className="mt-3 grid grid-cols-2 gap-2 rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-soft"
+              >
+                <FilterPopupField
+                  label="Event"
+                  value={
+                    bookingEventOptions.find((item) => String(item.id) === String(bookingFilters.event_id))?.title || "All Events"
+                  }
+                  isActive={activeBookingPanel === "event"}
+                  onToggle={(e) => {
+                    e.stopPropagation();
+                    setBookingEventQuery("");
+                    setActiveBookingPanel((prev) => (prev === "event" ? null : "event"));
+                  }}
+                  panelClassName="w-full min-w-[240px]"
+                  panelContent={
+                    <div>
+                      <label className="mb-2 block">
+                        <span className="sr-only">Search events</span>
+                        <input
+                          type="text"
+                          value={bookingEventQuery}
+                          onChange={(e) => setBookingEventQuery(e.target.value)}
+                          placeholder="Search events"
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
+                        />
+                      </label>
+                      <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookingFilters((prev) => ({ ...prev, event_id: "" }));
+                            setActiveBookingPanel(null);
+                          }}
+                          className={`group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm transition hover:bg-slate-50 ${
+                            !bookingFilters.event_id ? "bg-slate-50 text-slate-900" : "text-slate-700"
+                          }`}
+                        >
+                          <FiMapPin className="shrink-0 text-slate-400" />{" "}
+                          <span className="min-w-0 flex-1 truncate">All Events</span>
+                          {!bookingFilters.event_id ? (
+                            <span className="shrink-0 text-[11px] font-semibold text-emerald-700">Selected</span>
+                          ) : null}
+                        </button>
+                        {filteredBookingEventOptions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setBookingFilters((prev) => ({ ...prev, event_id: String(item.id) }));
+                              setActiveBookingPanel(null);
+                            }}
+                            className={`group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm transition hover:bg-slate-50 ${
+                              String(bookingFilters.event_id) === String(item.id)
+                                ? "bg-slate-50 text-slate-900"
+                                : "text-slate-700"
+                            }`}
+                          >
+                            <FiMapPin className="shrink-0 text-slate-400" />{" "}
+                            <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                            {String(bookingFilters.event_id) === String(item.id) ? (
+                              <span className="shrink-0 text-[11px] font-semibold text-emerald-700">Selected</span>
+                            ) : null}
+                          </button>
+                        ))}
+                        {filteredBookingEventOptions.length === 0 ? (
+                          <p className="px-2.5 py-3 text-sm text-slate-500">No events found.</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  }
+                />
+
+                <FilterPopupField
+                  label="Date"
+                  value={bookingFilters.date ? formatDateUS(bookingFilters.date) : "Any Date"}
+                  isActive={activeBookingPanel === "date"}
+                  onToggle={(e) => {
+                    e.stopPropagation();
+                    setActiveBookingPanel((prev) => (prev === "date" ? null : "date"));
+                  }}
+                  panelClassName="w-fit max-w-[calc(100vw-2rem)]"
+                  panelContent={
+                    <AirbnbDatePickerPanel
+                      value={bookingFilters.date}
+                      onChange={(next) => setBookingFilters((prev) => ({ ...prev, date: next }))}
+                      closeOnSelect
+                      onClose={() => setActiveBookingPanel(null)}
+                    />
+                  }
+                />
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {loadingBookingRows ? (
+                  <p className="rounded-2xl border border-slate-200 px-3 py-3 text-sm text-slate-500">Loading bookings...</p>
+                ) : bookingRows.length === 0 ? (
+                  <p className="rounded-2xl border border-slate-200 px-3 py-3 text-sm text-slate-500">
+                    No bookings match the selected filters.
+                  </p>
+                ) : (
+                  bookingRows.map((item) => (
+                    <article key={`m-org-book-card-${item.id}`} className="rounded-2xl border border-slate-200 p-4">
+                      <p className="text-sm font-semibold text-slate-900">{item.event_title}</p>
+                      <p className="mt-1 text-xs text-slate-600">{item.name} • {item.email}</p>
+                      <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
+                        <p><span className="font-semibold">Guests:</span> {item.attendee_count}</p>
+                        <p><span className="font-semibold">Booked:</span> {formatDateUS(item.booking_date)}</p>
+                        <p className="col-span-2">
+                          <span className="font-semibold">Dates:</span>{" "}
+                          {Array.isArray(item.selected_dates) && item.selected_dates.length
+                            ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
+                            : "-"}
+                        </p>
+                        <p className="col-span-2"><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            </motion.section>
+          ) : null}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Desktop layout (unchanged). */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, ease: "easeOut" }}
+        className="hidden lg:grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]"
+      >
+        <OrganizerSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+
+        <section className="space-y-4">
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Organizer Dashboard</h1>
+              <p className="text-sm text-slate-600">
+                Track event performance, booking activity, and submissions in one place.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {showBackToUserDashboard ? (
+                <Link
+                  to="/dashboard/user"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-soft transition hover:bg-slate-50"
+                >
+                  Back to User Dashboard
+                </Link>
+              ) : null}
+              {activeSection === "my-events" ? (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
+                >
+                  Create New Event
+                </button>
+              ) : null}
+            </div>
+          </header>
+
+          {error ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+              {error}
+            </div>
+          ) : null}
+          {success ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+              {success}
+            </div>
+          ) : null}
+
+          <AnimatePresence mode="wait">
           {activeSection === "overview" ? (
             <motion.section
               key="overview"
@@ -1008,8 +1416,9 @@ function OrganizerDashboardPage() {
               </div>
             </motion.section>
           ) : null}
-        </AnimatePresence>
-      </section>
+          </AnimatePresence>
+        </section>
+      </motion.div>
 
       {isFormOpen
         ? createPortal(
@@ -1514,7 +1923,7 @@ function OrganizerDashboardPage() {
             document.body
           )
         : null}
-    </motion.div>
+    </>
   );
 }
 

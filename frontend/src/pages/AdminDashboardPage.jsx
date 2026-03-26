@@ -83,6 +83,27 @@ function parseEventDates(value) {
   }
 }
 
+function parseInfluencerSocialLinks(value) {
+  if (!value) {
+    return { instagram: "", youtube: "" };
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return {
+      instagram: String(value.instagram || "").trim(),
+      youtube: String(value.youtube || "").trim()
+    };
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return {
+      instagram: String(parsed?.instagram || "").trim(),
+      youtube: String(parsed?.youtube || "").trim()
+    };
+  } catch (_err) {
+    return { instagram: "", youtube: "" };
+  }
+}
+
 function hasDisplayValue(value) {
   if (Array.isArray(value)) {
     return value.length > 0;
@@ -252,10 +273,45 @@ function AdminDashboardPage() {
   const [loadingNewsletter, setLoadingNewsletter] = useState(false);
   const [loadingContact, setLoadingContact] = useState(false);
   const [syncingNewsletterMailchimp, setSyncingNewsletterMailchimp] = useState(false);
+  const perPageMobile = 5;
+  const [mobileBookingsPage, setMobileBookingsPage] = useState(1);
+  const [mobileUsersPage, setMobileUsersPage] = useState(1);
+  const [mobileTeamPage, setMobileTeamPage] = useState(1);
+  const chipsRef = useRef(null);
+  const [chipsProgress, setChipsProgress] = useState(0);
   const canApplyAdminFilters =
     filters.date !== appliedFilters.date ||
     filters.city !== appliedFilters.city ||
     filters.category !== appliedFilters.category;
+
+  useEffect(() => {
+    setMobileBookingsPage(1);
+    setMobileUsersPage(1);
+    setMobileTeamPage(1);
+  }, [activeSection]);
+
+  useEffect(() => {
+    setMobileTeamPage(1);
+  }, [teamRole]);
+
+  useEffect(() => {
+    const el = chipsRef.current;
+    if (!el) return undefined;
+
+    const update = () => {
+      const max = Math.max(1, el.scrollWidth - el.clientWidth);
+      const next = Math.min(1, Math.max(0, el.scrollLeft / max));
+      setChipsProgress(next);
+    };
+
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   useEffect(() => {
     const onDocClick = (event) => {
@@ -374,14 +430,20 @@ function AdminDashboardPage() {
     }
   };
 
-  const loadNotifications = async () => {
+  const loadNotifications = async ({ silent = false } = {}) => {
     try {
-      setLoadingNotifications(true);
-      const response = await fetchAdminNotifications({ limit: 30 });
-      setNotifications(response?.data || []);
+      if (!silent) {
+        setLoadingNotifications(true);
+      }
+      const response = await fetchAdminNotifications({ limit: 200 });
+      if (!silent || notificationsOpen || allNotificationsOpen) {
+        setNotifications(response?.data || []);
+      }
       setNotificationsUnread(Number(response?.unread || 0));
     } finally {
-      setLoadingNotifications(false);
+      if (!silent) {
+        setLoadingNotifications(false);
+      }
     }
   };
 
@@ -422,6 +484,35 @@ function AdminDashboardPage() {
   useEffect(() => {
     loadNotifications();
   }, []);
+
+  useEffect(() => {
+    const intervalMs = 15000;
+
+    const tick = () => {
+      loadNotifications({ silent: true }).catch(() => {});
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        tick();
+      }
+    };
+
+    const onFocus = () => {
+      tick();
+    };
+
+    const id = window.setInterval(tick, intervalMs);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificationsOpen, allNotificationsOpen]);
 
   const onFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -632,11 +723,18 @@ function AdminDashboardPage() {
       return;
     }
     if (listingType === "influencers") {
+      const links = parseInfluencerSocialLinks(item.social_links);
       setEditForm({
         name: item.name || "",
         description: item.bio || "",
         city_id: item.city_id ? String(item.city_id) : "",
-        category_id: item.category_id ? String(item.category_id) : ""
+        category_id: item.category_id ? String(item.category_id) : "",
+        instagram: links.instagram || "",
+        youtube: links.youtube || "",
+        followers_count: item.followers_count != null ? String(item.followers_count) : "",
+        youtube_subscribers_count: item.youtube_subscribers_count != null ? String(item.youtube_subscribers_count) : "",
+        contact_email: item.contact_email || "",
+        profile_image_url: item.profile_image_url || ""
       });
       return;
     }
@@ -1005,10 +1103,169 @@ function AdminDashboardPage() {
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]"
     >
-      <AdminSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+      {/* Desktop sidebar only (mobile uses top chips). */}
+      <div className="hidden lg:block">
+        <AdminSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+      </div>
 
       <section className="space-y-4">
-        <header className="flex items-start justify-between gap-3">
+        {/* Mobile / Tablet hero + navigation (does not affect desktop). */}
+        <section className="lg:hidden space-y-3">
+          <div className="overflow-visible rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white shadow-soft">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-lg font-bold">Admin Dashboard</h1>
+                <p className="mt-1 text-sm text-white/70">Moderate, manage, and monitor key activity.</p>
+              </div>
+
+              <div className="relative flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const nextOpen = !notificationsOpen;
+                    setNotificationsOpen(nextOpen);
+                    if (nextOpen) {
+                      await loadNotifications({ silent: false });
+                    }
+                  }}
+                  className="relative rounded-2xl bg-white/10 p-2 text-white ring-1 ring-white/10 hover:bg-white/15"
+                  aria-label="Open notifications"
+                >
+                  <FiBell className="h-5 w-5" />
+                  {notificationsUnread > 0 ? (
+                    <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold text-white">
+                      {notificationsUnread > 99 ? "99+" : notificationsUnread}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div ref={chipsRef} className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+              {[
+                { key: "overview", label: "Overview" },
+                { key: "events", label: "Events" },
+                { key: "deals", label: "Deals" },
+                { key: "influencers", label: "Influencers" },
+                { key: "dealers", label: "Dealers" },
+                { key: "bookings", label: "Bookings" },
+                { key: "users", label: "Users" },
+                { key: "team", label: "Team" },
+                { key: "communications", label: "Comms" }
+              ].map((item) => {
+                const selected = activeSection === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setActiveSection(item.key)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
+                      selected
+                        ? "bg-white/20 text-white ring-white/25 shadow-[0_10px_26px_-18px_rgba(255,255,255,0.35)]"
+                        : "bg-white/10 text-white/80 ring-white/10 hover:bg-white/15"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+              </div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full w-1/3 rounded-full bg-white/40 transition-transform"
+                  style={{ transform: `translateX(${chipsProgress * 200}%)` }}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Mobile notifications overlay (closes on outside click). */}
+        {notificationsOpen
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[160] flex items-start justify-center bg-slate-950/55 p-3 pt-[calc(env(safe-area-inset-top)+14px)] lg:hidden"
+                onClick={() => setNotificationsOpen(false)}
+                role="presentation"
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur"
+                >
+                  <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
+                    <p className="text-sm font-semibold text-white">Notifications</p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setAllNotificationsOpen(true)}
+                        className="text-[11px] font-semibold text-white/80 hover:text-white"
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await markAdminNotificationsRead();
+                          setNotifications((prev) => prev.map((n) => ({ ...n, is_read: 1 })));
+                          await loadNotifications({ silent: false });
+                        }}
+                        className="text-[11px] font-semibold text-white/70 hover:text-white"
+                      >
+                        Mark read
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNotificationsOpen(false)}
+                        className="text-[11px] font-semibold text-white/70 hover:text-white"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-[70dvh] overflow-y-auto">
+                    {loadingNotifications ? (
+                      <p className="px-3 py-3 text-sm text-white/70">Loading notifications...</p>
+                    ) : notifications.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-white/70">No updates yet.</p>
+                    ) : (
+                      notifications.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`border-b border-white/10 px-3 py-2.5 last:border-b-0 ${
+                            Number(item.is_read) === 1 ? "bg-transparent" : "bg-white/5"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="min-w-0 flex-1 text-sm font-semibold text-white">
+                              <span className="block truncate">{item.title || "Update"}</span>
+                            </p>
+                            <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/70">
+                              {getNotificationEntityLabel(item.entity_type)}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-white/70">
+                            {item.message || "New activity in admin dashboard."}
+                          </p>
+                          <p className="mt-1 text-[11px] text-white/60">
+                            {item.created_at ? formatDateUS(item.created_at) : ""}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {/* Desktop header (unchanged). */}
+        <header className="hidden items-start justify-between gap-3 lg:flex">
           <div>
             <h1 className="text-2xl font-bold">Admin Dashboard</h1>
             <p className="text-sm text-slate-600">
@@ -1022,7 +1279,7 @@ function AdminDashboardPage() {
                 const nextOpen = !notificationsOpen;
                 setNotificationsOpen(nextOpen);
                 if (nextOpen) {
-                  await loadNotifications();
+                  await loadNotifications({ silent: false });
                 }
               }}
               className="relative rounded-xl border border-slate-300 bg-white p-2 text-slate-700 hover:bg-slate-50"
@@ -1059,7 +1316,7 @@ function AdminDashboardPage() {
                         onClick={async () => {
                           await markAdminNotificationsRead();
                           setNotifications((prev) => prev.map((n) => ({ ...n, is_read: 1 })));
-                          setNotificationsUnread(0);
+                          await loadNotifications({ silent: false });
                         }}
                         className="text-xs font-semibold text-slate-600 hover:text-slate-900"
                       >
@@ -1110,7 +1367,7 @@ function AdminDashboardPage() {
                         onClick={async () => {
                           await markAdminNotificationsRead();
                           setNotifications((prev) => prev.map((n) => ({ ...n, is_read: 1 })));
-                          setNotificationsUnread(0);
+                          await loadNotifications({ silent: false });
                         }}
                         className="text-xs font-semibold text-slate-600 hover:text-slate-900"
                       >
@@ -1192,6 +1449,176 @@ function AdminDashboardPage() {
           </div>
         ) : null}
 
+        {/* Mobile-only: Recent updates panel (Overview). */}
+        {activeSection === "overview" ? (
+          <div className="lg:hidden">
+            <div className="mt-4 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <p className="text-sm font-semibold text-slate-900">Recent updates</p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await loadNotifications({ silent: false });
+                    setNotificationsOpen(true);
+                  }}
+                  className="rounded-full border border-slate-300 px-3 py-1.5 text-[10px] font-semibold text-slate-700"
+                >
+                  Open notifications
+                </button>
+              </div>
+
+              <div className="space-y-2 p-3">
+                {loadingNotifications ? (
+                  <p className="rounded-2xl border border-slate-200 px-3 py-3 text-sm text-slate-500">
+                    Loading updates...
+                  </p>
+                ) : (notifications || []).filter((n) =>
+                    ["events", "event", "deals", "deal", "influencers", "influencer"].includes(
+                      String(n.entity_type || "").toLowerCase()
+                    )
+                  ).length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-white px-4 py-6 text-center"
+                  >
+                    <div className="relative mx-auto w-full max-w-[260px]">
+                      <motion.div
+                        animate={{ y: [0, -3, 0] }}
+                        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                        className="mx-auto grid h-24 w-24 place-content-center rounded-3xl bg-white shadow-sm ring-1 ring-slate-200"
+                      >
+                        <svg
+                          viewBox="0 0 128 128"
+                          className="h-16 w-16"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          {/* Sleeping rabbit (simple, friendly). */}
+                          <path
+                            d="M40 56c-9 4-16 13-16 23 0 14 12 25 40 25s40-11 40-25c0-10-7-19-16-23"
+                            fill="#0F172A"
+                            opacity="0.08"
+                          />
+                          <path
+                            d="M44 54c0-16 9-29 20-29s20 13 20 29c0 3-1 7-3 10-6 9-17 12-17 12s-11-3-17-12c-2-3-3-7-3-10Z"
+                            fill="#F8FAFC"
+                            stroke="#0F172A"
+                            strokeOpacity="0.12"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M54 30c-7-10-8-18-5-22 4-5 13 1 19 12"
+                            stroke="#0F172A"
+                            strokeOpacity="0.18"
+                            strokeWidth="6"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M74 30c7-10 8-18 5-22-4-5-13 1-19 12"
+                            stroke="#0F172A"
+                            strokeOpacity="0.18"
+                            strokeWidth="6"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M49 62c3 2 7 3 11 3"
+                            stroke="#0F172A"
+                            strokeOpacity="0.35"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M79 62c-3 2-7 3-11 3"
+                            stroke="#0F172A"
+                            strokeOpacity="0.35"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M60 69c2 1 6 1 8 0"
+                            stroke="#0F172A"
+                            strokeOpacity="0.28"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                          <circle cx="52" cy="56" r="2.5" fill="#0F172A" opacity="0.25" />
+                          <circle cx="76" cy="56" r="2.5" fill="#0F172A" opacity="0.25" />
+                          <path
+                            d="M58 77c3 3 9 3 12 0"
+                            stroke="#0F172A"
+                            strokeOpacity="0.18"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </motion.div>
+
+                      {/* Curvy floating Zzz. */}
+                      <motion.div
+                        className="pointer-events-none absolute -top-2 right-2 text-slate-700"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        {["Z", "z", "z", "…"].map((ch, idx) => (
+                          <motion.span
+                            key={`zzz-${idx}`}
+                            className="inline-block text-sm font-black"
+                            animate={{
+                              y: [0, -10 - idx * 2, 0],
+                              x: [0, idx % 2 === 0 ? 6 : -6, 0],
+                              rotate: [0, idx % 2 === 0 ? 8 : -8, 0],
+                              opacity: [0.85, 1, 0.85]
+                            }}
+                            transition={{ duration: 2.4 + idx * 0.25, repeat: Infinity, ease: "easeInOut" }}
+                            style={{ marginLeft: idx === 0 ? 0 : 2 }}
+                          >
+                            {ch}
+                          </motion.span>
+                        ))}
+                      </motion.div>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-slate-900">You’re all caught up</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      No new updates for events, influencers, or deals right now.
+                    </p>
+                  </motion.div>
+                ) : (
+                  (notifications || [])
+                    .filter((n) =>
+                      ["events", "event", "deals", "deal", "influencers", "influencer"].includes(
+                        String(n.entity_type || "").toLowerCase()
+                      )
+                    )
+                    .slice(0, 5)
+                    .map((n) => (
+                      <div
+                        key={`ov-upd-${n.id}`}
+                        className={`rounded-2xl border border-slate-200 px-3 py-2.5 ${
+                          Number(n.is_read) === 1 ? "bg-white" : "bg-blue-50/40"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 flex-1 text-sm font-semibold text-slate-900">
+                            <span className="block truncate">{n.title || "Update"}</span>
+                          </p>
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                            {getNotificationEntityLabel(n.entity_type)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-600">
+                          {n.message || "New activity in admin dashboard."}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500">{n.created_at ? formatDateUS(n.created_at) : ""}</p>
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {activeSection === "communications" ? (
           <AdminCommunicationsSection
             tab={commTab}
@@ -1212,7 +1639,7 @@ function AdminDashboardPage() {
         ) : null}
 
         {activeSection !== "team" && activeSection !== "bookings" && activeSection !== "communications" && activeSection !== "users" ? (
-          <div>
+          <div className={activeSection === "overview" ? "hidden lg:block" : ""}>
             <h2 className="mb-2 text-lg font-semibold capitalize text-slate-900">
               {listingType} Management
             </h2>
@@ -1249,7 +1676,7 @@ function AdminDashboardPage() {
             </div>
             <div
               ref={bookingFilterRef}
-              className="grid grid-cols-1 gap-2 rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-soft sm:grid-cols-2 lg:grid-cols-4"
+              className="grid grid-cols-2 gap-2 rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-soft lg:grid-cols-4"
             >
               <FilterPopupField
                 label="Event"
@@ -1283,9 +1710,15 @@ function AdminDashboardPage() {
                         setBookingFilters((prev) => ({ ...prev, event_id: "" }));
                         setActiveBookingPanel(null);
                       }}
-                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                      className={`group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm transition hover:bg-slate-50 ${
+                        !bookingFilters.event_id ? "bg-slate-50 text-slate-900" : "text-slate-700"
+                      }`}
                     >
-                      <FiMapPin className="text-slate-400" /> All Events
+                      <FiMapPin className="shrink-0 text-slate-400" />{" "}
+                      <span className="min-w-0 flex-1 truncate">All Events</span>
+                      {!bookingFilters.event_id ? (
+                        <span className="shrink-0 text-[11px] font-semibold text-emerald-700">Selected</span>
+                      ) : null}
                     </button>
                     {filteredBookingEventOptions.map((item) => (
                       <button
@@ -1295,9 +1728,17 @@ function AdminDashboardPage() {
                           setBookingFilters((prev) => ({ ...prev, event_id: String(item.event_id) }));
                           setActiveBookingPanel(null);
                         }}
-                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                        className={`group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm transition hover:bg-slate-50 ${
+                          String(bookingFilters.event_id) === String(item.event_id)
+                            ? "bg-slate-50 text-slate-900"
+                            : "text-slate-700"
+                        }`}
                       >
-                        <FiMapPin className="text-slate-400" /> {item.event_title}
+                        <FiMapPin className="shrink-0 text-slate-400" />{" "}
+                        <span className="min-w-0 flex-1 truncate">{item.event_title}</span>
+                        {String(bookingFilters.event_id) === String(item.event_id) ? (
+                          <span className="shrink-0 text-[11px] font-semibold text-emerald-700">Selected</span>
+                        ) : null}
                       </button>
                     ))}
                     {filteredBookingEventOptions.length === 0 ? (
@@ -1433,8 +1874,10 @@ function AdminDashboardPage() {
                   No bookings match the selected filters.
                 </p>
               ) : (
-                bookingRows.map((item) => (
-                  <article key={`m-booking-${item.id}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                bookingRows
+                  .slice((mobileBookingsPage - 1) * perPageMobile, (mobileBookingsPage - 1) * perPageMobile + perPageMobile)
+                  .map((item) => (
+                  <article key={`m-booking-${item.id}`} className="rounded-2xl border border-slate-200 bg-white p-2.5">
                     <p className="text-sm font-semibold text-slate-900">{item.event_title}</p>
                     <p className="text-xs text-slate-600">{item.name} • {item.email}</p>
                     <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
@@ -1452,6 +1895,31 @@ function AdminDashboardPage() {
                   </article>
                 ))
               )}
+              {!loadingBookings && bookingRows.length > perPageMobile ? (
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <button
+                    type="button"
+                    disabled={mobileBookingsPage <= 1}
+                    onClick={() => setMobileBookingsPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <span className="font-medium">
+                    Page {mobileBookingsPage} of {Math.max(1, Math.ceil(bookingRows.length / perPageMobile))}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={mobileBookingsPage >= Math.max(1, Math.ceil(bookingRows.length / perPageMobile))}
+                    onClick={() =>
+                      setMobileBookingsPage((p) => Math.min(Math.max(1, Math.ceil(bookingRows.length / perPageMobile)), p + 1))
+                    }
+                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
               <table className="min-w-full text-left text-sm">
@@ -1513,8 +1981,10 @@ function AdminDashboardPage() {
               ) : usersRows.length === 0 ? (
                 <p className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">No users found.</p>
               ) : (
-                usersRows.map((user) => (
-                  <article key={`m-user-${user.id}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                usersRows
+                  .slice((mobileUsersPage - 1) * perPageMobile, (mobileUsersPage - 1) * perPageMobile + perPageMobile)
+                  .map((user) => (
+                  <article key={`m-user-${user.id}`} className="rounded-2xl border border-slate-200 bg-white p-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-900">{user.name}</p>
                       <span
@@ -1537,13 +2007,38 @@ function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteUser(user.id)}
-                      className="mt-2 rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white"
+                      className="mt-2 rounded-lg bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white"
                     >
                       Delete
                     </button>
                   </article>
                 ))
               )}
+              {!loadingUsers && usersRows.length > perPageMobile ? (
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <button
+                    type="button"
+                    disabled={mobileUsersPage <= 1}
+                    onClick={() => setMobileUsersPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <span className="font-medium">
+                    Page {mobileUsersPage} of {Math.max(1, Math.ceil(usersRows.length / perPageMobile))}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={mobileUsersPage >= Math.max(1, Math.ceil(usersRows.length / perPageMobile))}
+                    onClick={() =>
+                      setMobileUsersPage((p) => Math.min(Math.max(1, Math.ceil(usersRows.length / perPageMobile)), p + 1))
+                    }
+                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
               <table className="min-w-full text-left text-sm">
@@ -1701,8 +2196,10 @@ function AdminDashboardPage() {
                   No team members found for this role.
                 </p>
               ) : (
-                teamRows.map((user) => (
-                  <article key={`m-team-${user.id}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                teamRows
+                  .slice((mobileTeamPage - 1) * perPageMobile, (mobileTeamPage - 1) * perPageMobile + perPageMobile)
+                  .map((user) => (
+                  <article key={`m-team-${user.id}`} className="rounded-2xl border border-slate-200 bg-white p-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-900">{user.name}</p>
                       <span
@@ -1777,6 +2274,31 @@ function AdminDashboardPage() {
                   </article>
                 ))
               )}
+              {!loadingTeam && teamRows.length > perPageMobile ? (
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <button
+                    type="button"
+                    disabled={mobileTeamPage <= 1}
+                    onClick={() => setMobileTeamPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <span className="font-medium">
+                    Page {mobileTeamPage} of {Math.max(1, Math.ceil(teamRows.length / perPageMobile))}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={mobileTeamPage >= Math.max(1, Math.ceil(teamRows.length / perPageMobile))}
+                    onClick={() =>
+                      setMobileTeamPage((p) => Math.min(Math.max(1, Math.ceil(teamRows.length / perPageMobile)), p + 1))
+                    }
+                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
               <table className="min-w-full text-left text-sm">
@@ -1872,14 +2394,14 @@ function AdminDashboardPage() {
                                   type="button"
                                   onClick={() => handleSaveCapabilities(user)}
                                   disabled={savingCapabilitiesForUserId === user.id}
-                                  className="rounded-md bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                                className="rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-60"
                                 >
                                   {savingCapabilitiesForUserId === user.id ? "Saving..." : "Save Capabilities"}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleDeactivate(user.id)}
-                                  className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white"
+                                className="rounded-lg bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white"
                                 >
                                   Deactivate
                                 </button>
@@ -1888,7 +2410,7 @@ function AdminDashboardPage() {
                               <button
                                 type="button"
                                 onClick={() => handleActivate(user.id)}
-                                className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white"
+                              className="rounded-lg bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white"
                               >
                                 Activate
                               </button>
@@ -1906,10 +2428,10 @@ function AdminDashboardPage() {
 
       {editingListing
         ? createPortal(
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-3 sm:p-6">
+        <div className="fixed inset-0 z-[120] flex items-start justify-center bg-slate-900/45 p-3 pt-[calc(env(safe-area-inset-top)+16px)] pb-[calc(env(safe-area-inset-bottom)+18px)] sm:items-center sm:p-6">
           <form
             onSubmit={handleSaveEdit}
-            className="popup-modal flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[min(88dvh,780px)]"
+            className="popup-modal flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[calc(100dvh-160px)] lg:max-h-[min(88dvh,780px)]"
           >
             <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4">
               <div className="flex items-center justify-between">
@@ -1959,6 +2481,85 @@ function AdminDashboardPage() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
+
+              {listingType === "influencers" ? (
+                <>
+                  <FormField
+                    label="Instagram URL"
+                    hint="Paste the influencer's Instagram profile link."
+                    example="https://instagram.com/yourhandle"
+                  >
+                    <input
+                      type="url"
+                      value={editForm.instagram || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, instagram: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Instagram Followers Count"
+                    hint="Saved as Instagram followers (numbers only)."
+                    example="12500"
+                  >
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.followers_count || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, followers_count: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField
+                    label="YouTube URL"
+                    hint="Paste the influencer's channel or profile link."
+                    example="https://youtube.com/@yourchannel"
+                  >
+                    <input
+                      type="url"
+                      value={editForm.youtube || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, youtube: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField
+                    label="YouTube Subscribers Count"
+                    hint="Saved subscriber count (numbers only)."
+                    example="245000"
+                  >
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.youtube_subscribers_count || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, youtube_subscribers_count: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Contact Email"
+                    hint="Use an email where brands can contact this influencer."
+                    example="creator@example.com"
+                  >
+                    <input
+                      type="email"
+                      value={editForm.contact_email || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, contact_email: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Profile Image URL"
+                    hint="Paste a public profile image URL."
+                    example="https://images.example.com/profile.jpg"
+                  >
+                    <input
+                      type="url"
+                      value={editForm.profile_image_url || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, profile_image_url: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                </>
+              ) : null}
 
               <FormField label="City" hint="Choose the relevant city for this listing.">
                 <PopupSelect
@@ -2669,7 +3270,7 @@ function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={() => handleReject(reviewListing)}
-                className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
+                className="min-h-10 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700 lg:min-h-0 lg:px-4 lg:py-2 lg:text-sm"
               >
                 Reject Event
               </button>
@@ -2684,7 +3285,7 @@ function AdminDashboardPage() {
                 type="button"
                 onClick={handleApproveEventFromReview}
                 disabled={reviewSaving}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className="min-h-10 rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-60 lg:min-h-0 lg:px-4 lg:py-2 lg:text-sm"
               >
                 {reviewSaving ? "Approving..." : "Approve Event"}
               </button>
@@ -2717,14 +3318,14 @@ function AdminDashboardPage() {
                     Validate details and take moderation action.
                   </p>
                 </div>
-                <button type="button" onClick={closeViewModal} className="text-sm font-semibold text-slate-500">
+                <button type="button" onClick={closeViewModal} className="text-[11px] font-semibold text-slate-500">
                   Close
                 </button>
               </div>
             </div>
-            <div className="hide-scrollbar flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+            <div className="hide-scrollbar flex-1 overflow-y-auto overscroll-contain px-4 py-3 lg:px-5 lg:py-4">
               {viewListingType === "events" ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:gap-3">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Title</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">{viewListing.title || "-"}</p>
@@ -2813,6 +3414,44 @@ function AdminDashboardPage() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</p>
                     <p className="mt-1 text-sm text-slate-700 uppercase">{viewListing.status || "-"}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Instagram URL</p>
+                    {hasDisplayValue(parseInfluencerSocialLinks(viewListing.social_links).instagram) ? (
+                      <a
+                        href={parseInfluencerSocialLinks(viewListing.social_links).instagram}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                      >
+                        Open Instagram
+                      </a>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-700">-</p>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube URL</p>
+                    {hasDisplayValue(parseInfluencerSocialLinks(viewListing.social_links).youtube) ? (
+                      <a
+                        href={parseInfluencerSocialLinks(viewListing.social_links).youtube}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                      >
+                        Open YouTube
+                      </a>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-700">-</p>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Instagram Followers</p>
+                    <p className="mt-1 text-sm text-slate-700">{viewListing.followers_count != null ? Number(viewListing.followers_count).toLocaleString() : "-"}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube Subscribers</p>
+                    <p className="mt-1 text-sm text-slate-700">{viewListing.youtube_subscribers_count != null ? Number(viewListing.youtube_subscribers_count).toLocaleString() : "-"}</p>
                   </div>
                   {hasDisplayValue(viewListing.profile_image_url) ? (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">

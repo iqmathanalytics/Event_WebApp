@@ -34,9 +34,52 @@ const editOwnInfluencerSubmission = asyncHandler(async (req, res) => {
   });
 });
 
+const fetchInfluencerById = asyncHandler(async (req, res) => {
+  const influencer = await influencerService.fetchInfluencerById(Number(req.params.id));
+  res.status(200).json({
+    success: true,
+    data: influencer
+  });
+});
+
+const trackInfluencerView = asyncHandler(async (req, res) => {
+  await influencerService.trackInfluencerView(Number(req.params.id));
+  res.status(200).json({ success: true });
+});
+
+const trackInfluencerClick = asyncHandler(async (req, res) => {
+  await influencerService.trackInfluencerClick(Number(req.params.id));
+  res.status(200).json({ success: true });
+});
+
+const fetchInfluencerGalleryById = asyncHandler(async (req, res) => {
+  const rows = await influencerService.fetchInfluencerGalleryById(Number(req.params.id));
+  res.status(200).json({
+    success: true,
+    data: rows
+  });
+});
+
+const uploadInfluencerGallery = asyncHandler(async (req, res) => {
+  await influencerService.uploadInfluencerGallery({
+    influencerId: Number(req.params.id),
+    imageUrls: req.validated.body.image_urls,
+    userId: req.user.id
+  });
+  res.status(201).json({
+    success: true,
+    message: "Gallery updated successfully"
+  });
+});
+
 module.exports = {
   fetchInfluencers,
   submitInfluencer,
   fetchMyInfluencerSubmissions,
-  editOwnInfluencerSubmission
+  editOwnInfluencerSubmission,
+  fetchInfluencerById,
+  trackInfluencerView,
+  trackInfluencerClick,
+  fetchInfluencerGalleryById,
+  uploadInfluencerGallery
 };

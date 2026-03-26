@@ -1,11 +1,79 @@
 const bcrypt = require("bcryptjs");
+const { OAuth2Client } = require("google-auth-library");
 const ApiError = require("../utils/ApiError");
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require("../utils/jwt");
-const { findUserByEmail, createUser, findUserById } = require("../models/userModel");
+const {
+  findUserByEmail,
+  createUser,
+  findUserById,
+  updateUserAfterGoogleSignIn
+} = require("../models/userModel");
 const { upsertUserOnboardingProfile } = require("../models/userOnboardingProfileModel");
 const { createInfluencer } = require("../models/influencerModel");
 const { createDealerProfile } = require("../models/dealerProfileModel");
 const { createAdminNotification } = require("../models/adminModel");
+
+function splitDisplayName(full) {
+  const t = String(full || "User").trim() || "User";
+  const parts = t.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return { first: "User", last: "-" };
+  }
+  if (parts.length === 1) {
+    return { first: parts[0], last: "-" };
+  }
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+}
+
+function buildAuthUser(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    mobile_number: user.mobile_number,
+    role: user.role,
+    organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
+    can_post_events: user.can_post_events === 1 ? 1 : 0,
+    can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
+    can_post_deals: user.can_post_deals === 1 ? 1 : 0,
+    profile_image_url: user.profile_image_url || null,
+    auth_provider: user.auth_provider || "local"
+  };
+}
+
+function tokensForUser(user) {
+  const tokenPayload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
+    can_post_events: user.can_post_events === 1 ? 1 : 0,
+    can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
+    can_post_deals: user.can_post_deals === 1 ? 1 : 0
+  };
+  return {
+    accessToken: generateAccessToken(tokenPayload),
+    refreshToken: generateRefreshToken(tokenPayload),
+    user: buildAuthUser(user)
+  };
+}
+
+async function verifyGoogleIdToken(idToken) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    throw new ApiError(503, "Google sign-in is not configured");
+  }
+  const client = new OAuth2Client(clientId);
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: clientId
+    });
+    return ticket.getPayload();
+  } catch (_err) {
+    throw new ApiError(401, "Invalid or expired Google sign-in. Please try again.");
+  }
+}
 
 async function register(payload) {
   const existing = await findUserByEmail(payload.email);
@@ -76,21 +144,9 @@ async function register(payload) {
     });
   }
 
-  const tokenPayload = {
-    id: userId,
-    email: payload.email,
-    role: "user",
-    organizer_enabled: 0,
-    can_post_events: 1,
-    can_create_influencer_profile: 1,
-    can_post_deals: 1
-  };
-
   return {
     userId,
-    accessToken: generateAccessToken(tokenPayload),
-    refreshToken: generateRefreshToken(tokenPayload),
-    user: {
+    ...tokensForUser({
       id: userId,
       name,
       email: payload.email,
@@ -99,8 +155,10 @@ async function register(payload) {
       organizer_enabled: 0,
       can_post_events: 1,
       can_create_influencer_profile: 1,
-      can_post_deals: 1
-    }
+      can_post_deals: 1,
+      profile_image_url: null,
+      auth_provider: "local"
+    })
   };
 }
 
@@ -111,6 +169,10 @@ async function login({ email, password, portal }) {
   }
   if (!user.is_active) {
     throw new ApiError(403, "Account is deactivated");
+  }
+
+  if (!user.password_hash) {
+    throw new ApiError(401, "This account uses Google sign-in. Use Continue with Google.");
   }
 
   const isMatch = await bcrypt.compare(password, user.password_hash);
@@ -131,31 +193,115 @@ async function login({ email, password, portal }) {
     }
   }
 
-  const tokenPayload = {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
-    can_post_events: user.can_post_events === 1 ? 1 : 0,
-    can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
-    can_post_deals: user.can_post_deals === 1 ? 1 : 0
-  };
+  const fresh = await findUserById(user.id);
+  return tokensForUser(fresh || user);
+}
 
-  return {
-    accessToken: generateAccessToken(tokenPayload),
-    refreshToken: generateRefreshToken(tokenPayload),
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      mobile_number: user.mobile_number,
-      role: user.role,
-      organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
-      can_post_events: user.can_post_events === 1 ? 1 : 0,
-      can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
-      can_post_deals: user.can_post_deals === 1 ? 1 : 0
+async function readGoogleIdentity(idToken) {
+  const payload = await verifyGoogleIdToken(idToken);
+  const email = payload.email;
+  const emailVerified = payload.email_verified;
+  const sub = payload.sub;
+  const name = (payload.name || "").trim() || "User";
+  const picture = payload.picture || null;
+
+  if (!email || !emailVerified) {
+    throw new ApiError(400, "Google did not return a verified email for this account.");
+  }
+
+  return { email: String(email).trim().toLowerCase(), sub, name, picture };
+}
+
+async function finalizeGoogleUserSession(userId) {
+  const user = await findUserById(userId);
+  if (!user) {
+    throw new ApiError(500, "Could not complete Google sign-in.");
+  }
+  return tokensForUser(user);
+}
+
+/**
+ * User portal: Google sign-in only for accounts that already exist.
+ */
+async function loginWithGoogleIdToken(idToken) {
+  const { email, sub, name, picture } = await readGoogleIdentity(idToken);
+  const user = await findUserByEmail(email);
+
+  if (!user) {
+    throw new ApiError(
+      404,
+      "We could not find a Yay! Tickets account for this Google sign-in. Please create an account first, then sign in here."
+    );
+  }
+
+  if (!user.is_active) {
+    throw new ApiError(403, "Account is deactivated.");
+  }
+  if (user.role !== "user") {
+    throw new ApiError(403, "Please use staff login for this account.");
+  }
+  if (user.google_id && user.google_id !== sub) {
+    throw new ApiError(
+      409,
+      "This email is linked to a different Google account. Use the same Google profile you used when you signed up, or sign in with email and password."
+    );
+  }
+
+  await updateUserAfterGoogleSignIn({
+    id: user.id,
+    googleId: sub,
+    profileImageUrl: picture,
+    displayName: name
+  });
+
+  return finalizeGoogleUserSession(user.id);
+}
+
+/**
+ * User portal: Google registration — creates an account only when email is new.
+ */
+async function registerWithGoogleIdToken(idToken) {
+  const { email, sub, name, picture } = await readGoogleIdentity(idToken);
+  const existing = await findUserByEmail(email);
+
+  if (existing) {
+    throw new ApiError(
+      409,
+      "An account with this email already exists. Sign in with Google on the login page, or use your email and password."
+    );
+  }
+
+  const userId = await createUser({
+    name,
+    email,
+    mobileNumber: null,
+    passwordHash: null,
+    role: "user",
+    organizerEnabled: false,
+    authProvider: "google",
+    googleId: sub,
+    profileImageUrl: picture
+  });
+
+  try {
+    const { first, last } = splitDisplayName(name);
+    await upsertUserOnboardingProfile({
+      userId,
+      firstName: first,
+      lastName: last,
+      mobileNumber: null,
+      cityId: null,
+      interests: [],
+      wantsInfluencer: false,
+      wantsDeal: false
+    });
+  } catch (err) {
+    if (err?.code !== "ER_NO_SUCH_TABLE") {
+      throw err;
     }
-  };
+  }
+
+  return finalizeGoogleUserSession(userId);
 }
 
 async function refreshAccessToken(refreshToken) {
@@ -174,35 +320,13 @@ async function refreshAccessToken(refreshToken) {
     throw new ApiError(403, "Account is deactivated");
   }
 
-  const tokenPayload = {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
-    can_post_events: user.can_post_events === 1 ? 1 : 0,
-    can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
-    can_post_deals: user.can_post_deals === 1 ? 1 : 0
-  };
-
-  return {
-    accessToken: generateAccessToken(tokenPayload),
-    refreshToken: generateRefreshToken(tokenPayload),
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      mobile_number: user.mobile_number,
-      role: user.role,
-      organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
-      can_post_events: user.can_post_events === 1 ? 1 : 0,
-      can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
-      can_post_deals: user.can_post_deals === 1 ? 1 : 0
-    }
-  };
+  return tokensForUser(user);
 }
 
 module.exports = {
   register,
   login,
+  loginWithGoogleIdToken,
+  registerWithGoogleIdToken,
   refreshAccessToken
 };

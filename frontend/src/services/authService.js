@@ -19,3 +19,13 @@ export async function refreshAccessToken(refreshToken) {
   const response = await api.post("/auth/refresh-token", { refreshToken });
   return response.data;
 }
+
+export async function loginWithGoogle(idToken) {
+  const response = await api.post("/auth/google/login", { idToken });
+  return response.data;
+}
+
+export async function registerWithGoogle(idToken) {
+  const response = await api.post("/auth/google/register", { idToken });
+  return response.data;
+}

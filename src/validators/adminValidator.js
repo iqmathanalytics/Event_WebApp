@@ -52,6 +52,12 @@ const editListingSchema = z.object({
   body: z.object({
     title: z.string().min(2).max(220).optional(),
     name: z.string().min(2).max(160).optional(),
+    bio: z.string().trim().min(0).max(2000).optional(),
+    instagram: z.string().trim().max(255).optional(),
+    youtube: z.string().trim().max(255).optional(),
+    followers_count: z.coerce.number().int().min(0).optional(),
+    youtube_subscribers_count: z.coerce.number().int().min(0).optional(),
+    contact_email: z.string().trim().email().optional(),
     business_email: z.string().email().optional(),
     business_mobile: z.string().max(25).optional(),
     location_text: z.string().max(255).optional(),

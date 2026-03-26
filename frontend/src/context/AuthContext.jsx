@@ -1,4 +1,5 @@
 import { createContext, useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 
 const AuthContext = createContext(null);
 
@@ -44,15 +45,33 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   const login = (payload) => {
-    setAccessToken(payload.accessToken);
-    setRefreshToken(payload.refreshToken || null);
-    setUser(payload.user);
+    if (payload?.accessToken) {
+      localStorage.setItem("accessToken", payload.accessToken);
+    }
+    if (payload?.refreshToken) {
+      localStorage.setItem("refreshToken", payload.refreshToken);
+    } else {
+      localStorage.removeItem("refreshToken");
+    }
+    if (payload?.user) {
+      localStorage.setItem("user", JSON.stringify(payload.user));
+    }
+    flushSync(() => {
+      setAccessToken(payload.accessToken ?? null);
+      setRefreshToken(payload.refreshToken || null);
+      setUser(payload.user ?? null);
+    });
   };
 
   const logout = () => {
-    setAccessToken(null);
-    setRefreshToken(null);
-    setUser(null);
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
+    flushSync(() => {
+      setAccessToken(null);
+      setRefreshToken(null);
+      setUser(null);
+    });
   };
 
   const value = useMemo(

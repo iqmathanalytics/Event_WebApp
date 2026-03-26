@@ -76,6 +76,39 @@ function getLocationUrl(booking) {
   return null;
 }
 
+function parseInfluencerSocialLinks(value) {
+  if (!value) {
+    return { instagram: "", youtube: "" };
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return {
+      instagram: String(value.instagram || "").trim(),
+      youtube: String(value.youtube || "").trim()
+    };
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return {
+      instagram: String(parsed?.instagram || "").trim(),
+      youtube: String(parsed?.youtube || "").trim()
+    };
+  } catch (_err) {
+    return { instagram: "", youtube: "" };
+  }
+}
+
+function getFavoriteDetailsUrl(item) {
+  if (!item) return null;
+  const listingType = item.listing_type;
+  const listingId = item.listing_id;
+  if (!listingType || listingId == null) return null;
+
+  if (listingType === "event") return `/events/${listingId}`;
+  if (listingType === "deal") return `/deals/${listingId}`;
+  if (listingType === "influencer") return `/influencers/${listingId}`;
+  return null;
+}
+
 function UserDashboardPage() {
   const { user, accessToken, refreshToken, login } = useAuth();
   const { favorites, loading, toggleFavorite } = useFavorites();
@@ -107,6 +140,9 @@ function UserDashboardPage() {
     name: "",
     bio: "",
     category_id: "",
+    instagram: "",
+    youtube: "",
+    followers_count: "",
     contact_email: "",
     profile_image_url: ""
   });
@@ -148,6 +184,8 @@ function UserDashboardPage() {
       influencerProfile.bio?.trim() &&
       influencerProfile.category_id &&
       profileForm.city_id &&
+      influencerProfile.followers_count !== undefined &&
+      String(influencerProfile.followers_count).trim() !== "" &&
       influencerProfile.contact_email?.trim()
   );
   const hasDealerDetails = Boolean(
@@ -165,6 +203,13 @@ function UserDashboardPage() {
     ],
     []
   );
+
+  const isGoogleUser = useMemo(
+    () => String(profile?.auth_provider || user?.auth_provider || "").toLowerCase() === "google",
+    [profile?.auth_provider, user?.auth_provider]
+  );
+  /** Google: no local password yet — “Set” copy; otherwise still no current-password field */
+  const isGoogleFirstPassword = isGoogleUser && profile?.has_local_password !== true;
 
   useEffect(() => {
     setProfile(user || null);
@@ -217,11 +262,15 @@ function UserDashboardPage() {
       return;
     }
     const item = myInfluencerSubmissions[0];
+    const links = parseInfluencerSocialLinks(item.social_links);
     setInfluencerProfile((prev) => ({
       ...prev,
       name: item.name || prev.name,
       bio: item.bio || prev.bio,
       category_id: item.category_id ? String(item.category_id) : prev.category_id,
+      instagram: links.instagram || prev.instagram,
+      youtube: links.youtube || prev.youtube,
+      followers_count: item.followers_count != null ? String(item.followers_count) : prev.followers_count,
       contact_email: item.contact_email || prev.contact_email,
       profile_image_url: item.profile_image_url || prev.profile_image_url
     }));
@@ -360,6 +409,341 @@ function UserDashboardPage() {
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="space-y-4"
     >
+      {/* Mobile + Tablet layout (does not affect desktop). */}
+      <div className="lg:hidden space-y-4">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white shadow-soft">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-lg font-bold text-white ring-1 ring-white/15">
+                {profileInitial || <FiUser className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold">{profile?.name || user?.name || "User"}</p>
+                <p className="truncate text-xs text-white/70">{profile?.email || user?.email}</p>
+                <p className="truncate text-xs text-white/60">{profile?.mobile_number || "Add mobile number"}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileError("");
+                setProfileMessage("");
+                setProfileEditorTab("basic");
+                setShowProfileEditor(true);
+              }}
+              className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold ring-1 ring-white/15 hover:bg-white/15"
+            >
+              Edit
+            </button>
+          </div>
+
+          {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-200">{profileMessage}</p> : null}
+
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => {
+                setPasswordError("");
+                setPasswordMessage("");
+                setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+                setShowPasswordModal(true);
+              }}
+              className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10 hover:bg-white/15"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Password</p>
+              <p className="mt-1 text-sm font-semibold">{isGoogleFirstPassword ? "Set password" : "Change password"}</p>
+            </button>
+
+            <div className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Favorites</p>
+              <p className="mt-1 text-sm font-semibold">{favorites.length}</p>
+            </div>
+
+            <div className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Bookings</p>
+              <p className="mt-1 text-sm font-semibold">{bookings.length}</p>
+            </div>
+
+            <Link
+              to="/dashboard/user/submissions"
+              className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10 hover:bg-white/15"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Deal Submissions</p>
+              <p className="mt-1 text-sm font-semibold">
+                {dealerStatus && String(dealerStatus).toLowerCase() === "approved" ? myDealSubmissions.length : 0}
+              </p>
+            </Link>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Quick actions</h2>
+              <p className="mt-1 text-sm text-slate-600">Everything you need, faster on mobile.</p>
+            </div>
+            {canOrganize ? (
+              <Link
+                to="/dashboard/organizer"
+                className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
+              >
+                Organizer
+              </Link>
+            ) : null}
+          </div>
+
+          {!canOrganize ? (
+            <button
+              type="button"
+              disabled={enablingOrganizer}
+              onClick={async () => {
+                try {
+                  setOrganizerEnableError("");
+                  setEnablingOrganizer(true);
+                  await enableOrganizer();
+                  const refreshTokenValue = localStorage.getItem("refreshToken");
+                  if (refreshTokenValue) {
+                    const refreshed = await refreshAccessToken(refreshTokenValue);
+                    const payload = refreshed?.data;
+                    if (payload?.accessToken && payload?.refreshToken && payload?.user) {
+                      login(payload);
+                    }
+                  }
+                } catch (_err) {
+                  setOrganizerEnableError("Could not enable organizer capabilities. Please try again.");
+                } finally {
+                  setEnablingOrganizer(false);
+                }
+              }}
+              className="mt-3 inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {enablingOrganizer ? "Enabling..." : "Enable Organizer"}
+            </button>
+          ) : null}
+          {organizerEnableError ? <p className="mt-2 text-sm font-medium text-rose-600">{organizerEnableError}</p> : null}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-slate-900">My Content Submissions</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Influencer and deal submissions currently under admin review.
+              </p>
+            </div>
+            <Link
+              to="/dashboard/user/submissions"
+              className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+            >
+              Open Submissions
+            </Link>
+          </div>
+
+          {loadingSubmissions ? <p className="mt-2 text-sm text-slate-500">Loading submissions...</p> : null}
+          {submissionsError ? <p className="mt-2 text-sm text-rose-600">{submissionsError}</p> : null}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-bold text-slate-900">My Registered Events</h2>
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setBookingFilter("upcoming")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  bookingFilter === "upcoming" ? "bg-slate-900 text-white" : "text-slate-600"
+                }`}
+              >
+                Upcoming
+              </button>
+              <button
+                type="button"
+                onClick={() => setBookingFilter("past")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  bookingFilter === "past" ? "bg-slate-900 text-white" : "text-slate-600"
+                }`}
+              >
+                Past
+              </button>
+              <button
+                type="button"
+                onClick={() => setBookingFilter("all")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  bookingFilter === "all" ? "bg-slate-900 text-white" : "text-slate-600"
+                }`}
+              >
+                All
+              </button>
+            </div>
+          </div>
+
+          {loadingBookings ? <p className="mt-2 text-sm text-slate-500">Loading bookings...</p> : null}
+          {bookingsError ? <p className="mt-2 text-sm text-rose-600">{bookingsError}</p> : null}
+
+          {!loadingBookings && !bookingsError && bookings.length === 0 ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+              <p className="text-sm font-semibold text-slate-900">No bookings yet.</p>
+              <Link to="/events" className="mt-3 inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+                Explore Events
+              </Link>
+            </div>
+          ) : null}
+
+          {!loadingBookings && !bookingsError && filteredBookings.length === 0 && bookings.length > 0 ? (
+            <p className="mt-3 text-sm text-slate-500">No bookings match the selected filter.</p>
+          ) : null}
+
+          {!loadingBookings && !bookingsError && filteredBookings.length ? (
+            <div className="mt-3 space-y-3">
+              {filteredBookings.map((b) => {
+                const locationUrl = getLocationUrl(b);
+                const timeLabel = b.event_time ? String(b.event_time).slice(0, 5) : "Time not specified";
+                const totalLabel = formatCurrency(b.total_amount || b.price || 0);
+                return (
+                  <article
+                    key={b.booking_id}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft transition hover:shadow-md"
+                  >
+                    <img
+                      src={b.event_image || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=900"}
+                      alt={b.event_title}
+                      className="aspect-[4/3] w-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="space-y-2 p-4">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-bold text-slate-900">{b.event_title}</h3>
+                        <p className="truncate text-sm text-slate-600">
+                          {b.city || "City"} • {b.venue_name || "Venue to be announced"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs font-semibold text-slate-700">
+                          {formatReadableDate(b.booking_date)} • {timeLabel}
+                        </p>
+                        <div className="mt-2 space-y-1 text-xs text-slate-700">
+                          <p>
+                            Guests: <span className="font-semibold">{b.attendee_count ?? 0}</span>
+                          </p>
+                          <p>
+                            Days: <span className="font-semibold">{b.total_days || 1}</span>
+                          </p>
+                          <p>
+                            Total: <span className="font-semibold">{totalLabel}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Link
+                          to={`/events/${b.event_id}`}
+                          className="inline-flex flex-1 items-center justify-center rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+                        >
+                          View Event
+                        </Link>
+                        {locationUrl ? (
+                          <a
+                            href={locationUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                          >
+                            View Location
+                          </a>
+                        ) : (
+                          <span className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-400">
+                            View Location
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-400"
+                        title="Cancel Booking coming soon"
+                      >
+                        Cancel Booking (Coming Soon)
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-bold text-slate-900">Saved Items</h2>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {favorites.length}
+            </span>
+          </div>
+          {loading ? <p className="mt-2 text-sm text-slate-500">Loading favorites...</p> : null}
+          {!loading && favorites.length === 0 ? <p className="mt-2 text-sm text-slate-500">No saved items yet.</p> : null}
+          {!loading && favorites.length ? (
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {favorites.map((item) => {
+                const displayPrice = getDisplayPrice(item);
+                const detailsUrl = getFavoriteDetailsUrl(item);
+
+                return (
+                  <article
+                    key={item.id}
+                    className="flex gap-3 rounded-xl border border-slate-200 bg-white p-3 transition hover:bg-slate-50"
+                  >
+                    <img
+                      src={item.image_url || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600"}
+                      alt={item.title}
+                      className="h-20 w-20 rounded-lg object-cover"
+                      loading="lazy"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold uppercase text-slate-500">{item.listing_type}</p>
+                      <p className="truncate text-xs font-bold text-slate-900">{item.title}</p>
+                      <p className="truncate text-xs text-slate-500">
+                        {item.category_name || "Category"} • {item.city_name || "City"}
+                      </p>
+                      {displayPrice !== null ? (
+                        <p className="mt-1 text-xs font-semibold text-slate-700">
+                          {formatCurrency(displayPrice)}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col items-end justify-between gap-2">
+                      {detailsUrl ? (
+                        <Link
+                          to={detailsUrl}
+                          className="inline-flex rounded-full bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-700"
+                        >
+                          Open
+                        </Link>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        onClick={() =>
+                          toggleFavorite({
+                            listingType: item.listing_type,
+                            listingId: item.listing_id
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+      </div>
+
+      {/* Desktop layout (unchanged). */}
+      <div className="hidden lg:block space-y-4">
       <h1 className="text-2xl font-bold">My Dashboard</h1>
       <p className="text-sm text-slate-600">Track your bookings, saved listings, and account activity in one place.</p>
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
@@ -384,10 +768,10 @@ function UserDashboardPage() {
                 setShowPasswordModal(true);
               }}
               className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              title="Change password"
+              title={isGoogleFirstPassword ? "Set your password" : "Change password"}
             >
               <FiKey className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span className="hidden sm:inline">Password</span>
+              <span className="hidden sm:inline">{isGoogleFirstPassword ? "Set password" : "Password"}</span>
             </button>
             <button
               type="button"
@@ -421,7 +805,9 @@ function UserDashboardPage() {
         </div>
         <div className="rounded-xl border border-slate-200 p-4">
           <p className="text-sm text-slate-500">Deal Submissions</p>
-          <p className="mt-1 text-2xl font-bold">{myDealSubmissions.length}</p>
+          <p className="mt-1 text-2xl font-bold">
+            {dealerStatus && String(dealerStatus).toLowerCase() === "approved" ? myDealSubmissions.length : 0}
+          </p>
         </div>
       </div>
 
@@ -679,6 +1065,7 @@ function UserDashboardPage() {
           })}
         </div>
       </section>
+      </div>
 
       {showProfileEditor ? renderInPortal(
         <div
@@ -790,7 +1177,7 @@ function UserDashboardPage() {
                       user: latestProfile
                     });
                   }
-                  setProfileMessage("Profile updated successfully.");
+                  setProfileMessage(response?.message || "Profile updated successfully.");
                   setShowProfileEditor(false);
                 } catch (err) {
                   setProfileError(err?.response?.data?.message || "Could not update profile. Please try again.");
@@ -1069,8 +1456,14 @@ function UserDashboardPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">Change password</h3>
-                    <p className="mt-1 text-sm text-slate-600">Enter your current password, then your new password.</p>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      {isGoogleFirstPassword ? "Set your password" : "Change password"}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {isGoogleFirstPassword
+                        ? "Create a password so you can also sign in with email and password."
+                        : "Enter your current password, then your new password."}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -1094,13 +1487,24 @@ function UserDashboardPage() {
                       setPasswordError("New password must be at least 8 characters.");
                       return;
                     }
+                    if (!isGoogleFirstPassword && !passwordForm.current_password.trim()) {
+                      setPasswordError("Enter your current password.");
+                      return;
+                    }
                     try {
                       setPasswordSaving(true);
-                      await changeMyPassword({
-                        current_password: passwordForm.current_password,
-                        new_password: passwordForm.new_password
-                      });
-                      setPasswordMessage("Password updated successfully.");
+                      const res = await changeMyPassword(
+                        isGoogleFirstPassword
+                          ? { new_password: passwordForm.new_password }
+                          : {
+                              current_password: passwordForm.current_password,
+                              new_password: passwordForm.new_password
+                            }
+                      );
+                      setPasswordMessage(res?.message || "Password saved.");
+                      if (isGoogleFirstPassword) {
+                        setProfile((p) => (p ? { ...p, has_local_password: true } : p));
+                      }
                       setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
                       window.setTimeout(() => {
                         setShowPasswordModal(false);
@@ -1113,15 +1517,17 @@ function UserDashboardPage() {
                     }
                   }}
                 >
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Current password"
-                    value={passwordForm.current_password}
-                    onChange={(e) => setPasswordForm((s) => ({ ...s, current_password: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                    required
-                  />
+                  {!isGoogleFirstPassword ? (
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="Current password"
+                      value={passwordForm.current_password}
+                      onChange={(e) => setPasswordForm((s) => ({ ...s, current_password: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      required
+                    />
+                  ) : null}
                   <input
                     type="password"
                     autoComplete="new-password"
@@ -1156,7 +1562,11 @@ function UserDashboardPage() {
                       disabled={passwordSaving}
                       className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                     >
-                      {passwordSaving ? "Updating..." : "Update password"}
+                      {passwordSaving
+                        ? "Saving..."
+                        : isGoogleFirstPassword
+                          ? "Set password"
+                          : "Update password"}
                     </button>
                   </div>
                 </form>
@@ -1202,6 +1612,22 @@ function UserDashboardPage() {
                     </FormField>
                     <FormField label="Contact Email" hint="Use an email where brands can contact you." example="creator@example.com">
                       <input type="email" value={influencerProfile.contact_email} onChange={(e) => setInfluencerProfile((s) => ({ ...s, contact_email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                    <FormField label="Instagram URL" hint="Paste your Instagram profile link." example="https://instagram.com/yourhandle">
+                      <input type="url" value={influencerProfile.instagram} onChange={(e) => setInfluencerProfile((s) => ({ ...s, instagram: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                    <FormField label="Instagram Followers Count" hint="Enter your Instagram follower count (numbers only)." example="12500">
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={influencerProfile.followers_count}
+                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, followers_count: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      />
+                    </FormField>
+                    <FormField label="YouTube URL" hint="Paste your channel or profile link." example="https://youtube.com/@yourchannel">
+                      <input type="url" value={influencerProfile.youtube} onChange={(e) => setInfluencerProfile((s) => ({ ...s, youtube: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                     </FormField>
                     <FormField label="Profile Image URL" hint="Add a high-quality profile image link." example="https://images.example.com/profile.jpg">
                       <input type="url" value={influencerProfile.profile_image_url} onChange={(e) => setInfluencerProfile((s) => ({ ...s, profile_image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />

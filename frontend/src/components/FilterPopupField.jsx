@@ -17,9 +17,14 @@ function FilterPopupField({
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 8 });
   const [portalWidth, setPortalWidth] = useState(null);
   const showDateIcon = /date|when/i.test(String(label || ""));
+  const triggerVisible =
+    Boolean(triggerRef.current) &&
+    triggerRef.current.offsetParent !== null &&
+    triggerRef.current.getClientRects().length > 0;
+  const canPortal = Boolean(usePortal && isActive && triggerVisible);
 
   const updatePortalPosition = useCallback(() => {
-    if (!usePortal || !isActive || !triggerRef.current) {
+    if (!usePortal || !isActive || !triggerRef.current || triggerRef.current.offsetParent === null) {
       return;
     }
     const triggerRect = triggerRef.current.getBoundingClientRect();
@@ -121,7 +126,7 @@ function FilterPopupField({
       </button>
 
       {usePortal ? (
-        isActive ? createPortal(panelNode, document.body) : null
+        canPortal ? createPortal(panelNode, document.body) : null
       ) : (
         <AnimatePresence mode="wait">{isActive ? panelNode : null}</AnimatePresence>
       )}

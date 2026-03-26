@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { createPortal } from "react-dom";
-import { FiInfo } from "react-icons/fi";
+import { FiClock, FiInfo, FiUser } from "react-icons/fi";
 import useCityFilter from "../hooks/useCityFilter";
 import { categories } from "../utils/filterOptions";
 import {
@@ -122,10 +122,12 @@ function FormField({ label, hint, example, className = "", children }) {
 
 function UserSubmissionsPage() {
   const { cities } = useCityFilter();
+  const navigate = useNavigate();
   const [myInfluencerSubmissions, setMyInfluencerSubmissions] = useState([]);
   const [myDealSubmissions, setMyDealSubmissions] = useState([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
   const [submissionsError, setSubmissionsError] = useState("");
+  const [activeSubmissionsTab, setActiveSubmissionsTab] = useState("influencers");
   const [submissionActionLoading, setSubmissionActionLoading] = useState(false);
   const [submissionActionError, setSubmissionActionError] = useState("");
 
@@ -186,6 +188,14 @@ function UserSubmissionsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (loadingSubmissions) return;
+    const influencerCount = myInfluencerSubmissions.length;
+    const dealCount = myDealSubmissions.length;
+    if (influencerCount === 0 && dealCount > 0) setActiveSubmissionsTab("deals");
+    if (dealCount === 0 && influencerCount > 0) setActiveSubmissionsTab("influencers");
+  }, [loadingSubmissions, myInfluencerSubmissions.length, myDealSubmissions.length]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -216,27 +226,96 @@ function UserSubmissionsPage() {
         </div>
       ) : null}
 
+      {!loadingSubmissions && (myInfluencerSubmissions.length > 0 || myDealSubmissions.length > 0) ? (
+        <div className="lg:hidden">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2">
+            <button
+              type="button"
+              onClick={() => setActiveSubmissionsTab("influencers")}
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                activeSubmissionsTab === "influencers"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Influencers
+              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+                {myInfluencerSubmissions.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubmissionsTab("deals")}
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                activeSubmissionsTab === "deals"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Deals
+              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+                {myDealSubmissions.length}
+              </span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {!loadingSubmissions && myInfluencerSubmissions.length > 0 ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <section
+          className={`rounded-2xl border border-slate-200 bg-white p-4 ${activeSubmissionsTab === "influencers" ? "" : "hidden lg:block"}`}
+        >
           <h2 className="text-sm font-semibold text-slate-900">Influencer Profiles</h2>
           <div className="mt-3 space-y-2">
             {myInfluencerSubmissions.map((item) => (
-              <div key={`influencer-submission-${item.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">{item.name}</p>
-                  <p className="text-xs text-slate-500">
-                    {item.city_name || "City"} • {item.category_name || "Category"} • Submitted {formatReadableDate(item.created_at)}
-                  </p>
-                  {item.status === "rejected" && item.review_note ? (
-                    <p className="mt-1 text-xs text-rose-600">Reason: {item.review_note}</p>
-                  ) : null}
+              <div
+                key={`influencer-submission-${item.id}`}
+                className="flex w-full flex-col gap-3 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/influencers/${item.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") navigate(`/influencers/${item.id}`);
+                }}
+              >
+                <div className="flex w-full items-start gap-3">
+                  {item.profile_image_url ? (
+                    <img
+                      src={item.profile_image_url}
+                      alt={item.name}
+                      className="h-12 w-12 flex-shrink-0 rounded-xl object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                      <FiUser className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-semibold text-slate-900">{item.name}</p>
+                    <div className="mt-2 flex flex-col gap-2">
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                        {item.city_name || "City"} • {item.category_name || "Category"}
+                      </span>
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                        Submitted {formatReadableDate(item.created_at)}
+                      </span>
+                    </div>
+                    {item.status === "rejected" && item.review_note ? (
+                      <p className="mt-2 break-words rounded-xl bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
+                        Reason: {item.review_note}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
                   <StatusBadge status={item.status} />
                   {["approved", "rejected"].includes(String(item.status || "").toLowerCase()) ? (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setSubmissionActionError("");
                         setEditInfluencerItem(item);
                         setEditInfluencerForm({
@@ -263,29 +342,74 @@ function UserSubmissionsPage() {
       ) : null}
 
       {!loadingSubmissions && myDealSubmissions.length > 0 ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <section
+          className={`rounded-2xl border border-slate-200 bg-white p-4 ${activeSubmissionsTab === "deals" ? "" : "hidden lg:block"}`}
+        >
           <h2 className="text-sm font-semibold text-slate-900">Deals</h2>
           <div className="mt-3 space-y-2">
             {myDealSubmissions.map((item) => (
-              <div key={`deal-submission-${item.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
-                  <p className="text-xs text-slate-500">
-                    {item.city_name || "City"} • {item.category_name || "Category"} • Submitted {formatReadableDate(item.created_at)}
-                  </p>
-                  {item.expiry_date ? (
-                    <p className="text-xs text-slate-500">Valid until {formatReadableDate(item.expiry_date)}</p>
-                  ) : null}
-                  {item.status === "rejected" && item.review_note ? (
-                    <p className="mt-1 text-xs text-rose-600">Reason: {item.review_note}</p>
-                  ) : null}
+              <div
+                key={`deal-submission-${item.id}`}
+                className="flex w-full flex-col gap-3 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/deals/${item.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") navigate(`/deals/${item.id}`);
+                }}
+              >
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                  {item.image_url ? (
+                    <img
+                      src={item.image_url}
+                      alt={item.title}
+                      className="h-12 w-12 flex-shrink-0 rounded-xl object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                      <FiInfo className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    {/* Title should always be readable on all devices. */}
+                    <p className="break-words text-sm font-semibold text-slate-900">{item.title}</p>
+
+                    <div className="mt-2 flex w-full flex-col items-start gap-2">
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                        {item.city_name || "City"} • {item.category_name || "Category"}
+                      </span>
+
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                        Submitted {formatReadableDate(item.created_at)}
+                      </span>
+
+                      {item.expiry_date ? (
+                        <p className="mt-2 w-full rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <FiClock className="h-3.5 w-3.5 text-slate-500" aria-hidden />
+                            <span className="truncate">
+                              Valid until {formatReadableDate(item.expiry_date)}
+                            </span>
+                          </span>
+                        </p>
+                      ) : null}
+
+                      {item.status === "rejected" && item.review_note ? (
+                        <p className="w-full break-words rounded-xl bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
+                          Reason: {item.review_note}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
                   <StatusBadge status={item.status} />
                   {["approved", "rejected"].includes(String(item.status || "").toLowerCase()) ? (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setSubmissionActionError("");
                         setEditDealItem(item);
                         const offerMeta = item.offer_meta_json

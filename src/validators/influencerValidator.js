@@ -21,6 +21,7 @@ const submitInfluencerSchema = z.object({
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
     instagram: z.string().trim().max(255).optional(),
+    instagram_followers_count: z.coerce.number().int().min(0).optional(),
     youtube: z.string().trim().max(255).optional(),
     contact_email: z.string().trim().email(),
     profile_image_url: z.string().trim().url().optional()
@@ -42,9 +43,44 @@ const editOwnInfluencerSchema = z.object({
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
     instagram: z.string().trim().max(255).optional(),
+    instagram_followers_count: z.coerce.number().int().min(0).optional(),
     youtube: z.string().trim().max(255).optional(),
     contact_email: z.string().trim().email(),
     profile_image_url: z.string().trim().url().optional()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const fetchInfluencerByIdSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const influencerTrackSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const fetchInfluencerGallerySchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const influencerGalleryUploadSchema = z.object({
+  body: z.object({
+    image_urls: z.array(z.string().trim().url().max(1000)).min(1).max(25)
   }),
   query: z.object({}).passthrough(),
   params: z.object({
@@ -56,5 +92,9 @@ module.exports = {
   fetchInfluencersSchema,
   submitInfluencerSchema,
   myInfluencerSubmissionsSchema,
-  editOwnInfluencerSchema
+  editOwnInfluencerSchema,
+  fetchInfluencerByIdSchema,
+  influencerTrackSchema,
+  influencerGalleryUploadSchema,
+  fetchInfluencerGallerySchema
 };

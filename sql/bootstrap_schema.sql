@@ -6,7 +6,10 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(120) NOT NULL,
   email VARCHAR(190) NOT NULL,
   mobile_number VARCHAR(20) NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NULL,
+  auth_provider VARCHAR(20) NOT NULL DEFAULT 'local',
+  google_id VARCHAR(64) NULL,
+  profile_image_url VARCHAR(500) NULL,
   role ENUM('user','organizer','admin') NOT NULL DEFAULT 'user',
   organizer_enabled TINYINT(1) NOT NULL DEFAULT 0,
   can_post_events TINYINT(1) NOT NULL DEFAULT 1,
@@ -16,7 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_users_email (email)
+  UNIQUE KEY uq_users_email (email),
+  UNIQUE KEY uq_users_google_id (google_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS user_onboarding_profiles (
@@ -104,8 +108,12 @@ CREATE TABLE IF NOT EXISTS influencers (
   city_id BIGINT UNSIGNED NOT NULL,
   category_id BIGINT UNSIGNED NULL,
   social_links JSON NULL,
+  youtube_subscribers_count INT NOT NULL DEFAULT 0,
   contact_email VARCHAR(190) NULL,
   profile_image_url VARCHAR(500) NULL,
+  profile_view_count INT NOT NULL DEFAULT 0,
+  profile_click_count INT NOT NULL DEFAULT 0,
+  engagement_updated_at TIMESTAMP NULL DEFAULT NULL,
   followers_count INT NOT NULL DEFAULT 0,
   is_verified TINYINT(1) NOT NULL DEFAULT 0,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
@@ -115,6 +123,15 @@ CREATE TABLE IF NOT EXISTS influencers (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_influencers_discovery (status, city_id, category_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS influencer_gallery_images (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  influencer_id BIGINT UNSIGNED NOT NULL,
+  image_url VARCHAR(1000) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_influencer_gallery_influencer (influencer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS deals (

@@ -86,6 +86,19 @@ function DealDetailsPage() {
           <p className="mb-2 text-sm text-slate-500">{deal.city_name || "City"}</p>
           <h1 className="text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">{deal.title}</h1>
 
+          {Array.isArray(deal.tags) && deal.tags.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {deal.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <div className="mt-4 grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
             <p className="inline-flex items-center gap-2">
               <FiMapPin className="text-slate-500" />

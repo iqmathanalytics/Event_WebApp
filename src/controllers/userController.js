@@ -28,6 +28,8 @@ const bookingService = require("../services/bookingService");
 
 const getMe = asyncHandler(async (req, res) => {
   const user = await findUserById(req.user.id);
+  const credRow = user?.email ? await findUserByEmail(user.email) : null;
+  const has_local_password = Boolean(credRow?.password_hash);
   let onboarding = null;
   const dealerProfile = await findLatestDealerProfileByCreator(req.user.id).catch((err) => {
     if (err?.code === "ER_NO_SUCH_TABLE") {
@@ -46,6 +48,7 @@ const getMe = asyncHandler(async (req, res) => {
     success: true,
     data: {
       ...user,
+      has_local_password,
       onboarding: onboarding
         ? {
             first_name: onboarding.first_name || "",
@@ -172,6 +175,7 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     });
   }
 
+  let influencerResubmittedForReview = false;
   if (wantsInfluencer && influencerProfile) {
     if (!String(influencerProfile.name || "").trim() || !Number(influencerProfile.category_id)) {
       return res.status(400).json({
@@ -179,23 +183,35 @@ const updateMyProfile = asyncHandler(async (req, res) => {
         message: "Influencer name and category are required"
       });
     }
+    const social_links = {
+      instagram: String(influencerProfile.instagram || "").trim(),
+      youtube: String(influencerProfile.youtube || "").trim()
+    };
+    const followers_count =
+      influencerProfile.followers_count != null
+        ? Number(influencerProfile.followers_count)
+        : Number(influencerProfile.instagram_followers_count || 0);
     const existingInfluencer = await findAnyInfluencerByCreator(req.user.id);
     const payload = {
       name: String(influencerProfile.name || "").trim(),
       bio: String(influencerProfile.bio || "").trim(),
       city_id: cityId,
       category_id: Number(influencerProfile.category_id),
+      social_links,
       contact_email: String(influencerProfile.contact_email || email).trim(),
       profile_image_url: influencerProfile.profile_image_url
         ? String(influencerProfile.profile_image_url).trim()
         : null
     };
+    payload.followers_count = Number.isFinite(followers_count) ? followers_count : 0;
     if (existingInfluencer?.id) {
       const hasInfluencerChanges =
         String(existingInfluencer.name || "").trim() !== payload.name ||
         String(existingInfluencer.bio || "").trim() !== payload.bio ||
         Number(existingInfluencer.city_id || 0) !== Number(payload.city_id || 0) ||
         Number(existingInfluencer.category_id || 0) !== Number(payload.category_id || 0) ||
+        String(existingInfluencer.social_links || "").trim() !== JSON.stringify(payload.social_links || {}) ||
+        Number(existingInfluencer.followers_count || 0) !== Number(payload.followers_count || 0) ||
         String(existingInfluencer.contact_email || "").trim() !== payload.contact_email ||
         String(existingInfluencer.profile_image_url || "").trim() !== String(payload.profile_image_url || "").trim();
       if (hasInfluencerChanges) {
@@ -204,13 +220,15 @@ const updateMyProfile = asyncHandler(async (req, res) => {
           createdBy: req.user.id,
           payload
         });
+        influencerResubmittedForReview = true;
       }
     } else {
       await createInfluencer({
         ...payload,
-        social_links: null,
+        social_links: payload.social_links,
         created_by: req.user.id
       });
+      influencerResubmittedForReview = true;
     }
   }
 
@@ -288,9 +306,13 @@ const updateMyProfile = asyncHandler(async (req, res) => {
       throw err;
     }
   }
+  const message = influencerResubmittedForReview
+    ? "Your influencer profile update has been submitted for admin review. You will see it live once approved."
+    : "Profile updated successfully";
+
   return res.status(200).json({
     success: true,
-    message: "Profile updated successfully",
+    message,
     data: {
       ...user,
       onboarding: onboarding
@@ -316,21 +338,39 @@ const changeMyPassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Account not found");
   }
   const row = await findUserByEmail(me.email);
-  if (!row?.password_hash) {
-    throw new ApiError(400, "Cannot change password for this account");
+  const hasExistingPassword = Boolean(row?.password_hash);
+  const isGoogle = String(me.auth_provider || "").toLowerCase() === "google";
+
+  if (hasExistingPassword) {
+    const current = String(current_password || "").trim();
+    if (!current) {
+      throw new ApiError(400, "Current password is required.");
+    }
+    const match = await bcrypt.compare(current, row.password_hash);
+    if (!match) {
+      throw new ApiError(401, "Current password is incorrect.");
+    }
+  } else if (isGoogle) {
+    // Google account, first local password — session proves identity; no current password.
+    if (String(current_password || "").trim()) {
+      throw new ApiError(400, "Leave current password blank when setting your first password.");
+    }
+  } else {
+    throw new ApiError(400, "Use the password reset flow for your account type.");
   }
-  const match = await bcrypt.compare(current_password, row.password_hash);
-  if (!match) {
-    throw new ApiError(401, "Current password is incorrect");
-  }
+
   const passwordHash = await bcrypt.hash(new_password, 12);
   const ok = await updatePasswordHashByUserId({ id: req.user.id, passwordHash });
   if (!ok) {
     throw new ApiError(400, "Could not update password");
   }
+  const message =
+    isGoogle && !hasExistingPassword
+      ? "Your password has been set. You can sign in with email and password anytime."
+      : "Password updated successfully.";
   res.status(200).json({
     success: true,
-    message: "Password updated successfully"
+    message
   });
 });
 

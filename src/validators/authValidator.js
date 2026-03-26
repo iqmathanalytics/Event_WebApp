@@ -79,8 +79,17 @@ const refreshTokenSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const googleUserSchema = z.object({
+  body: z.object({
+    idToken: z.string().min(40).max(12000)
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
-  refreshTokenSchema
+  refreshTokenSchema,
+  googleUserSchema
 };

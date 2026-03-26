@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FiDownload, FiMail, FiMessageSquare } from "react-icons/fi";
 import { formatDateUS } from "../utils/format";
@@ -18,6 +19,10 @@ function AdminCommunicationsSection({
   onSyncNewsletterMailchimp,
   syncingNewsletterMailchimp
 }) {
+  const perPageMobile = 5;
+  const [mobilePage, setMobilePage] = useState(1);
+  const [mobileContactPage, setMobileContactPage] = useState(1);
+
   const nTotal = newsletterPagination?.total ?? 0;
   const nPage = newsletterPagination?.page ?? 1;
   const nLimit = newsletterPagination?.limit ?? 20;
@@ -27,6 +32,17 @@ function AdminCommunicationsSection({
   const cPage = contactPagination?.page ?? 1;
   const cLimit = contactPagination?.limit ?? 20;
   const cPages = Math.max(1, Math.ceil(cTotal / cLimit));
+
+  const mobileNewsletterPages = Math.max(1, Math.ceil((newsletterRows?.length || 0) / perPageMobile));
+  const mobileContactPages = Math.max(1, Math.ceil((contactRows?.length || 0) / perPageMobile));
+
+  useEffect(() => {
+    setMobilePage(1);
+  }, [tab, nPage]);
+
+  useEffect(() => {
+    setMobileContactPage(1);
+  }, [tab, cPage]);
 
   const formatInterests = (raw) => {
     if (Array.isArray(raw)) {
@@ -110,14 +126,16 @@ function AdminCommunicationsSection({
               </button>
             </div>
           </div>
-          <div className="space-y-2 p-3 md:hidden">
+          <div className="space-y-2 p-2 md:hidden">
             {loadingNewsletter ? (
               <p className="rounded-xl border border-slate-200 px-3 py-4 text-sm text-slate-500">Loading…</p>
             ) : newsletterRows.length === 0 ? (
               <p className="rounded-xl border border-slate-200 px-3 py-4 text-sm text-slate-500">No subscribers yet.</p>
             ) : (
-              newsletterRows.map((row) => (
-                <article key={`m-news-${row.id}`} className="rounded-xl border border-slate-200 p-3">
+              newsletterRows
+                .slice((mobilePage - 1) * perPageMobile, (mobilePage - 1) * perPageMobile + perPageMobile)
+                .map((row) => (
+                <article key={`m-news-${row.id}`} className="rounded-2xl border border-slate-200 bg-white p-2.5">
                   <p className="text-sm font-semibold text-slate-900">
                     {[row.first_name, row.last_name].filter(Boolean).join(" ") || "—"}
                   </p>
@@ -132,6 +150,29 @@ function AdminCommunicationsSection({
                 </article>
               ))
             )}
+            {!loadingNewsletter && mobileNewsletterPages > 1 ? (
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <button
+                  type="button"
+                  disabled={mobilePage <= 1}
+                  onClick={() => setMobilePage((p) => Math.max(1, p - 1))}
+                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <span className="font-medium">
+                  Page {mobilePage} of {mobileNewsletterPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={mobilePage >= mobileNewsletterPages}
+                  onClick={() => setMobilePage((p) => Math.min(mobileNewsletterPages, p + 1))}
+                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full text-left text-sm">
@@ -232,14 +273,19 @@ function AdminCommunicationsSection({
               </button>
             </div>
           </div>
-          <div className="space-y-2 p-3 md:hidden">
+          <div className="space-y-2 p-2 md:hidden">
             {loadingContact ? (
               <p className="rounded-xl border border-slate-200 px-3 py-4 text-sm text-slate-500">Loading…</p>
             ) : contactRows.length === 0 ? (
               <p className="rounded-xl border border-slate-200 px-3 py-4 text-sm text-slate-500">No messages yet.</p>
             ) : (
-              contactRows.map((row) => (
-                <article key={`m-contact-${row.id}`} className="rounded-xl border border-slate-200 p-3">
+              contactRows
+                .slice(
+                  (mobileContactPage - 1) * perPageMobile,
+                  (mobileContactPage - 1) * perPageMobile + perPageMobile
+                )
+                .map((row) => (
+                <article key={`m-contact-${row.id}`} className="rounded-2xl border border-slate-200 bg-white p-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-900">{row.name}</p>
                     <span className="text-[11px] font-semibold uppercase text-slate-500">{row.status}</span>
@@ -251,6 +297,29 @@ function AdminCommunicationsSection({
                 </article>
               ))
             )}
+            {!loadingContact && mobileContactPages > 1 ? (
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <button
+                  type="button"
+                  disabled={mobileContactPage <= 1}
+                  onClick={() => setMobileContactPage((p) => Math.max(1, p - 1))}
+                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <span className="font-medium">
+                  Page {mobileContactPage} of {mobileContactPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={mobileContactPage >= mobileContactPages}
+                  onClick={() => setMobileContactPage((p) => Math.min(mobileContactPages, p + 1))}
+                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full text-left text-sm">
