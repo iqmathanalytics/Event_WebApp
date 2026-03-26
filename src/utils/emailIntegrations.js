@@ -12,6 +12,30 @@ function logSkip(reason) {
   }
 }
 
+function warnMailchimpConfig(reason) {
+  // eslint-disable-next-line no-console
+  console.warn(`[emailIntegrations] ${reason}`);
+}
+
+/**
+ * Trim secrets and accept common dashboard mistakes (e.g. full API host as "server").
+ */
+function getMailchimpConfig() {
+  const apiKey = String(process.env.MAILCHIMP_API_KEY || "").trim();
+  const listId = String(process.env.MAILCHIMP_LIST_ID || "").trim();
+  let server = String(process.env.MAILCHIMP_SERVER_PREFIX || "").trim();
+  const hostMatch = server.match(/^(?:https?:\/\/)?([a-z0-9-]+)\.api\.mailchimp\.com\/?$/i);
+  if (hostMatch) {
+    server = hostMatch[1];
+  }
+  return { apiKey, listId, server };
+}
+
+function isMailchimpConfigured() {
+  const { apiKey, listId, server } = getMailchimpConfig();
+  return Boolean(apiKey && listId && server);
+}
+
 /**
  * Send a single email via SendGrid HTTP API.
  * @returns {{ sent: boolean, skipped?: boolean, error?: string }}
@@ -56,12 +80,12 @@ async function sendSendGridEmail({ to, subject, text, html }) {
  * Add/update a list member in Mailchimp (double opt-in handled by list settings in Mailchimp).
  */
 async function syncMailchimpSubscriber({ email, firstName = "", lastName = "", cityName = "", phoneNumber = "" }) {
-  const apiKey = process.env.MAILCHIMP_API_KEY;
-  const listId = process.env.MAILCHIMP_LIST_ID;
-  const server = process.env.MAILCHIMP_SERVER_PREFIX;
+  const { apiKey, listId, server } = getMailchimpConfig();
   if (!apiKey || !listId || !server) {
-    logSkip("Mailchimp skipped: MAILCHIMP_API_KEY, MAILCHIMP_LIST_ID, or MAILCHIMP_SERVER_PREFIX not set");
-    return { synced: false, skipped: true };
+    warnMailchimpConfig(
+      "Mailchimp skipped: set MAILCHIMP_API_KEY, MAILCHIMP_LIST_ID, and MAILCHIMP_SERVER_PREFIX (datacenter only, e.g. us5) on the server"
+    );
+    return { synced: false, skipped: true, skipReason: "mailchimp_not_configured" };
   }
   const subscriberHash = crypto.createHash("md5").update(email.toLowerCase()).digest("hex");
   const url = `https://${server}.api.mailchimp.com/3.0/lists/${listId}/members/${subscriberHash}`;
@@ -73,17 +97,23 @@ async function syncMailchimpSubscriber({ email, firstName = "", lastName = "", c
     merge_fields: {
       FNAME: firstName || "",
       LNAME: lastName || "",
-      PHONE: phoneNumber || "",
-      // Audience "Address" column maps to Mailchimp ADDRESS merge field (structured object).
-      ADDRESS: cityName
+      ...(phoneNumber
         ? {
-            addr1: cityName,
-            city: cityName,
-            state: "NA",
-            zip: "00000",
-            country: "US"
+            PHONE: phoneNumber
           }
-        : undefined
+        : {}),
+      // Audience "Address" column maps to Mailchimp ADDRESS merge field (structured object).
+      ...(cityName
+        ? {
+            ADDRESS: {
+              addr1: cityName,
+              city: cityName,
+              state: "NA",
+              zip: "00000",
+              country: "US"
+            }
+          }
+        : {})
     }
   };
   try {
@@ -105,4 +135,4 @@ async function syncMailchimpSubscriber({ email, firstName = "", lastName = "", c
   }
 }
 
-module.exports = { sendSendGridEmail, syncMailchimpSubscriber };
+module.exports = { sendSendGridEmail, syncMailchimpSubscriber, isMailchimpConfigured };

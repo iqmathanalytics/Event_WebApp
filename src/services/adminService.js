@@ -21,7 +21,10 @@ const {
   deleteSubscriberByEmail
 } = require("../models/newsletterModel");
 const { listMessagesPaginated, getAllMessagesForExport } = require("../models/contactModel");
-const { syncMailchimpSubscriber } = require("../utils/emailIntegrations");
+const {
+  syncMailchimpSubscriber,
+  isMailchimpConfigured
+} = require("../utils/emailIntegrations");
 const {
   listAdminNotifications,
   countUnreadAdminNotifications,
@@ -509,12 +512,28 @@ async function syncNewsletterSubscribersToMailchimp() {
   let synced = 0;
   let skipped = 0;
   let failed = 0;
+  let skippedNoEmail = 0;
   const failures = [];
+
+  if (!isMailchimpConfigured()) {
+    return {
+      total: rows.length,
+      synced: 0,
+      skipped: rows.length,
+      skippedNoEmail: 0,
+      skippedMailchimpNotConfigured: rows.length,
+      failed: 0,
+      failures: [],
+      hint:
+        "Mailchimp env vars are missing or empty on this server. In Render, set MAILCHIMP_API_KEY, MAILCHIMP_LIST_ID, and MAILCHIMP_SERVER_PREFIX (e.g. us5 — only the datacenter prefix, not the full URL). Redeploy after saving."
+    };
+  }
 
   for (const row of rows) {
     const email = String(row.email || "").trim().toLowerCase();
     if (!email) {
       skipped += 1;
+      skippedNoEmail += 1;
       continue;
     }
 
@@ -549,12 +568,19 @@ async function syncNewsletterSubscribersToMailchimp() {
     }
   }
 
+  const hint =
+    skippedNoEmail > 0 && skippedNoEmail === skipped
+      ? "All rows were skipped because subscriber email was empty (unexpected with user-linked export)."
+      : undefined;
+
   return {
     total: rows.length,
     synced,
     skipped,
+    skippedNoEmail,
     failed,
-    failures: failures.slice(0, 20)
+    failures: failures.slice(0, 20),
+    ...(hint ? { hint } : {})
   };
 }
 

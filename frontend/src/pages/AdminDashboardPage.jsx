@@ -1020,10 +1020,11 @@ function AdminDashboardPage() {
       setSyncingNewsletterMailchimp(true);
       const result = await syncAdminNewsletterSubscribersToMailchimp();
       const stats = result?.data || {};
+      const tail = stats.hint ? ` ${stats.hint}` : "";
       setAdminMessage(
-        `Mailchimp sync complete. Synced: ${stats.synced || 0}, Failed: ${stats.failed || 0}, Skipped: ${stats.skipped || 0}.`
+        `Mailchimp sync complete. Synced: ${stats.synced || 0}, Failed: ${stats.failed || 0}, Skipped: ${stats.skipped || 0}.${tail}`
       );
-      window.setTimeout(() => setAdminMessage(""), 5000);
+      window.setTimeout(() => setAdminMessage(""), stats.hint ? 14000 : 5000);
     } catch (err) {
       setAdminMessage(err?.response?.data?.message || "Could not sync newsletter subscribers to Mailchimp.");
       window.setTimeout(() => setAdminMessage(""), 5000);
