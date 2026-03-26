@@ -89,7 +89,7 @@ function RegisterPage() {
         login(response.data);
       }
       const next = safeReturnPath(searchParams.get("next"));
-      navigate(next || "/newsletter");
+      navigate(next || "/dashboard/user");
     } catch (err) {
       setError(err?.response?.data?.message || "Registration failed. Please review your details.");
     } finally {
