@@ -1,4 +1,5 @@
-# Render Blueprint — set secrets (DB_*, JWT_*, etc.) in the Render dashboard or here as sync: false.
+# Render Blueprint — create the service from the Render dashboard (New → Blueprint → paste repo URL)
+# or link the repo and apply this file. Set secrets in the dashboard: DB_*, JWT_*, CORS_ORIGIN, GOOGLE_CLIENT_ID, etc.
 services:
   - type: web
     name: yay-tickets-api
@@ -9,3 +10,33 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT is set automatically by Render for web services.
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRES_IN
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_REFRESH_EXPIRES_IN
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: CSC_API_KEY
+        sync: false

@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "db:migrate": "node scripts/run-sql-migrations.js",
+    "db:migrate:fresh": "node scripts/run-sql-migrations.js --bootstrap",
     "lint": "echo \"No linter configured yet\""
   },
   "engines": {

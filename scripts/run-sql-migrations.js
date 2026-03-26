@@ -1,13 +1,19 @@
 /**
  * Run SQL migration files in order against DB_* env vars.
  * Usage: set DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, optional DB_SSL=true, DB_SSL_REJECT_UNAUTHORIZED=false
+ *
+ * For an empty database, run once with --bootstrap (runs bootstrap_schema.sql first, then migrations).
  */
 require("dotenv").config({ path: require("path").resolve(__dirname, "..", ".env") });
 const fs = require("fs");
 const path = require("path");
 const mysql = require("mysql2/promise");
 
+const withBootstrap =
+  process.argv.includes("--bootstrap") || process.env.DB_INCLUDE_BOOTSTRAP === "true";
+
 const FILES = [
+  ...(withBootstrap ? ["bootstrap_schema.sql"] : []),
   "user_capabilities_and_content_fields_migration.sql",
   "organizer_enabled_migration.sql",
   "event_click_view_counts.sql",
