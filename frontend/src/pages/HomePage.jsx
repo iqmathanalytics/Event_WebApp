@@ -48,10 +48,17 @@ function HomePage() {
     async function loadTrendingEvents() {
       try {
         setLoadingEvents(true);
-        const response = await fetchFeaturedEvents({
+        let response = await fetchFeaturedEvents({
           city: selectedCity || undefined,
           limit: 60
         });
+        const initialRows = response?.data || [];
+        if (selectedCity && initialRows.length === 0) {
+          response = await fetchFeaturedEvents({ limit: 60 });
+          if (active) {
+            setSelectedCity("");
+          }
+        }
         if (active) {
           const now = Date.now();
           const rawRows = response?.data || [];
@@ -110,7 +117,7 @@ function HomePage() {
       try {
         setLoadingInfluencers(true);
         setLoadingDeals(true);
-        const [influencerResponse, dealsResponse] = await Promise.all([
+        let [influencerResponse, dealsResponse] = await Promise.all([
           fetchInfluencers({
             city: selectedCity || undefined,
             sort: "popularity"
@@ -121,6 +128,19 @@ function HomePage() {
             only_active: "true"
           })
         ]);
+        if (selectedCity) {
+          const inflRows = influencerResponse?.data || [];
+          const dealRows = dealsResponse?.data || [];
+          if (inflRows.length === 0 && dealRows.length === 0) {
+            [influencerResponse, dealsResponse] = await Promise.all([
+              fetchInfluencers({ sort: "popularity" }),
+              fetchDeals({ sort: "popularity", only_active: "true" })
+            ]);
+            if (active) {
+              setSelectedCity("");
+            }
+          }
+        }
         if (!active) {
           return;
         }
