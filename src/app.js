@@ -12,6 +12,9 @@ const allowedOrigins = String(corsOrigin || "")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean);
+const wildcardOriginSuffixes = allowedOrigins
+  .filter((item) => item.startsWith("*.") && item.length > 2)
+  .map((item) => item.slice(1)); // "*.netlify.app" -> ".netlify.app"
 
 app.use(helmet());
 app.use(
@@ -26,6 +29,15 @@ app.use(
         return;
       }
       if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      if (wildcardOriginSuffixes.some((suffix) => origin.endsWith(suffix))) {
+        callback(null, true);
+        return;
+      }
+      // Netlify preview + new site URLs change often; allow by suffix in production.
+      if (nodeEnv === "production" && origin.endsWith(".netlify.app")) {
         callback(null, true);
         return;
       }
