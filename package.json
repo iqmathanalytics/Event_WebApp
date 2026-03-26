@@ -10,6 +10,7 @@
     "db:migrate": "node scripts/run-sql-migrations.js",
     "db:migrate:fresh": "node scripts/run-sql-migrations.js --bootstrap",
     "deploy:render": "node scripts/render-deploy.js",
+    "sync:render-env": "node scripts/sync-render-env-from-local.js",
     "lint": "echo \"No linter configured yet\""
   },
   "engines": {
