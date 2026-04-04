@@ -1,91 +1,133 @@
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import DealCard from "../components/DealCard";
 import EventFilterBar from "../components/EventFilterBar";
+import DealSubmissionModal, { emptyDealSubmitForm } from "../components/DealSubmissionModal";
 import { createDeal, fetchDeals } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
 import { Link } from "react-router-dom";
-import { createPortal } from "react-dom";
-import { FiInfo } from "react-icons/fi";
-import { categories } from "../utils/filterOptions";
+import { FiBriefcase, FiCheckCircle, FiClock, FiRefreshCw } from "react-icons/fi";
+import { BadgePercent, MousePointerClick, Sparkles, Store } from "lucide-react";
 import { fetchMyProfile } from "../services/userService";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
-const DEAL_OFFER_TYPES = [
-  { value: "percentage_off", label: "Percentage Off" },
-  { value: "flat_off", label: "Flat Amount Off" },
-  { value: "bogo", label: "Buy X Get Y" },
-  { value: "bundle_price", label: "Bundle Price" },
-  { value: "free_item", label: "Free Item with Purchase" },
-  { value: "custom", label: "Custom Offer" }
-];
+function DealerProfileProgressNote({ status }) {
+  const s = String(status || "").toLowerCase();
+  const shell =
+    "mt-3 flex gap-3 rounded-xl border px-3 py-3 sm:items-start sm:gap-3.5 sm:px-4 motion-safe:transition-shadow motion-safe:hover:shadow-md";
 
-function FormField({ label, hint, example, className = "", children }) {
+  if (!status) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className={`${shell} border-indigo-200/70 bg-gradient-to-br from-indigo-50/90 to-white`}
+      >
+        <motion.span
+          className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100"
+          animate={{ y: [0, -2, 0] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <FiBriefcase className="h-5 w-5" aria-hidden />
+        </motion.span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">Almost there — add your business profile</p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">
+            Complete your dealer profile from your dashboard. After approval, you can publish offers straight from this page.
+          </p>
+          <Link
+            to="/dashboard/user"
+            className="mt-2 inline-flex text-sm font-semibold text-indigo-600 underline-offset-2 hover:text-indigo-700 hover:underline"
+          >
+            Go to dashboard
+          </Link>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (s === "pending") {
+    return (
+      <div className={`${shell} border-sky-200/70 bg-gradient-to-br from-sky-50/90 to-white`}>
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100">
+          <FiClock className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">We&apos;re reviewing your profile</p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">
+            Hang tight — once your business details are approved, deal posting unlocks here automatically.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (s === "rejected") {
+    return (
+      <div className={`${shell} border-violet-200/70 bg-gradient-to-br from-violet-50/80 to-white`}>
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-white text-violet-600 shadow-sm ring-1 ring-violet-100">
+          <FiRefreshCw className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">Quick refresh, then you&apos;re back in</p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">
+            Update your dealer profile from your dashboard and resubmit — we&apos;ll take another look right away.
+          </p>
+          <Link
+            to="/dashboard/user/submissions"
+            className="mt-2 inline-flex text-sm font-semibold text-violet-700 underline-offset-2 hover:text-violet-800 hover:underline"
+          >
+            Submissions &amp; edits
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`block ${className}`}>
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
-      <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-slate-500">
-        <FiInfo className="text-slate-400" />
-        {hint}
-        {example ? <span className="text-slate-400">Example: {example}</span> : null}
-      </span>
-      {children}
+    <div className={`${shell} border-slate-200/80 bg-slate-50/90`}>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-900">Business profile</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">
+          Status: <span className="font-medium capitalize text-slate-800">{s}</span>. Finish any open steps from your dashboard so deal posting can turn on when you&apos;re ready.
+        </p>
+        <Link
+          to="/dashboard/user"
+          className="mt-2 inline-flex text-sm font-semibold text-slate-700 underline-offset-2 hover:underline"
+        >
+          Open dashboard
+        </Link>
+      </div>
     </div>
   );
 }
 
-function SubmissionModal({ title, onClose, onSubmit, children, submitLoading }) {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <AnimatePresence>
-      <motion.div
-        key="deal-submit-overlay"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        className="fixed inset-0 z-[220] bg-slate-950/65 backdrop-blur-[1px]"
-        onClick={onClose}
-      />
-      <div className="fixed inset-0 z-[221] flex items-center justify-center p-3 sm:p-5">
-        <motion.form
-          key="deal-submit-modal"
-          onSubmit={onSubmit}
-          initial={{ opacity: 0, y: 20, scale: 0.985 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 16, scale: 0.985 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          onClick={(e) => e.stopPropagation()}
-          className="popup-modal flex h-[min(90vh,820px)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-        >
-          <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
-            <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          </div>
-          <div className="hide-scrollbar flex-1 overflow-y-auto px-5 py-4">{children}</div>
-          <div className="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitLoading}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitLoading ? "Submitting..." : "Submit for Approval"}
-            </button>
-          </div>
-        </motion.form>
+function DealerApprovedRibbon() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="relative mt-3 flex gap-3 overflow-hidden rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/95 via-white to-teal-50/50 px-3 py-3 sm:items-start sm:gap-3.5 sm:px-4"
+    >
+      <div className="pointer-events-none absolute -right-6 top-0 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl" />
+      <motion.span
+        className="relative mt-0.5 grid h-10 w-10 shrink-0 place-content-center rounded-xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100"
+        animate={{ scale: [1, 1.06, 1] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <FiCheckCircle className="h-6 w-6" aria-hidden />
+      </motion.span>
+      <div className="relative min-w-0">
+        <p className="text-sm font-semibold text-slate-900">Profile approved — you&apos;re live to post</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">
+          Your business is verified. Submit a deal anytime; we still give new listings a quick review before they publish.
+        </p>
       </div>
-    </AnimatePresence>,
-    document.body
+    </motion.div>
   );
 }
 
@@ -110,34 +152,14 @@ function DealsPage() {
     sortBy: "popularity"
   });
   const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
-  const [submitForm, setSubmitForm] = useState({
-    title: "",
-    description: "",
-    city_id: "",
-    category_id: "",
-    provider_name: "",
-    original_price: "",
-    expiry_date: "",
-    promo_code: "",
-    deal_link: "",
-    image_url: "",
-    is_premium: false,
-    offer_type: "percentage_off",
-    offer_value: "",
-    buy_qty: "",
-    get_qty: "",
-    minimum_spend: "",
-    max_discount_amount: "",
-    free_item_name: "",
-    custom_offer_text: "",
-    terms: ""
-  });
+  const [submitForm, setSubmitForm] = useState(() => ({ ...emptyDealSubmitForm }));
   const { isFavorite, toggleFavorite } = useFavorites();
+  useRouteContentReady(loading);
   const canApply =
     query !== appliedFilters.query ||
     city !== appliedFilters.city ||
@@ -273,43 +295,137 @@ function DealsPage() {
         <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Deals</h1>
         <p className="text-sm text-slate-600">Browse limited-time local offers from trusted partners across your city.</p>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Post a deal or offer</p>
-            <p className="text-sm text-slate-600">Your deal will be reviewed by admin before it goes live.</p>
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-indigo-50/15 to-emerald-50/25 p-4 shadow-soft ring-1 ring-indigo-500/[0.06] sm:p-5">
+        <div className="pointer-events-none absolute -right-14 -top-14 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-400/25 to-emerald-400/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-teal-400/15 blur-3xl" />
+
+        {!isAuthenticated ? (
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+            <div className="min-w-0 flex-1">
+              <motion.p
+                className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-800/90"
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35 }}
+              >
+                <motion.span
+                  className="inline-flex text-indigo-600"
+                  animate={{ rotate: [0, -10, 8, 0] }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                  aria-hidden
+                >
+                  <Sparkles className="h-4 w-4" />
+                </motion.span>
+                Partners &amp; promos
+              </motion.p>
+              <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+                List offers locals actually click
+              </h2>
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-slate-600">
+                Create a free account, add your business profile once, then publish deals from this page — we keep quality high.
+              </p>
+              <ul className="mt-3 flex flex-col gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
+                <li className="inline-flex items-center gap-1.5">
+                  <motion.span
+                    className="text-indigo-600"
+                    animate={{ y: [0, -2, 0] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                    aria-hidden
+                  >
+                    <MousePointerClick className="h-4 w-4" />
+                  </motion.span>
+                  Sign up — then tweak promos anytime
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                  <BadgePercent className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+                  Discounts, flash sales, partner perks
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                  <Store className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
+                  One storefront profile, city-wide reach
+                </li>
+              </ul>
+            </div>
+            <div className="relative flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:flex-col xl:flex-row">
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  to="/register"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-500 hover:to-emerald-500 sm:min-h-0 sm:w-auto"
+                >
+                  Partner with Yay! — join free
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link
+                  to="/login"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-slate-200 bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-indigo-300 hover:bg-white sm:min-h-0 sm:w-auto"
+                >
+                  Have an account? Sign in to list
+                </Link>
+              </motion.div>
+            </div>
           </div>
-          {!isAuthenticated ? (
-            <Link to="/login" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-              Login to Submit
-            </Link>
-          ) : canPostDeals && dealerStatus === "approved" ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSubmitError("");
-                setSubmitMessage("");
-                setSubmitOpen(true);
-              }}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-            >
-              Submit Deal
-            </button>
-          ) : (
-            <Link to="/dashboard/user" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-              Complete Dealer Profile
-            </Link>
-          )}
-        </div>
-        {isAuthenticated && !canPostDeals ? (
-          <p className="mt-2 text-sm text-rose-600">Deal posting capability is disabled for your account.</p>
-        ) : null}
-        {isAuthenticated && canPostDeals && dealerStatus !== "approved" ? (
-          <p className="mt-2 text-sm text-amber-700">
-            Dealer profile status: {dealerStatus || "not submitted"}. You can post deals after admin approval.
-          </p>
-        ) : null}
-        {submitMessage ? <p className="mt-2 text-sm font-medium text-emerald-700">{submitMessage}</p> : null}
+        ) : (
+          <>
+            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Post a deal or offer</p>
+                <p className="text-sm text-slate-600">Your deal will be reviewed by admin before it goes live.</p>
+              </div>
+              {canPostDeals && dealerStatus === "approved" ? (
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitError("");
+                      setSubmitMessage("");
+                      setSubmitOpen(true);
+                    }}
+                    className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
+                  >
+                    Submit Deal
+                  </button>
+                </motion.div>
+              ) : !canPostDeals ? (
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <Link
+                    to="/dashboard/user"
+                    className="inline-flex rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    Open dashboard
+                  </Link>
+                </motion.div>
+              ) : (
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <Link
+                    to="/dashboard/user"
+                    className="inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
+                  >
+                    Complete Dealer Profile
+                  </Link>
+                </motion.div>
+              )}
+            </div>
+            {isAuthenticated && !canPostDeals ? (
+              <div className="relative mt-3 flex gap-3 rounded-xl border border-slate-200/90 bg-slate-50/95 px-3 py-3 sm:px-4">
+                <span className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-lg bg-white text-slate-500 shadow-sm ring-1 ring-slate-200">
+                  <FiBriefcase className="h-5 w-5" aria-hidden />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Deal posting isn&apos;t enabled for this login yet</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                    Need access? Contact us — we turn on partner tools for verified businesses.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {isAuthenticated && canPostDeals && dealerStatus === "approved" ? <DealerApprovedRibbon /> : null}
+            {isAuthenticated && canPostDeals && dealerStatus !== "approved" ? (
+              <DealerProfileProgressNote status={dealerStatus} />
+            ) : null}
+            {submitMessage ? <p className="mt-2 text-sm font-medium text-emerald-700">{submitMessage}</p> : null}
+          </>
+        )}
       </div>
       <EventFilterBar
         query={query}
@@ -361,7 +477,7 @@ function DealsPage() {
                 isFavorite={isFavorite("deal", item.id)}
                 tags={item.tags || []}
                 isPremium={item.is_premium === 1 || item.is_premium === true}
-                showPremiumBadge={isAuthenticated}
+                showPremiumBadge
                 onToggleFavorite={() =>
                   toggleFavorite({
                     listingType: "deal",
@@ -373,173 +489,46 @@ function DealsPage() {
           : null}
       </div>
 
-      {submitOpen ? (
-        <SubmissionModal
-          title="Submit Deal"
-          onClose={() => setSubmitOpen(false)}
-          submitLoading={submitLoading}
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setSubmitError("");
-            try {
-              setSubmitLoading(true);
-              await createDeal({
-                ...submitForm,
-                city_id: Number(submitForm.city_id),
-                category_id: Number(submitForm.category_id),
-                discount_percentage:
-                  submitForm.offer_type === "percentage_off" && submitForm.offer_value
-                    ? Number(submitForm.offer_value)
-                    : undefined,
-                original_price: submitForm.original_price ? Number(submitForm.original_price) : undefined,
-                offer_value: submitForm.offer_value ? Number(submitForm.offer_value) : undefined,
-                buy_qty: submitForm.buy_qty ? Number(submitForm.buy_qty) : undefined,
-                get_qty: submitForm.get_qty ? Number(submitForm.get_qty) : undefined,
-                minimum_spend: submitForm.minimum_spend ? Number(submitForm.minimum_spend) : undefined,
-                max_discount_amount: submitForm.max_discount_amount ? Number(submitForm.max_discount_amount) : undefined,
-                terms_text: submitForm.terms || undefined
-              });
-              setSubmitOpen(false);
-              setSubmitForm({
-                title: "",
-                description: "",
-                city_id: "",
-                category_id: "",
-                provider_name: "",
-                original_price: "",
-                expiry_date: "",
-                promo_code: "",
-                deal_link: "",
-                image_url: "",
-                is_premium: false,
-                offer_type: "percentage_off",
-                offer_value: "",
-                buy_qty: "",
-                get_qty: "",
-                minimum_spend: "",
-                max_discount_amount: "",
-                free_item_name: "",
-                custom_offer_text: "",
-                terms: ""
-              });
-              setSubmitMessage("Deal submitted. It will be visible after admin approval.");
-            } catch (err) {
-              setSubmitError(err?.response?.data?.message || "Could not submit deal.");
-            } finally {
-              setSubmitLoading(false);
-            }
-          }}
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="Deal Title" hint="Write a concise title customers can scan quickly." example="Buy 1 Get 2 Burger Combo" className="sm:col-span-2">
-              <input required value={submitForm.title} onChange={(e) => setSubmitForm((p) => ({ ...p, title: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            </FormField>
-            <FormField label="Description" hint="Add key details like eligibility, timing, and availability." className="sm:col-span-2">
-              <textarea rows={4} value={submitForm.description} onChange={(e) => setSubmitForm((p) => ({ ...p, description: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            </FormField>
-            <FormField label="City" hint="Choose where this deal is valid.">
-              <select
-                required
-                value={submitForm.city_id}
-                onChange={(e) => setSubmitForm((p) => ({ ...p, city_id: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              >
-                <option value="">Select City</option>
-                {cities.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Category" hint="Pick the most relevant deal category.">
-              <select
-                required
-                value={submitForm.category_id}
-                onChange={(e) => setSubmitForm((p) => ({ ...p, category_id: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              >
-                <option value="">Select Category</option>
-                {categories.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Brand / Store Name" hint="Enter the business name behind this offer." example="Burger District">
-              <input required value={submitForm.provider_name} onChange={(e) => setSubmitForm((p) => ({ ...p, provider_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            </FormField>
-            <FormField label="Valid Until" hint="Users can claim this offer until this date.">
-              <input
-                required
-                type="date"
-                value={submitForm.expiry_date}
-                onChange={(e) => setSubmitForm((p) => ({ ...p, expiry_date: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              />
-            </FormField>
-            <FormField label="Original Price" hint="Optional reference price before discount." example="49.99">
-              <input type="number" min="0" value={submitForm.original_price} onChange={(e) => setSubmitForm((p) => ({ ...p, original_price: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            </FormField>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Offer Configuration</p>
-              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <select
-                  value={submitForm.offer_type}
-                  onChange={(e) => setSubmitForm((p) => ({ ...p, offer_type: e.target.value }))}
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                >
-                  {DEAL_OFFER_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-                {(submitForm.offer_type === "percentage_off" || submitForm.offer_type === "flat_off" || submitForm.offer_type === "bundle_price") ? (
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder={submitForm.offer_type === "percentage_off" ? "Offer Value (%)" : "Offer Value ($)"}
-                    value={submitForm.offer_value}
-                    onChange={(e) => setSubmitForm((p) => ({ ...p, offer_value: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                ) : null}
-                {submitForm.offer_type === "bogo" ? (
-                  <>
-                    <input type="number" min="1" placeholder="Buy Quantity" value={submitForm.buy_qty} onChange={(e) => setSubmitForm((p) => ({ ...p, buy_qty: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                    <input type="number" min="1" placeholder="Get Quantity" value={submitForm.get_qty} onChange={(e) => setSubmitForm((p) => ({ ...p, get_qty: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                  </>
-                ) : null}
-                {submitForm.offer_type === "free_item" ? (
-                  <input type="text" placeholder="Free Item Name" value={submitForm.free_item_name} onChange={(e) => setSubmitForm((p) => ({ ...p, free_item_name: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2" />
-                ) : null}
-                {submitForm.offer_type === "custom" ? (
-                  <input type="text" placeholder="Custom Offer Text (e.g. Buy 1 Get 2)" value={submitForm.custom_offer_text} onChange={(e) => setSubmitForm((p) => ({ ...p, custom_offer_text: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2" />
-                ) : null}
-                <input type="number" min="0" placeholder="Minimum Spend (optional)" value={submitForm.minimum_spend} onChange={(e) => setSubmitForm((p) => ({ ...p, minimum_spend: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                <input type="number" min="0" placeholder="Maximum Discount Cap (optional)" value={submitForm.max_discount_amount} onChange={(e) => setSubmitForm((p) => ({ ...p, max_discount_amount: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                <textarea rows={2} placeholder="Terms and Conditions (optional)" value={submitForm.terms} onChange={(e) => setSubmitForm((p) => ({ ...p, terms: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2" />
-              </div>
-            </div>
-            <FormField label="Promo Code" hint="Optional code users apply at checkout." example="SAVE20">
-              <input value={submitForm.promo_code} onChange={(e) => setSubmitForm((p) => ({ ...p, promo_code: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            </FormField>
-            <FormField label="Deal Link" hint="Optional landing page where users redeem this offer." example="https://brand.com/deals/summer">
-              <input type="url" value={submitForm.deal_link} onChange={(e) => setSubmitForm((p) => ({ ...p, deal_link: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            </FormField>
-            <FormField label="Image URL" hint="Use a high-quality image to improve clicks." example="https://images.example.com/deal.jpg" className="sm:col-span-2">
-              <input type="url" value={submitForm.image_url} onChange={(e) => setSubmitForm((p) => ({ ...p, image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            </FormField>
-            <label className="inline-flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
-              <input type="checkbox" checked={submitForm.is_premium} onChange={(e) => setSubmitForm((p) => ({ ...p, is_premium: e.target.checked }))} />
-              Mark as Premium (visible only to logged-in users)
-            </label>
-          </div>
-          {submitError ? <p className="mt-3 text-sm text-rose-600">{submitError}</p> : null}
-        </SubmissionModal>
-      ) : null}
+      <DealSubmissionModal
+        open={submitOpen}
+        title="Submit Deal"
+        onClose={() => setSubmitOpen(false)}
+        submitLoading={submitLoading}
+        submitError={submitError}
+        cities={cities}
+        form={submitForm}
+        setForm={setSubmitForm}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setSubmitError("");
+          try {
+            setSubmitLoading(true);
+            await createDeal({
+              ...submitForm,
+              city_id: Number(submitForm.city_id),
+              category_id: Number(submitForm.category_id),
+              discount_percentage:
+                submitForm.offer_type === "percentage_off" && submitForm.offer_value
+                  ? Number(submitForm.offer_value)
+                  : undefined,
+              original_price: submitForm.original_price ? Number(submitForm.original_price) : undefined,
+              offer_value: submitForm.offer_value ? Number(submitForm.offer_value) : undefined,
+              buy_qty: submitForm.buy_qty ? Number(submitForm.buy_qty) : undefined,
+              get_qty: submitForm.get_qty ? Number(submitForm.get_qty) : undefined,
+              minimum_spend: submitForm.minimum_spend ? Number(submitForm.minimum_spend) : undefined,
+              max_discount_amount: submitForm.max_discount_amount ? Number(submitForm.max_discount_amount) : undefined,
+              terms_text: submitForm.terms || undefined
+            });
+            setSubmitOpen(false);
+            setSubmitForm({ ...emptyDealSubmitForm });
+            setSubmitMessage("Deal submitted. It will be visible after admin approval.");
+          } catch (err) {
+            setSubmitError(err?.response?.data?.message || "Could not submit deal.");
+          } finally {
+            setSubmitLoading(false);
+          }
+        }}
+      />
     </motion.div>
   );
 }

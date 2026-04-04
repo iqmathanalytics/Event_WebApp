@@ -14,6 +14,7 @@ const withBootstrap =
 
 const FILES = [
   ...(withBootstrap ? ["bootstrap_schema.sql"] : []),
+  "cities_categories_expansion.sql",
   "user_capabilities_and_content_fields_migration.sql",
   "organizer_enabled_migration.sql",
   "event_click_view_counts.sql",
@@ -26,7 +27,11 @@ const FILES = [
   "event_yay_deal_fields.sql",
   "google_oauth_users.sql",
   "influencer_premium_gallery_and_metrics.sql",
-  "influencer_engagement_timestamp.sql"
+  "influencer_engagement_timestamp.sql",
+  "event_gallery_image_urls.sql",
+  "newsletter_guest_columns.sql",
+  "newsletter_email_unique.sql",
+  "newsletter_user_id.sql"
 ];
 
 function buildSsl() {
@@ -57,10 +62,13 @@ async function runFile(conn, relPath) {
       await conn.query(stmt);
     } catch (err) {
       const msg = String(err?.message || "");
+      const errno = err?.errno;
       if (
         msg.includes("Duplicate column") ||
         msg.includes("already exists") ||
-        msg.includes("Duplicate key name")
+        msg.includes("Duplicate key name") ||
+        errno === 1091 ||
+        msg.includes("check that column/key exists")
       ) {
         continue;
       }

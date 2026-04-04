@@ -125,3 +125,71 @@ export function pickHomeCarouselSix(items, { isPremium }) {
 
   return [...firstFour.slice(0, 4), ...lastTwo.slice(0, 2)].slice(0, 6);
 }
+
+/**
+ * Landing sections: prioritize tag discovery score first, then popularity.
+ * Rules:
+ * - Show up to maxStandard non-premium first
+ * - Show up to maxPremium premium last
+ * - Never exceed maxStandard + maxPremium total
+ *
+ * @param {object[]} items - rows with id, tags[], popularity_score
+ * @param {{ isPremium: (item: object) => boolean, maxStandard: number, maxPremium: number }} opts
+ */
+export function pickLandingSectionCards(items, { isPremium, maxStandard = 3, maxPremium = 2 }) {
+  const rows = (items || []).filter((x) => x && x.id != null);
+  if (!rows.length) {
+    return [];
+  }
+
+  const sortedStandard = rows.filter((r) => !isPremium(r)).sort(byDiscoveryThenPopularity);
+  const sortedPremium = rows.filter((r) => isPremium(r)).sort(byDiscoveryThenPopularity);
+
+  const picked = [];
+  const used = new Set();
+
+  for (const item of sortedStandard) {
+    if (picked.length >= maxStandard) {
+      break;
+    }
+    picked.push(item);
+    used.add(item.id);
+  }
+
+  const premiumPicked = [];
+  for (const item of sortedPremium) {
+    if (premiumPicked.length >= maxPremium) {
+      break;
+    }
+    if (used.has(item.id)) {
+      continue;
+    }
+    premiumPicked.push(item);
+    used.add(item.id);
+  }
+
+  // If we didn't have enough standard items, backfill from remaining non-premium first, then anything.
+  if (picked.length < maxStandard) {
+    const restStandard = rows.filter((r) => !isPremium(r) && !used.has(r.id)).sort(byDiscoveryThenPopularity);
+    for (const item of restStandard) {
+      if (picked.length >= maxStandard) {
+        break;
+      }
+      picked.push(item);
+      used.add(item.id);
+    }
+  }
+
+  if (picked.length < maxStandard) {
+    const restAny = rows.filter((r) => !used.has(r.id)).sort(byDiscoveryThenPopularity);
+    for (const item of restAny) {
+      if (picked.length >= maxStandard) {
+        break;
+      }
+      picked.push(item);
+      used.add(item.id);
+    }
+  }
+
+  return [...picked.slice(0, maxStandard), ...premiumPicked.slice(0, maxPremium)].slice(0, maxStandard + maxPremium);
+}

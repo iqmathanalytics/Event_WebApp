@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FiAlertCircle, FiCheck, FiLoader, FiSend } from "react-icons/fi";
 import { CONTACT_SUBJECT_OPTIONS } from "../constants/contactSubjects";
 import { submitContactMessage } from "../services/contactService";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 const fieldClass =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-inner outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-60";
@@ -17,6 +18,7 @@ function ContactPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  useRouteContentReady(false);
 
   const onChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));

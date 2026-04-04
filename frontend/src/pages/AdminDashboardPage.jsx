@@ -24,6 +24,7 @@ import {
   exportAdminBookings,
   fetchAdminNewsletterSubscribers,
   syncAdminNewsletterSubscribersToMailchimp,
+  deleteAdminNewsletterSubscriber,
   exportAdminNewsletterSubscribers,
   fetchAdminContactMessages,
   exportAdminContactMessages,
@@ -38,6 +39,7 @@ import {
 import { downloadBlob } from "../utils/fileDownload";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import useCityFilter from "../hooks/useCityFilter";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 const eventHighlightOptions = [
   "Free Parking",
@@ -273,6 +275,7 @@ function AdminDashboardPage() {
   const [loadingNewsletter, setLoadingNewsletter] = useState(false);
   const [loadingContact, setLoadingContact] = useState(false);
   const [syncingNewsletterMailchimp, setSyncingNewsletterMailchimp] = useState(false);
+  const [deletingNewsletterId, setDeletingNewsletterId] = useState(null);
   const perPageMobile = 5;
   const [mobileBookingsPage, setMobileBookingsPage] = useState(1);
   const [mobileUsersPage, setMobileUsersPage] = useState(1);
@@ -283,6 +286,35 @@ function AdminDashboardPage() {
     filters.date !== appliedFilters.date ||
     filters.city !== appliedFilters.city ||
     filters.category !== appliedFilters.category;
+
+  const adminRouteBusy = useMemo(() => {
+    const statsBusy = loadingStats;
+    if (activeSection === "bookings") {
+      return statsBusy || loadingBookings;
+    }
+    if (activeSection === "users") {
+      return statsBusy || loadingUsers;
+    }
+    if (activeSection === "team") {
+      return statsBusy || loadingTeam;
+    }
+    if (activeSection === "communications") {
+      return statsBusy || (commTab === "newsletter" ? loadingNewsletter : loadingContact);
+    }
+    return statsBusy || loadingRows;
+  }, [
+    activeSection,
+    commTab,
+    loadingStats,
+    loadingRows,
+    loadingBookings,
+    loadingUsers,
+    loadingTeam,
+    loadingNewsletter,
+    loadingContact
+  ]);
+
+  useRouteContentReady(adminRouteBusy);
 
   useEffect(() => {
     setMobileBookingsPage(1);
@@ -544,6 +576,7 @@ function AdminDashboardPage() {
     google_maps_link: item.google_maps_link || "",
     ticket_link: item.ticket_link || "",
     image_url: item.image_url || "",
+    gallery_image_urls: Array.isArray(item.gallery_image_urls) ? [...item.gallery_image_urls] : [],
     price: item.price ?? "",
     duration_hours: item.duration_hours ?? "",
     age_limit: item.age_limit || "All Ages",
@@ -578,6 +611,10 @@ function AdminDashboardPage() {
       }
       if (key === "event_dates" && Array.isArray(value)) {
         payload[key] = value;
+        return;
+      }
+      if (key === "gallery_image_urls" && Array.isArray(value)) {
+        payload[key] = value.map((u) => String(u || "").trim()).filter(Boolean);
         return;
       }
       payload[key] = typeof value === "string" ? value.trim() : value;
@@ -663,6 +700,11 @@ function AdminDashboardPage() {
     pushLink("Google Maps", reviewForm.google_maps_link, "Open Map");
     pushLink("Ticket Link", reviewForm.ticket_link, "Open Ticket Page");
     pushLink("Image", reviewForm.image_url, "View Image");
+    if (Array.isArray(reviewForm.gallery_image_urls)) {
+      reviewForm.gallery_image_urls.forEach((url, idx) => {
+        pushLink(`Gallery image ${idx + 1}`, url, "View Image");
+      });
+    }
 
     return items;
   }, [reviewListing, reviewForm]);
@@ -1013,6 +1055,36 @@ function AdminDashboardPage() {
       format: format === "excel" ? "excel" : "csv"
     });
     downloadBlob(result.blob, `newsletter-subscribers.${format === "excel" ? "xlsx" : "csv"}`);
+  };
+
+  const deleteNewsletterSubscriber = async (subscriberId) => {
+    if (!Number.isFinite(Number(subscriberId))) {
+      return;
+    }
+    const ok = window.confirm(
+      "Remove this row from the newsletter list? This does not delete the user account—only the newsletter subscription record."
+    );
+    if (!ok) {
+      return;
+    }
+    try {
+      setDeletingNewsletterId(Number(subscriberId));
+      await deleteAdminNewsletterSubscriber(subscriberId);
+      setAdminMessage("Subscriber removed.");
+      window.setTimeout(() => setAdminMessage(""), 4000);
+      const nextPage =
+        newsletterRows.length === 1 && newsletterPage > 1 ? newsletterPage - 1 : newsletterPage;
+      if (nextPage !== newsletterPage) {
+        setNewsletterPage(nextPage);
+      } else {
+        await loadNewsletterSubscribers(newsletterPage);
+      }
+    } catch (err) {
+      setAdminMessage(err?.response?.data?.message || "Could not remove subscriber.");
+      window.setTimeout(() => setAdminMessage(""), 5000);
+    } finally {
+      setDeletingNewsletterId(null);
+    }
   };
 
   const syncNewsletterToMailchimp = async () => {
@@ -1636,6 +1708,8 @@ function AdminDashboardPage() {
             onExportContact={exportContact}
             onSyncNewsletterMailchimp={syncNewsletterToMailchimp}
             syncingNewsletterMailchimp={syncingNewsletterMailchimp}
+            onDeleteNewsletterSubscriber={deleteNewsletterSubscriber}
+            deletingNewsletterId={deletingNewsletterId}
           />
         ) : null}
 
@@ -2798,13 +2872,60 @@ function AdminDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
-                  <FormField label="Image URL" hint="High-quality cover image link." example="https://images.example.com/event.jpg">
+                  <FormField label="Cover image URL" hint="Primary banner; detail page shows this first." example="https://images.example.com/event.jpg">
                     <input
                       value={editForm.image_url || ""}
                       onChange={(e) => setEditForm((prev) => ({ ...prev, image_url: e.target.value }))}
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
+                  <div className="space-y-2 sm:col-span-2">
+                    <p className="text-sm font-semibold text-slate-900">Additional banner images</p>
+                    <p className="text-xs text-slate-500">Optional carousel URLs (max 12).</p>
+                    <div className="space-y-2">
+                      {(editForm.gallery_image_urls || []).map((row, idx) => (
+                        <div key={`ad-gal-${idx}`} className="flex gap-2">
+                          <input
+                            type="url"
+                            value={row}
+                            onChange={(e) =>
+                              setEditForm((prev) => {
+                                const next = [...(prev.gallery_image_urls || [])];
+                                next[idx] = e.target.value;
+                                return { ...prev, gallery_image_urls: next };
+                              })
+                            }
+                            className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditForm((prev) => ({
+                                ...prev,
+                                gallery_image_urls: (prev.gallery_image_urls || []).filter((_, i) => i !== idx)
+                              }))
+                            }
+                            className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={(editForm.gallery_image_urls || []).length >= 12}
+                        onClick={() =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            gallery_image_urls: [...(prev.gallery_image_urls || []), ""]
+                          }))
+                        }
+                        className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                      >
+                        + Add image URL
+                      </button>
+                    </div>
+                  </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                     <p className="text-sm font-semibold text-slate-900">Event Highlights</p>
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -3141,13 +3262,60 @@ function AdminDashboardPage() {
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
-                <FormField label="Image URL" hint="High-quality cover image link." example="https://images.example.com/event.jpg">
+                <FormField label="Cover image URL" hint="Primary banner image." example="https://images.example.com/event.jpg">
                   <input
                     value={reviewForm.image_url || ""}
                     onChange={(e) => setReviewForm((prev) => ({ ...prev, image_url: e.target.value }))}
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
+                <div className="space-y-2 sm:col-span-2">
+                  <p className="text-sm font-semibold text-slate-900">Additional banner images</p>
+                  <p className="text-xs text-slate-500">Optional carousel URLs (max 12).</p>
+                  <div className="space-y-2">
+                    {(reviewForm.gallery_image_urls || []).map((row, idx) => (
+                      <div key={`rv-gal-${idx}`} className="flex gap-2">
+                        <input
+                          type="url"
+                          value={row}
+                          onChange={(e) =>
+                            setReviewForm((prev) => {
+                              const next = [...(prev.gallery_image_urls || [])];
+                              next[idx] = e.target.value;
+                              return { ...prev, gallery_image_urls: next };
+                            })
+                          }
+                          className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReviewForm((prev) => ({
+                              ...prev,
+                              gallery_image_urls: (prev.gallery_image_urls || []).filter((_, i) => i !== idx)
+                            }))
+                          }
+                          className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={(reviewForm.gallery_image_urls || []).length >= 12}
+                      onClick={() =>
+                        setReviewForm((prev) => ({
+                          ...prev,
+                          gallery_image_urls: [...(prev.gallery_image_urls || []), ""]
+                        }))
+                      }
+                      className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                    >
+                      + Add image URL
+                    </button>
+                  </div>
+                </div>
                 <FormField label="Price (USD)" hint="Ticket price per attendee." example="29.99">
                   <input
                     type="number"
@@ -3389,6 +3557,33 @@ function AdminDashboardPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</p>
                     <p className="mt-1 text-sm text-slate-700 uppercase">{viewListing.status || "-"}</p>
                   </div>
+                  {hasDisplayValue(viewListing.image_url) ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cover image</p>
+                      <a
+                        href={viewListing.image_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                      >
+                        View Image
+                      </a>
+                    </div>
+                  ) : null}
+                  {Array.isArray(viewListing.gallery_image_urls) && viewListing.gallery_image_urls.length ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Additional images</p>
+                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm">
+                        {viewListing.gallery_image_urls.map((u) => (
+                          <li key={u}>
+                            <a href={u} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:underline">
+                              Open
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               ) : viewListingType === "influencers" ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

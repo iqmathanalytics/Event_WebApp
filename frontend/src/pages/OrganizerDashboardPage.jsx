@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -29,6 +29,7 @@ import FilterPopupField from "../components/FilterPopupField";
 import OrganizerSidebar from "../components/OrganizerSidebar";
 import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 const initialForm = {
   title: "",
@@ -47,6 +48,7 @@ const initialForm = {
   ticket_link: "",
   price: "",
   image_url: "",
+  gallery_image_urls: [],
   duration_hours: "",
   age_limit: "All Ages",
   languages: "",
@@ -154,7 +156,10 @@ function FormField({ label, hint, example, className = "", children }) {
   );
 }
 
-function OrganizerDashboardPage() {
+const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
+  { embedded = false, suppressChrome = false, suppressRouteContentReadySignal = false, onEmbeddedWorkspaceInitialReady },
+  ref
+) {
   const { user } = useAuth();
   const { cities } = useCityFilter();
   const [activeSection, setActiveSection] = useState("overview");
@@ -178,6 +183,13 @@ function OrganizerDashboardPage() {
   const [activeBookingPanel, setActiveBookingPanel] = useState(null);
   const formPanelRef = useRef(null);
   const [activeFormPanel, setActiveFormPanel] = useState(null);
+  const didKickOffLoadsRef = useRef(false);
+  const embeddedWorkspaceReadySentRef = useRef(false);
+  const sawEmbeddedLoadCycleRef = useRef(false);
+
+  useRouteContentReady(
+    suppressRouteContentReadySignal ? true : loading || loadingOverviewBookings || loadingBookingRows
+  );
 
   useEffect(() => {
     const onDocClick = (event) => {
@@ -269,10 +281,13 @@ function OrganizerDashboardPage() {
     setEditingEvent(null);
   };
 
-  const openCreate = () => {
-    resetForm();
+  const openCreate = useCallback(() => {
+    setForm(initialForm);
+    setEditingEvent(null);
     setIsFormOpen(true);
-  };
+  }, []);
+
+  useImperativeHandle(ref, () => ({ openCreateEvent: openCreate }), [openCreate]);
 
   const openEdit = (event) => {
     setEditingEvent(event);
@@ -293,6 +308,9 @@ function OrganizerDashboardPage() {
       ticket_link: event.ticket_link || "",
       price: event.price ?? "",
       image_url: event.image_url || "",
+      gallery_image_urls: Array.isArray(event.gallery_image_urls)
+        ? [...event.gallery_image_urls]
+        : [],
       duration_hours: event.duration_hours ?? "",
       age_limit: event.age_limit || "All Ages",
       languages: event.languages || "",
@@ -356,11 +374,46 @@ function OrganizerDashboardPage() {
   };
 
   useEffect(() => {
+    didKickOffLoadsRef.current = true;
     loadEvents();
     loadOverviewBookings();
     loadFilteredBookings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!didKickOffLoadsRef.current) {
+      return undefined;
+    }
+    if (loading || loadingOverviewBookings || loadingBookingRows) {
+      sawEmbeddedLoadCycleRef.current = true;
+    }
+    return undefined;
+  }, [loading, loadingOverviewBookings, loadingBookingRows]);
+
+  useEffect(() => {
+    if (!embedded || suppressRouteContentReadySignal || typeof onEmbeddedWorkspaceInitialReady !== "function") {
+      return undefined;
+    }
+    if (!didKickOffLoadsRef.current || embeddedWorkspaceReadySentRef.current) {
+      return undefined;
+    }
+    if (!sawEmbeddedLoadCycleRef.current) {
+      return undefined;
+    }
+    if (!loading && !loadingOverviewBookings && !loadingBookingRows) {
+      embeddedWorkspaceReadySentRef.current = true;
+      onEmbeddedWorkspaceInitialReady();
+    }
+    return undefined;
+  }, [
+    embedded,
+    suppressRouteContentReadySignal,
+    loading,
+    loadingOverviewBookings,
+    loadingBookingRows,
+    onEmbeddedWorkspaceInitialReady
+  ]);
 
   useEffect(() => {
     loadFilteredBookings();
@@ -408,6 +461,18 @@ function OrganizerDashboardPage() {
       const venueMapsUrl = normalizeOptionalUrl(form.google_maps_link, "Google Maps");
       const ticketUrl = normalizeOptionalUrl(form.ticket_link, "ticket");
       const imageUrl = normalizeOptionalUrl(form.image_url, "image");
+      const galleryRaw = Array.isArray(form.gallery_image_urls) ? form.gallery_image_urls : [];
+      const galleryUrls = [];
+      for (const line of galleryRaw) {
+        const trimmed = String(line || "").trim();
+        if (!trimmed) {
+          continue;
+        }
+        galleryUrls.push(normalizeOptionalUrl(trimmed, "gallery image"));
+      }
+      if (galleryUrls.length > 12) {
+        throw new Error("You can add up to 12 additional banner images.");
+      }
 
       const payload = {
         title: form.title.trim(),
@@ -426,6 +491,7 @@ function OrganizerDashboardPage() {
         category_id: Number(form.category_id),
         ticket_link: ticketUrl,
         image_url: imageUrl,
+        gallery_image_urls: galleryUrls,
         price: form.price === "" ? 0 : Number(form.price),
         duration_hours: form.duration_hours === "" ? undefined : Number(form.duration_hours),
         age_limit: form.age_limit || undefined,
@@ -511,7 +577,8 @@ function OrganizerDashboardPage() {
     return bookingEventOptions.filter((item) => String(item.title || "").toLowerCase().includes(query));
   }, [bookingEventOptions, bookingEventQuery]);
 
-  const showBackToUserDashboard = user?.role === "user" && (user?.organizer_enabled === 1 || user?.role === "organizer");
+  const showBackToUserDashboard =
+    !embedded && user?.role === "user" && (user?.organizer_enabled === 1 || user?.role === "organizer");
   const scheduleTypeLabel =
     form.schedule_type === "multiple"
       ? "Multiple Dates Event"
@@ -524,6 +591,8 @@ function OrganizerDashboardPage() {
 
   return (
     <>
+      {!suppressChrome ? (
+        <>
       {/* Mobile + Tablet layout (does not affect desktop). */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -535,14 +604,25 @@ function OrganizerDashboardPage() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">
-                Organizer dashboard
+                {embedded ? "Your hosted experiences" : "Host dashboard"}
               </p>
               <h1 className="mt-2 text-xl font-bold leading-tight">
-                Manage events, bookings,
-                <span className="block text-white/85">and performance</span>
+                {embedded ? (
+                  <>
+                    Gatherings you&apos;re bringing
+                    <span className="block text-white/85">to the city</span>
+                  </>
+                ) : (
+                  <>
+                    Manage events, bookings,
+                    <span className="block text-white/85">and momentum</span>
+                  </>
+                )}
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-white/75">
-                Quick access to what matters most on mobile.
+                {embedded
+                  ? "Create listings, tune details, and watch RSVPs roll in."
+                  : "Quick access to what matters most on mobile."}
               </p>
             </div>
             {showBackToUserDashboard ? (
@@ -705,18 +785,9 @@ function OrganizerDashboardPage() {
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">My events</h2>
-                  <p className="mt-1 text-sm text-slate-600">Create, edit, and track review status.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={openCreate}
-                  className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-                >
-                  Create
-                </button>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">My events</h2>
+                <p className="mt-1 text-sm text-slate-600">Create, edit, and track review status.</p>
               </div>
 
               {loading ? <p className="mt-3 text-sm text-slate-500">Loading your events...</p> : null}
@@ -1419,10 +1490,12 @@ function OrganizerDashboardPage() {
           </AnimatePresence>
         </section>
       </motion.div>
+        </>
+      ) : null}
 
       {isFormOpen
         ? createPortal(
-            <div className="fixed inset-0 z-[90] flex items-start justify-center bg-slate-900/45 p-4 sm:items-center">
+            <div className="fixed inset-0 z-[210] flex items-start justify-center bg-slate-900/45 p-4 sm:items-center">
               <div className="popup-modal hide-scrollbar max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl">
                 <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
                   <div>
@@ -1832,7 +1905,12 @@ function OrganizerDashboardPage() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
-              <FormField label="Image URL" hint="Add a high-quality banner image link." example="https://images.example.com/event.jpg" className="sm:col-span-2">
+              <FormField
+                label="Cover image URL"
+                hint="Main banner image (shown first). Optional extra images below power the detail-page slideshow."
+                example="https://images.example.com/event.jpg"
+                className="sm:col-span-2"
+              >
                 <input
                   type="url"
                   value={form.image_url}
@@ -1840,6 +1918,59 @@ function OrganizerDashboardPage() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
+              <div className="space-y-2 sm:col-span-2">
+                <FormField
+                  label="Additional banner images"
+                  hint="Up to 12 extra photo URLs for the event page carousel (same cover is not duplicated on save)."
+                  example=""
+                  className="!mb-0"
+                >
+                  <div className="space-y-2">
+                    {(form.gallery_image_urls || []).map((row, idx) => (
+                      <div key={`gal-${idx}`} className="flex gap-2">
+                        <input
+                          type="url"
+                          value={row}
+                          onChange={(e) =>
+                            setForm((prev) => {
+                              const next = [...(prev.gallery_image_urls || [])];
+                              next[idx] = e.target.value;
+                              return { ...prev, gallery_image_urls: next };
+                            })
+                          }
+                          placeholder="https://…"
+                          className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              gallery_image_urls: (prev.gallery_image_urls || []).filter((_, i) => i !== idx)
+                            }))
+                          }
+                          className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={(form.gallery_image_urls || []).length >= 12}
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          gallery_image_urls: [...(prev.gallery_image_urls || []), ""]
+                        }))
+                      }
+                      className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      + Add image URL
+                    </button>
+                  </div>
+                </FormField>
+              </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                 <p className="text-sm font-semibold text-slate-900">Event Highlights</p>
                 <p className="mt-1 text-xs text-slate-500">Select all highlights that apply to this event.</p>
@@ -1895,7 +2026,7 @@ function OrganizerDashboardPage() {
 
       {isDeleteOpen
         ? createPortal(
-            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/45 p-4">
+            <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/45 p-4">
               <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
                 <h3 className="text-lg font-semibold text-slate-900">Delete Event Listing</h3>
                 <p className="mt-2 text-sm text-slate-600">
@@ -1925,6 +2056,8 @@ function OrganizerDashboardPage() {
         : null}
     </>
   );
-}
+});
+
+OrganizerDashboardPage.displayName = "OrganizerDashboardPage";
 
 export default OrganizerDashboardPage;

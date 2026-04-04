@@ -98,6 +98,11 @@ export async function syncAdminNewsletterSubscribersToMailchimp() {
   return response.data;
 }
 
+export async function deleteAdminNewsletterSubscriber(id) {
+  const response = await api.delete(`/admin/newsletter/subscribers/${id}`);
+  return response.data;
+}
+
 export async function fetchAdminContactMessages(params = {}) {
   const response = await api.get("/admin/contact/messages", { params });
   return response.data;

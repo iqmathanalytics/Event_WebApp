@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { loginStaff } from "../services/authService";
 import AuthBrandLogo from "../components/AuthBrandLogo";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function StaffLoginPage() {
   const { login } = useAuth();
@@ -11,6 +12,7 @@ function StaffLoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  useRouteContentReady(loading);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -25,9 +27,15 @@ function StaffLoginPage() {
       login(payload);
       const isAdmin = payload?.user?.role === "admin";
       const canOrganize = payload?.user?.organizer_enabled === 1 || payload?.user?.role === "organizer";
-      navigate(isAdmin ? "/dashboard/admin" : canOrganize ? "/dashboard/organizer" : "/dashboard/user");
+      navigate(
+        isAdmin
+          ? "/dashboard/admin"
+          : canOrganize
+            ? { pathname: "/dashboard/user", hash: "host-events" }
+            : "/dashboard/user"
+      );
     } catch (_err) {
-      setError("Invalid credentials or this account must use user login.");
+      setError("We couldn't sign you in. Check your email and password and try again.");
     } finally {
       setLoading(false);
     }

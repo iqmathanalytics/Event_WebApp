@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FiDownload, FiMail, FiMessageSquare } from "react-icons/fi";
+import { FiDownload, FiMail, FiMessageSquare, FiTrash2 } from "react-icons/fi";
 import { formatDateUS } from "../utils/format";
 
 function AdminCommunicationsSection({
@@ -17,7 +17,9 @@ function AdminCommunicationsSection({
   onExportNewsletter,
   onExportContact,
   onSyncNewsletterMailchimp,
-  syncingNewsletterMailchimp
+  syncingNewsletterMailchimp,
+  onDeleteNewsletterSubscriber,
+  deletingNewsletterId
 }) {
   const perPageMobile = 5;
   const [mobilePage, setMobilePage] = useState(1);
@@ -55,6 +57,24 @@ function AdminCommunicationsSection({
       const text = String(raw || "").trim();
       return text ? text : "—";
     }
+  };
+
+  /** Guest newsletter signups store free-text / chip labels in interests_note; registered users use interests_json. */
+  const newsletterFirstName = (row) => row?.first_name ?? row?.firstName ?? "";
+  const newsletterLastName = (row) => row?.last_name ?? row?.lastName ?? "";
+
+  const newsletterRowId = (row) => Number(row?.id);
+
+  const formatNewsletterInterestedIn = (row) => {
+    const note = String(row?.interests_note || "").trim();
+    const jsonLabel = formatInterests(row?.interests_json);
+    if (note && jsonLabel && jsonLabel !== "—") {
+      return `${jsonLabel}; ${note}`;
+    }
+    if (note) {
+      return note;
+    }
+    return jsonLabel;
   };
 
   return (
@@ -135,15 +155,30 @@ function AdminCommunicationsSection({
               newsletterRows
                 .slice((mobilePage - 1) * perPageMobile, (mobilePage - 1) * perPageMobile + perPageMobile)
                 .map((row) => (
-                <article key={`m-news-${row.id}`} className="rounded-2xl border border-slate-200 bg-white p-2.5">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {[row.first_name, row.last_name].filter(Boolean).join(" ") || "—"}
-                  </p>
+                <article key={`m-news-${newsletterRowId(row)}`} className="rounded-2xl border border-slate-200 bg-white p-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {[newsletterFirstName(row), newsletterLastName(row)].filter(Boolean).join(" ") || "—"}
+                    </p>
+                    <button
+                      type="button"
+                      title="Remove subscriber"
+                      disabled={deletingNewsletterId === newsletterRowId(row)}
+                      onClick={() => onDeleteNewsletterSubscriber?.(newsletterRowId(row))}
+                      className="shrink-0 rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deletingNewsletterId === newsletterRowId(row) ? (
+                        <span className="text-[11px] font-semibold">…</span>
+                      ) : (
+                        <FiTrash2 className="h-4 w-4" aria-hidden />
+                      )}
+                    </button>
+                  </div>
                   <p className="text-xs text-slate-600">{row.email}</p>
                   <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
                     <p><span className="font-semibold">Mobile:</span> {row.mobile_number || "—"}</p>
                     <p><span className="font-semibold">City:</span> {row.city_name || "—"}</p>
-                    <p className="col-span-2"><span className="font-semibold">Interested In:</span> {formatInterests(row.interests_json)}</p>
+                    <p className="col-span-2"><span className="font-semibold">Interested In:</span> {formatNewsletterInterestedIn(row)}</p>
                     <p><span className="font-semibold">Influencer:</span> {Number(row.wants_influencer) === 1 ? "Yes" : "No"}</p>
                     <p><span className="font-semibold">Dealer:</span> {Number(row.wants_deal) === 1 ? "Yes" : "No"}</p>
                   </div>
@@ -186,34 +221,50 @@ function AdminCommunicationsSection({
                   <th className="px-4 py-2">Interested In</th>
                   <th className="px-4 py-2">Influencer</th>
                   <th className="px-4 py-2">Dealer</th>
+                  <th className="w-px px-4 py-2 text-right"> </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loadingNewsletter ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                    <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
                       Loading…
                     </td>
                   </tr>
                 ) : newsletterRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                    <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
                       No subscribers yet.
                     </td>
                   </tr>
                 ) : (
                   newsletterRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50/80">
-                      <td className="px-4 py-2.5 text-slate-700">{row.first_name || "—"}</td>
-                      <td className="px-4 py-2.5 text-slate-700">{row.last_name || "—"}</td>
+                    <tr key={newsletterRowId(row)} className="hover:bg-slate-50/80">
+                      <td className="px-4 py-2.5 text-slate-700">{newsletterFirstName(row) || "—"}</td>
+                      <td className="px-4 py-2.5 text-slate-700">{newsletterLastName(row) || "—"}</td>
                       <td className="px-4 py-2.5 font-medium text-slate-900">{row.email}</td>
                       <td className="px-4 py-2.5 text-slate-600">{row.mobile_number || "—"}</td>
                       <td className="px-4 py-2.5 text-slate-600">
                         {row.city_name || "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-600">{formatInterests(row.interests_json)}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{formatNewsletterInterestedIn(row)}</td>
                       <td className="px-4 py-2.5 text-slate-600">{Number(row.wants_influencer) === 1 ? "Yes" : "No"}</td>
                       <td className="px-4 py-2.5 text-slate-600">{Number(row.wants_deal) === 1 ? "Yes" : "No"}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <button
+                          type="button"
+                          title="Remove subscriber"
+                          disabled={deletingNewsletterId === newsletterRowId(row)}
+                          onClick={() => onDeleteNewsletterSubscriber?.(newsletterRowId(row))}
+                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingNewsletterId === newsletterRowId(row) ? (
+                            <span className="text-xs font-semibold text-slate-500">…</span>
+                          ) : (
+                            <FiTrash2 className="h-4 w-4" aria-hidden />
+                          )}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}

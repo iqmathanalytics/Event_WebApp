@@ -11,10 +11,8 @@ import DealsPage from "./pages/DealsPage";
 import LoginPage from "./pages/LoginPage";
 import StaffLoginPage from "./pages/StaffLoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import CompleteSignupPage from "./pages/CompleteSignupPage";
 import UserDashboardPage from "./pages/UserDashboardPage";
 import UserSubmissionsPage from "./pages/UserSubmissionsPage";
-import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ContactPage from "./pages/ContactPage";
 import NewsletterPage from "./pages/NewsletterPage";
@@ -23,12 +21,16 @@ import AdminRoute from "./components/AdminRoute";
 import UserRoute from "./components/UserRoute";
 import OrganizerRoute from "./components/OrganizerRoute";
 import AnimatedBackground from "./components/AnimatedBackground";
+import LogoutOverlay from "./components/LogoutOverlay";
+import NavigationProgress from "./components/NavigationProgress";
 import ScrollToTop from "./components/ScrollToTop";
 
 function App() {
   return (
     <div className="relative isolate min-h-screen overflow-x-hidden">
       <AnimatedBackground />
+      <LogoutOverlay />
+      <NavigationProgress />
       <ScrollToTop />
       <div className="relative z-[2]">
         <Routes>
@@ -43,13 +45,13 @@ function App() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/newsletter" element={<NewsletterPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/staff-login" element={<StaffLoginPage />} />
+            <Route path="/admin" element={<StaffLoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route
               path="/complete-signup"
               element={
                 <UserRoute>
-                  <CompleteSignupPage />
+                  <Navigate to="/dashboard/user" replace />
                 </UserRoute>
               }
             />
@@ -67,14 +69,13 @@ function App() {
           </Route>
 
           <Route
+            path="/dashboard/organizer"
             element={
               <OrganizerRoute>
-                <DashboardLayout />
+                <Navigate to={{ pathname: "/dashboard/user", hash: "host-events" }} replace />
               </OrganizerRoute>
             }
-          >
-            <Route path="/dashboard/organizer" element={<OrganizerDashboardPage />} />
-          </Route>
+          />
 
           <Route
             element={

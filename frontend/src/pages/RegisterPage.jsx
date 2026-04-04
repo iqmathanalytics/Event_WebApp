@@ -1,12 +1,21 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { register as registerRequest, registerWithGoogle } from "../services/authService";
 import useAuth from "../hooks/useAuth";
 import AuthBrandLogo from "../components/AuthBrandLogo";
 import GoogleContinueButton, { AuthDividerOr, isGoogleAuthConfigured } from "../components/GoogleContinueButton";
-import RegistrationOnboardingForm from "../components/RegistrationOnboardingForm";
 import { safeReturnPath } from "../utils/postGoogleSignIn";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import { REGISTRATION_DISCLAIMER_PARAGRAPHS } from "../constants/registerDisclaimer";
+
+const mobileOk = (s) => {
+  const t = String(s || "").trim();
+  if (!t) {
+    return true;
+  }
+  return t.length >= 8 && t.length <= 25 && /^[0-9+()\-\s]+$/.test(t);
+};
 
 function RegisterPage() {
   const navigate = useNavigate();
@@ -17,72 +26,39 @@ function RegisterPage() {
     last_name: "",
     email: "",
     mobile_number: "",
-    city_id: "",
-    interests: [],
-    wants_influencer: false,
-    wants_deal: false,
     password: ""
-  });
-  const [influencerProfile, setInfluencerProfile] = useState({
-    name: "",
-    bio: "",
-    category_id: "",
-    contact_email: "",
-    profile_image_url: ""
-  });
-  const [dealProfile, setDealProfile] = useState({
-    name: "",
-    business_email: "",
-    business_mobile: "",
-    location_text: "",
-    category_id: "",
-    bio: "",
-    website_or_social_link: "",
-    profile_image_url: ""
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [activeModal, setActiveModal] = useState(null);
-
-  useEffect(() => {
-    if (!activeModal) {
-      return undefined;
-    }
-    const prevBody = document.body.style.overflow;
-    const prevHtml = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevBody;
-      document.documentElement.style.overflow = prevHtml;
-    };
-  }, [activeModal]);
+  const [agreedDisclaimer, setAgreedDisclaimer] = useState(false);
+  useRouteContentReady(loading || googleLoading);
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (form.interests.length < 1) {
-      setError("Select at least one interest.");
+    if (!agreedDisclaimer) {
+      setError("Please confirm that you have read and agree to the terms above.");
+      return;
+    }
+    if (!mobileOk(form.mobile_number)) {
+      setError(
+        "If you enter a phone number, use at least 8 characters (digits, +, spaces, or parentheses), or leave the field blank."
+      );
       return;
     }
     try {
       setLoading(true);
       const payload = {
-        ...form,
-        city_id: Number(form.city_id),
-        influencer_profile: form.wants_influencer
-          ? {
-              ...influencerProfile,
-              category_id: Number(influencerProfile.category_id)
-            }
-          : undefined,
-        deal_profile: form.wants_deal
-          ? {
-              ...dealProfile,
-              category_id: Number(dealProfile.category_id)
-            }
-          : undefined
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        email: String(form.email || "").trim().toLowerCase(),
+        mobile_number: form.mobile_number.trim() || null,
+        password: form.password,
+        city_id: null,
+        interests: [],
+        wants_influencer: false,
+        wants_deal: false
       };
       const response = await registerRequest(payload);
       if (response?.data?.accessToken && response?.data?.user) {
@@ -91,99 +67,170 @@ function RegisterPage() {
       const next = safeReturnPath(searchParams.get("next"));
       navigate(next || "/dashboard/user");
     } catch (err) {
-      setError(err?.response?.data?.message || "Registration failed. Please review your details.");
+      setError(err?.response?.data?.message || "Registration could not be completed. Please check your details and try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, ease: "easeOut" }}
-      className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-soft"
-    >
-      <div className="mb-4 flex justify-center">
-        <AuthBrandLogo />
-      </div>
-      <h1 className="text-2xl font-bold">Create your account</h1>
-      <p className="mt-1 text-sm text-slate-600">Tell us a bit about you so we can personalize your city experience.</p>
-      <form onSubmit={onSubmit} className="mt-5 space-y-4">
-        <RegistrationOnboardingForm
-          form={form}
-          setForm={setForm}
-          influencerProfile={influencerProfile}
-          setInfluencerProfile={setInfluencerProfile}
-          dealProfile={dealProfile}
-          setDealProfile={setDealProfile}
-          activeModal={activeModal}
-          setActiveModal={setActiveModal}
-          emailMode="editable"
-        />
-        <input
-          type="password"
-          required
-          placeholder="Password"
-          value={form.password}
-          onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))}
-          className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
-        />
-        <button
-          type="submit"
-          disabled={loading || googleLoading}
-          className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {loading ? "Creating account..." : "Register"}
-        </button>
-      </form>
-      {isGoogleAuthConfigured() ? (
-        <>
-          <AuthDividerOr />
-          <GoogleContinueButton
-            disabled={loading || googleLoading}
-            onCredential={async (credential) => {
-              if (credential == null) {
-                setError("Google sign-in was cancelled or could not complete.");
-                return;
-              }
-              setError("");
-              setGoogleLoading(true);
-              try {
-                const response = await registerWithGoogle(credential);
-                const payload = response?.data;
-                if (!payload?.accessToken || !payload?.refreshToken || !payload?.user) {
-                  throw new Error("Invalid Google sign-in response");
-                }
-                login(payload);
-                const next = safeReturnPath(searchParams.get("next"));
-                navigate("/complete-signup", {
-                  replace: true,
-                  state: { next: next || "/dashboard/user" }
-                });
-              } catch (err) {
-                setError(err?.response?.data?.message || err?.message || "Google sign-in failed. Try again.");
-              } finally {
-                setGoogleLoading(false);
-              }
-            }}
-          />
-          {googleLoading ? (
-            <p className="mt-2 text-center text-sm text-slate-500">Continuing with Google…</p>
+    <div className="relative mx-auto w-full max-w-2xl px-3 sm:px-4 lg:px-0">
+      <div
+        className="pointer-events-none absolute -left-24 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-200/70 via-rose-100/40 to-transparent blur-2xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -bottom-12 -right-20 h-56 w-56 rounded-full bg-gradient-to-tl from-cyan-200/60 via-sky-100/40 to-transparent blur-2xl"
+        aria-hidden
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.32, ease: "easeOut" }}
+        className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-white/95 shadow-[0_24px_56px_-20px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/[0.04] backdrop-blur-sm"
+      >
+        <div className="h-1 w-full bg-gradient-to-r from-brand-500 via-fuchsia-500 to-cyan-500" aria-hidden />
+        <div className="p-6 sm:p-9 sm:pb-10">
+          <div className="mb-5 flex justify-center">
+            <AuthBrandLogo compact />
+          </div>
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">New member registration</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">
+              Create your Yay! Tickets account
+            </h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-[0.9375rem]">
+              Welcome to the side of the city that stays alive after dark—where the lights, the crowds, and the quiet
+              corners all have a story. Curate your nights, lift up what you love, and make this place feel a little more
+              yours.
+            </p>
+          </div>
+
+          <form onSubmit={onSubmit} className="mt-8 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                type="text"
+                required
+                placeholder="First name"
+                value={form.first_name}
+                onChange={(e) => setForm((s) => ({ ...s, first_name: e.target.value }))}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+              />
+              <input
+                type="text"
+                required
+                placeholder="Last name"
+                value={form.last_name}
+                onChange={(e) => setForm((s) => ({ ...s, last_name: e.target.value }))}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none sm:col-span-1"
+              />
+            </div>
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="Email address"
+              value={form.email}
+              onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+            />
+            <input
+              type="text"
+              autoComplete="tel"
+              placeholder="Mobile phone (optional)"
+              value={form.mobile_number}
+              onChange={(e) => setForm((s) => ({ ...s, mobile_number: e.target.value }))}
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+            />
+
+            <div className="rounded-2xl border border-slate-200/90 bg-slate-50/90 p-4 text-left sm:p-5">
+              <h2 className="text-sm font-bold text-slate-900">Acknowledgment &amp; terms</h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                Please review the following before you register.
+              </p>
+              <div className="mt-4 max-h-[min(14rem,38vh)] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-slate-600 sm:max-h-[min(16rem,32vh)]">
+                {REGISTRATION_DISCLAIMER_PARAGRAPHS.map((para, i) => (
+                  <p key={i}>{para}</p>
+                ))}
+              </div>
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200/80 bg-white/80 p-3 sm:p-4">
+                <input
+                  type="checkbox"
+                  checked={agreedDisclaimer}
+                  onChange={(e) => setAgreedDisclaimer(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-sm font-semibold leading-snug text-slate-800">
+                  I have read and agree to the acknowledgment above, and I understand that the Yay! Tickets Terms of
+                  Service and Privacy Policy apply to my use of the platform.
+                </span>
+              </label>
+            </div>
+
+            <input
+              type="password"
+              required
+              autoComplete="new-password"
+              placeholder="Password (minimum 8 characters)"
+              value={form.password}
+              onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))}
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={loading || googleLoading}
+              className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/20 transition hover:bg-brand-700 disabled:opacity-60"
+            >
+              {loading ? "Creating your account…" : "Register and open my hub"}
+            </button>
+          </form>
+
+          {isGoogleAuthConfigured() ? (
+            <>
+              <AuthDividerOr />
+              <GoogleContinueButton
+                disabled={loading || googleLoading}
+                onCredential={async (credential) => {
+                  if (credential == null) {
+                    setError("Google sign-in did not complete. Please try again.");
+                    return;
+                  }
+                  setError("");
+                  setGoogleLoading(true);
+                  try {
+                    const response = await registerWithGoogle(credential);
+                    const payload = response?.data;
+                    if (!payload?.accessToken || !payload?.refreshToken || !payload?.user) {
+                      throw new Error("Invalid Google sign-in response");
+                    }
+                    login(payload);
+                    const next = safeReturnPath(searchParams.get("next"));
+                    navigate(next || "/dashboard/user", { replace: true });
+                  } catch (err) {
+                    setError(err?.response?.data?.message || err?.message || "Google sign-in failed. Try again.");
+                  } finally {
+                    setGoogleLoading(false);
+                  }
+                }}
+              />
+              {googleLoading ? (
+                <p className="mt-2 text-center text-sm text-slate-500">Securing your account with Google…</p>
+              ) : null}
+            </>
           ) : null}
-        </>
-      ) : null}
-      {error ? <p className="mt-3 text-sm font-medium text-rose-600">{error}</p> : null}
-      <p className="mt-4 text-sm text-slate-600">
-        Organizer and admin accounts are created only by authorized admins.
-      </p>
-      <p className="mt-2 text-sm text-slate-600">
-        Already have an account?{" "}
-        <Link to="/login" className="font-semibold text-brand-600">
-          Sign in
-        </Link>
-      </p>
-    </motion.div>
+
+          {error ? <p className="mt-3 text-center text-sm font-medium text-rose-600">{error}</p> : null}
+
+          <p className="mt-6 text-center text-sm text-slate-600">
+            Already registered?{" "}
+            <Link to="/login" className="font-semibold text-brand-600 underline-offset-2 hover:underline">
+              Sign in to your account
+            </Link>
+          </p>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 

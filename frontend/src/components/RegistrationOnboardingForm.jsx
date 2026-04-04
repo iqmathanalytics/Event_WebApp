@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { createPortal } from "react-dom";
 import { FiInfo } from "react-icons/fi";
 import { categories, cities } from "../utils/filterOptions";
 
@@ -29,28 +28,31 @@ export function FormField({ label, hint, example, className = "", children }) {
   );
 }
 
-function renderInPortal(node) {
-  if (typeof document === "undefined") {
-    return node;
-  }
-  return createPortal(node, document.body);
+function ExpandPanel({ open, children }) {
+  return (
+    <AnimatePresence initial={false}>
+      {open ? (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+          className="overflow-hidden"
+        >
+          <div className="border-t border-brand-200/60 bg-gradient-to-b from-brand-50/50 to-white px-3 pb-4 pt-3 sm:px-4">
+            {children}
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 }
 
 /**
- * Shared onboarding fields: names, email (optional modes), mobile, city, interests,
- * influencer/dealer toggles + modals — same UI as email registration (minus password).
+ * Shared onboarding: names, email, optional mobile, city, interests,
+ * influencer / deal optional sections with checkbox + inline expandable details.
  */
-export default function RegistrationOnboardingForm({
-  form,
-  setForm,
-  influencerProfile,
-  setInfluencerProfile,
-  dealProfile,
-  setDealProfile,
-  activeModal,
-  setActiveModal,
-  emailMode = "editable"
-}) {
+export default function RegistrationOnboardingForm({ form, setForm, influencerProfile, setInfluencerProfile, dealProfile, setDealProfile, emailMode = "editable" }) {
   const eventCategories = useMemo(() => categories, []);
   const dealerLocationOptions = useMemo(
     () => [
@@ -63,9 +65,7 @@ export default function RegistrationOnboardingForm({
   const toggleInterest = (value) => {
     setForm((s) => ({
       ...s,
-      interests: s.interests.includes(value)
-        ? s.interests.filter((item) => item !== value)
-        : [...s.interests, value]
+      interests: s.interests.includes(value) ? s.interests.filter((item) => item !== value) : [...s.interests, value]
     }));
   };
 
@@ -97,9 +97,7 @@ export default function RegistrationOnboardingForm({
           required
           placeholder="Email"
           value={form.email}
-          onChange={
-            emailReadOnly ? undefined : (e) => setForm((s) => ({ ...s, email: e.target.value }))
-          }
+          onChange={emailReadOnly ? undefined : (e) => setForm((s) => ({ ...s, email: e.target.value }))}
           readOnly={emailReadOnly}
           className={`w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none ${
             emailReadOnly ? "cursor-not-allowed bg-slate-50 text-slate-600" : ""
@@ -107,8 +105,7 @@ export default function RegistrationOnboardingForm({
         />
         <input
           type="text"
-          required
-          placeholder="Mobile number"
+          placeholder="Mobile (optional)"
           value={form.mobile_number}
           onChange={(e) => setForm((s) => ({ ...s, mobile_number: e.target.value }))}
           className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
@@ -138,7 +135,7 @@ export default function RegistrationOnboardingForm({
                 type="button"
                 onClick={() => toggleInterest(option)}
                 className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                  active ? "bg-brand-600 text-white" : "bg-white text-slate-700 hover:bg-slate-100"
+                  active ? "bg-brand-600 text-white shadow-sm" : "bg-white text-slate-700 ring-1 ring-slate-200/80 hover:bg-slate-100"
                 }`}
               >
                 {option}
@@ -147,342 +144,234 @@ export default function RegistrationOnboardingForm({
           })}
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => {
-            setForm((s) => ({ ...s, wants_influencer: !s.wants_influencer }));
-            setActiveModal("influencer");
-          }}
-          className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
-            form.wants_influencer
-              ? "border-brand-500 bg-brand-50 text-brand-700"
-              : "border-slate-300 text-slate-700 hover:bg-slate-50"
+
+      <div className="space-y-3">
+        <div
+          className={`overflow-hidden rounded-2xl border transition-shadow ${
+            form.wants_influencer ? "border-brand-400/60 shadow-[0_0_0_1px_rgba(217,70,239,0.12)]" : "border-slate-200"
           }`}
         >
-          Want to become an influencer? {form.wants_influencer ? "Yes" : "Tap to add profile"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setForm((s) => ({ ...s, wants_deal: !s.wants_deal }));
-            setActiveModal("deal");
-          }}
-          className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
-            form.wants_deal
-              ? "border-brand-500 bg-brand-50 text-brand-700"
-              : "border-slate-300 text-slate-700 hover:bg-slate-50"
+          <label className="flex cursor-pointer items-start gap-3 px-4 py-3.5 transition hover:bg-slate-50/80">
+            <input
+              type="checkbox"
+              checked={form.wants_influencer}
+              onChange={(e) => setForm((s) => ({ ...s, wants_influencer: e.target.checked }))}
+              className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-slate-900">Are you an influencer?</span>
+              <span className="mt-0.5 block text-xs text-slate-600">
+                Check this to add your creator profile — we&apos;ll review it after you register.
+              </span>
+            </span>
+          </label>
+          <ExpandPanel open={form.wants_influencer}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField
+                label="Profile Name"
+                hint="Your public creator or brand name."
+                example="Ava Luxe"
+                className="sm:col-span-2"
+              >
+                <input
+                  required={form.wants_influencer}
+                  placeholder="Influencer name"
+                  value={influencerProfile.name}
+                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, name: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField
+                label="Bio"
+                hint="Short summary of your niche and audience."
+                example="Fashion and lifestyle in New York."
+                className="sm:col-span-2"
+              >
+                <textarea
+                  rows={3}
+                  required={form.wants_influencer}
+                  placeholder="Bio"
+                  value={influencerProfile.bio}
+                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, bio: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="City" hint="Primary operating city.">
+                <select
+                  required={form.wants_influencer}
+                  value={form.city_id}
+                  onChange={(e) => setForm((s) => ({ ...s, city_id: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                >
+                  <option value="">Select city</option>
+                  {cities.map((city) => (
+                    <option key={city.value} value={city.value}>
+                      {city.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Category" hint="Content category.">
+                <select
+                  required={form.wants_influencer}
+                  value={influencerProfile.category_id}
+                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, category_id: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                >
+                  <option value="">Select category</option>
+                  {eventCategories.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Contact Email" hint="Where brands can reach you." example="creator@example.com">
+                <input
+                  required={form.wants_influencer}
+                  type="email"
+                  placeholder="Contact email"
+                  value={influencerProfile.contact_email}
+                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, contact_email: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Profile Image URL" hint="Public image link." example="https://…">
+                <input
+                  type="url"
+                  placeholder="Profile image URL"
+                  value={influencerProfile.profile_image_url}
+                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, profile_image_url: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+            </div>
+          </ExpandPanel>
+        </div>
+
+        <div
+          className={`overflow-hidden rounded-2xl border transition-shadow ${
+            form.wants_deal ? "border-emerald-400/60 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]" : "border-slate-200"
           }`}
         >
-          Have hot deals to share? {form.wants_deal ? "Yes" : "Tap to add deal draft"}
-        </button>
+          <label className="flex cursor-pointer items-start gap-3 px-4 py-3.5 transition hover:bg-slate-50/80">
+            <input
+              type="checkbox"
+              checked={form.wants_deal}
+              onChange={(e) => setForm((s) => ({ ...s, wants_deal: e.target.checked }))}
+              className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-slate-900">Have a hot deal to share?</span>
+              <span className="mt-0.5 block text-xs text-slate-600">
+                Add a draft dealer profile — admin approval is required before posting deals.
+              </span>
+            </span>
+          </label>
+          <ExpandPanel open={form.wants_deal}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField label="Business Name" hint="Store or brand name." example="Glow City Deals" className="sm:col-span-2">
+                <input
+                  required={form.wants_deal}
+                  placeholder="Business name"
+                  value={dealProfile.name}
+                  onChange={(e) => setDealProfile((s) => ({ ...s, name: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Business Email" hint="Official contact email." example="hello@…">
+                <input
+                  required={form.wants_deal}
+                  type="email"
+                  placeholder="Business email"
+                  value={dealProfile.business_email}
+                  onChange={(e) => setDealProfile((s) => ({ ...s, business_email: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Business Mobile" hint="WhatsApp or phone for inquiries." example="+1 512 555 0199">
+                <input
+                  required={form.wants_deal}
+                  placeholder="Business mobile"
+                  value={dealProfile.business_mobile}
+                  onChange={(e) => setDealProfile((s) => ({ ...s, business_mobile: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Business Location" hint="City or Virtual / Online.">
+                <select
+                  required={form.wants_deal}
+                  value={dealerLocationOptions.find((opt) => opt.label === dealProfile.location_text)?.value || ""}
+                  onChange={(e) => {
+                    const option = dealerLocationOptions.find((opt) => String(opt.value) === String(e.target.value));
+                    if (!option) {
+                      return;
+                    }
+                    setDealProfile((s) => ({ ...s, location_text: option.label }));
+                    if (option.cityId) {
+                      setForm((s) => ({ ...s, city_id: String(option.cityId) }));
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                >
+                  <option value="">Select location</option>
+                  {dealerLocationOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Category" hint="Closest match for your offers.">
+                <select
+                  required={form.wants_deal}
+                  value={dealProfile.category_id}
+                  onChange={(e) => setDealProfile((s) => ({ ...s, category_id: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                >
+                  <option value="">Select category</option>
+                  {eventCategories.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField
+                label="About / Bio"
+                hint="What you offer."
+                example="Premium beauty offers in NYC."
+                className="sm:col-span-2"
+              >
+                <textarea
+                  rows={3}
+                  required={form.wants_deal}
+                  placeholder="About / bio"
+                  value={dealProfile.bio}
+                  onChange={(e) => setDealProfile((s) => ({ ...s, bio: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Website / Social" hint="Public URL." example="https://instagram.com/…" className="sm:col-span-2">
+                <input
+                  placeholder="Website / social link"
+                  value={dealProfile.website_or_social_link}
+                  onChange={(e) => setDealProfile((s) => ({ ...s, website_or_social_link: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Logo / image URL" hint="Optional public image." className="sm:col-span-2">
+                <input
+                  placeholder="Profile image / logo URL"
+                  value={dealProfile.profile_image_url}
+                  onChange={(e) => setDealProfile((s) => ({ ...s, profile_image_url: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+            </div>
+          </ExpandPanel>
+        </div>
       </div>
-
-      {renderInPortal(
-        <AnimatePresence>
-          {activeModal === "influencer" && form.wants_influencer ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 px-3 py-4 sm:px-6"
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="flex h-[min(76vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
-              >
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-                  <h3 className="text-lg font-semibold">Influencer onboarding</h3>
-                  <p className="mb-4 text-sm text-slate-600">
-                    Complete this now and we will submit it with your registration.
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 pb-16 sm:grid-cols-2">
-                    <FormField
-                      label="Profile Name"
-                      hint="Enter your public creator or brand name."
-                      example="Ava Luxe"
-                      className="sm:col-span-2"
-                    >
-                      <input
-                        required={form.wants_influencer}
-                        placeholder="Influencer name"
-                        value={influencerProfile.name}
-                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, name: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField
-                      label="Bio"
-                      hint="Write a short summary of your niche and audience."
-                      example="Fashion and lifestyle creator in New York."
-                      className="sm:col-span-2"
-                    >
-                      <textarea
-                        rows={4}
-                        required={form.wants_influencer}
-                        placeholder="Bio"
-                        value={influencerProfile.bio}
-                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, bio: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField label="City" hint="Choose your primary operating city.">
-                      <select
-                        required={form.wants_influencer}
-                        value={form.city_id}
-                        onChange={(e) => setForm((s) => ({ ...s, city_id: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      >
-                        <option value="">Select city</option>
-                        {cities.map((city) => (
-                          <option key={city.value} value={city.value}>
-                            {city.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField label="Category" hint="Select the content category that fits your profile.">
-                      <select
-                        required={form.wants_influencer}
-                        value={influencerProfile.category_id}
-                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, category_id: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      >
-                        <option value="">Select category</option>
-                        {eventCategories.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField
-                      label="Contact Email"
-                      hint="Use an email where brands can contact you."
-                      example="creator@example.com"
-                    >
-                      <input
-                        required={form.wants_influencer}
-                        type="email"
-                        placeholder="Contact email"
-                        value={influencerProfile.contact_email}
-                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, contact_email: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField
-                      label="Profile Image URL"
-                      hint="Add a high-quality profile image link."
-                      example="https://images.example.com/profile.jpg"
-                    >
-                      <input
-                        type="url"
-                        placeholder="Profile image URL"
-                        value={influencerProfile.profile_image_url}
-                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, profile_image_url: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                  </div>
-                </div>
-                <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur sm:px-6">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm((s) => ({ ...s, wants_influencer: false }));
-                      setActiveModal(null);
-                    }}
-                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveModal(null)}
-                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    Save details
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      )}
-
-      {renderInPortal(
-        <AnimatePresence>
-          {activeModal === "deal" && form.wants_deal ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 px-3 py-4 sm:px-6"
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="flex h-[min(76vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
-              >
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-                  <h3 className="text-lg font-semibold">Deal onboarding</h3>
-                  <p className="mb-4 text-sm text-slate-600">
-                    Create your dealer profile. Admin approval is required before posting deals.
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 pb-16 sm:grid-cols-2">
-                    <FormField
-                      label="Business Name"
-                      hint="Enter your store or brand name."
-                      example="Glow City Deals"
-                      className="sm:col-span-2"
-                    >
-                      <input
-                        required={form.wants_deal}
-                        placeholder="Business name"
-                        value={dealProfile.name}
-                        onChange={(e) => setDealProfile((s) => ({ ...s, name: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField
-                      label="Business Email"
-                      hint="Use your official business contact email."
-                      example="hello@glowcity.com"
-                    >
-                      <input
-                        required={form.wants_deal}
-                        type="email"
-                        placeholder="Business email"
-                        value={dealProfile.business_email}
-                        onChange={(e) => setDealProfile((s) => ({ ...s, business_email: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField
-                      label="Business Mobile"
-                      hint="Primary WhatsApp/contact number for deal inquiries."
-                      example="+1 512 555 0199"
-                    >
-                      <input
-                        required={form.wants_deal}
-                        placeholder="Business mobile"
-                        value={dealProfile.business_mobile}
-                        onChange={(e) => setDealProfile((s) => ({ ...s, business_mobile: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField
-                      label="Business Location"
-                      hint="Choose your city or Virtual / Online as business location."
-                    >
-                      <select
-                        required={form.wants_deal}
-                        value={dealerLocationOptions.find((opt) => opt.label === dealProfile.location_text)?.value || ""}
-                        onChange={(e) => {
-                          const option = dealerLocationOptions.find((opt) => String(opt.value) === String(e.target.value));
-                          if (!option) {
-                            return;
-                          }
-                          setDealProfile((s) => ({ ...s, location_text: option.label }));
-                          if (option.cityId) {
-                            setForm((s) => ({ ...s, city_id: String(option.cityId) }));
-                          }
-                        }}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      >
-                        <option value="">Select location</option>
-                        {dealerLocationOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField label="Category" hint="Select the closest category for your business offerings.">
-                      <select
-                        required={form.wants_deal}
-                        value={dealProfile.category_id}
-                        onChange={(e) => setDealProfile((s) => ({ ...s, category_id: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      >
-                        <option value="">Select category</option>
-                        {eventCategories.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField
-                      label="About / Bio"
-                      hint="Add a short summary of your business and what you offer."
-                      example="Curating premium beauty and wellness offers in NYC."
-                      className="sm:col-span-2"
-                    >
-                      <textarea
-                        rows={4}
-                        required={form.wants_deal}
-                        placeholder="About / bio"
-                        value={dealProfile.bio}
-                        onChange={(e) => setDealProfile((s) => ({ ...s, bio: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField
-                      label="Website / Social Link"
-                      hint="Add your business website or social page URL."
-                      example="https://instagram.com/glowcitydeals"
-                    >
-                      <input
-                        placeholder="Website / social link"
-                        value={dealProfile.website_or_social_link}
-                        onChange={(e) => setDealProfile((s) => ({ ...s, website_or_social_link: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                    <FormField
-                      label="Profile Image / Logo URL"
-                      hint="Paste a public logo or profile image URL."
-                      example="https://images.example.com/logo.png"
-                    >
-                      <input
-                        placeholder="Profile image / logo URL"
-                        value={dealProfile.profile_image_url}
-                        onChange={(e) => setDealProfile((s) => ({ ...s, profile_image_url: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      />
-                    </FormField>
-                  </div>
-                </div>
-                <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur sm:px-6">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm((s) => ({ ...s, wants_deal: false }));
-                      setActiveModal(null);
-                    }}
-                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveModal(null)}
-                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    Save details
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      )}
     </>
   );
 }

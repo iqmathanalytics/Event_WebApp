@@ -18,7 +18,8 @@ const { getPagination } = require("../utils/pagination");
 const {
   listSubscribersPaginated,
   getAllSubscribersForExport,
-  deleteSubscriberByEmail
+  deleteSubscriberByEmail,
+  deleteSubscriberById
 } = require("../models/newsletterModel");
 const { listMessagesPaginated, getAllMessagesForExport } = require("../models/contactModel");
 const {
@@ -276,6 +277,7 @@ function resolveEditableColumns(type) {
       "google_maps_link",
       "ticket_link",
       "image_url",
+      "gallery_image_urls",
       "duration_hours",
       "age_limit",
       "languages",
@@ -379,6 +381,12 @@ async function editListing({ type, id, payload }) {
       }
       if (key === "deal_event_discount_code") {
         return [key, value == null || value === "" ? null : String(value).trim()];
+      }
+      if (key === "gallery_image_urls") {
+        const urls = Array.isArray(value)
+          ? value.map((u) => String(u || "").trim()).filter(Boolean)
+          : [];
+        return [key, urls.length ? JSON.stringify(urls) : null];
       }
     }
     return [key, value];
@@ -487,6 +495,13 @@ async function listNewsletterSubscribers(query = {}) {
 
 async function getNewsletterSubscribersExportRows() {
   return getAllSubscribersForExport();
+}
+
+async function removeNewsletterSubscriberById(subscriberId) {
+  const deleted = await deleteSubscriberById(subscriberId);
+  if (!deleted) {
+    throw new ApiError(404, "Subscriber not found");
+  }
 }
 
 async function listContactMessages(query = {}) {
@@ -702,6 +717,7 @@ module.exports = {
   removeUserAccount,
   listNewsletterSubscribers,
   getNewsletterSubscribersExportRows,
+  removeNewsletterSubscriberById,
   listContactMessages,
   getContactMessagesExportRows,
   syncNewsletterSubscribersToMailchimp,

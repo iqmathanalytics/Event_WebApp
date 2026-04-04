@@ -1,19 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { FiEdit2, FiInfo, FiKey, FiUser } from "react-icons/fi";
 import useFavorites from "../hooks/useFavorites";
 import useAuth from "../hooks/useAuth";
+import YayUserGreeting from "../components/YayUserGreeting";
 import { fetchMyBookings } from "../services/bookingService";
-import {
-  fetchMyDealSubmissions,
-  fetchMyInfluencerSubmissions
-} from "../services/listingService";
+import { fetchMyDealSubmissions, fetchMyInfluencerSubmissions } from "../services/listingService";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { refreshAccessToken } from "../services/authService";
 import { changeMyPassword, enableOrganizer, fetchMyProfile, updateMyProfile } from "../services/userService";
 import { categories, cities } from "../utils/filterOptions";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import AppLoadingOverlay from "../components/AppLoadingOverlay";
+import OrganizerDashboardPage from "./OrganizerDashboardPage";
 
 const interestOptions = [
   "Events",
@@ -26,9 +27,8 @@ const interestOptions = [
   "Family Activities"
 ];
 const profileTabs = [
-  { key: "basic", label: "Basic" },
-  { key: "preferences", label: "Preferences" },
-  { key: "creator", label: "Creator Info" }
+  { key: "basic", label: "About you" },
+  { key: "preferences", label: "Interests" }
 ];
 
 function FormField({ label, hint, example, className = "", children }) {
@@ -110,6 +110,8 @@ function getFavoriteDetailsUrl(item) {
 }
 
 function UserDashboardPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user, accessToken, refreshToken, login } = useAuth();
   const { favorites, loading, toggleFavorite } = useFavorites();
   const [bookings, setBookings] = useState([]);
@@ -124,7 +126,11 @@ function UserDashboardPage() {
   const [submissionsError, setSubmissionsError] = useState("");
   const [profile, setProfile] = useState(user || null);
   const [showProfileEditor, setShowProfileEditor] = useState(false);
-  const [activeCreatorModal, setActiveCreatorModal] = useState(null);
+  const [creatorModal, setCreatorModal] = useState(null);
+  const [creatorHubOpen, setCreatorHubOpen] = useState(false);
+  const [eventsWorkspaceOpen, setEventsWorkspaceOpen] = useState(false);
+  const [organizerWorkspaceReady, setOrganizerWorkspaceReady] = useState(false);
+  const organizerFormShellRef = useRef(null);
   const [profileEditorTab, setProfileEditorTab] = useState("basic");
   const [profileForm, setProfileForm] = useState({
     first_name: "",
@@ -179,6 +185,7 @@ function UserDashboardPage() {
   const influencerStatus = myInfluencerSubmissions[0]?.status || null;
   const isInfluencerPending = String(influencerStatus || "").toLowerCase() === "pending";
   const isDealerPending = String(dealerStatus || "").toLowerCase() === "pending";
+  const hasRegisteredDealer = Boolean(profile?.dealer_profile);
   const hasInfluencerDetails = Boolean(
     influencerProfile.name?.trim() &&
       influencerProfile.bio?.trim() &&
@@ -201,8 +208,54 @@ function UserDashboardPage() {
       { value: "virtual", label: "Virtual / Online", cityId: null },
       ...cities.map((city) => ({ value: city.value, label: city.label, cityId: Number(city.value) }))
     ],
-    []
+    [cities]
   );
+
+  const businessProfileCta = useMemo(() => {
+    if (isDealerPending) {
+      return {
+        label: "Business profile · in review",
+        sub: "We’ll email you when it’s reviewed.",
+        disabled: true
+      };
+    }
+    if (hasRegisteredDealer) {
+      return {
+        label: "Edit business profile",
+        sub: "Update your dealer details for moderation.",
+        disabled: false
+      };
+    }
+    return {
+      label: "Register your business",
+      sub: "Set up your business profile — offers go live after approval.",
+      disabled: false
+    };
+  }, [isDealerPending, hasRegisteredDealer]);
+
+  const infStatusLower = String(influencerStatus || "").toLowerCase();
+
+  const influencerSpotlightCta = useMemo(() => {
+    if (infStatusLower === "pending") {
+      return {
+        label: "Creator spotlight · In review",
+        sub: "We’ll email you when it’s live."
+      };
+    }
+    if (myInfluencerSubmissions.length > 0 && infStatusLower === "approved") {
+      return { label: "Edit your creator spotlight", sub: "Polish your public creator page." };
+    }
+    if (myInfluencerSubmissions.length > 0 && infStatusLower === "rejected") {
+      return { label: "Revise your creator spotlight", sub: "Update and resubmit for review." };
+    }
+    if (hasInfluencerDetails) {
+      return { label: "Update your creator spotlight", sub: "Keep your story fresh." };
+    }
+    return {
+      label: "Share your creator story",
+      sub: "Tell us about you — get spotlighted on Yay!"
+    };
+  }, [infStatusLower, myInfluencerSubmissions.length, hasInfluencerDetails]);
 
   const isGoogleUser = useMemo(
     () => String(profile?.auth_provider || user?.auth_provider || "").toLowerCase() === "google",
@@ -210,6 +263,14 @@ function UserDashboardPage() {
   );
   /** Google: no local password yet — “Set” copy; otherwise still no current-password field */
   const isGoogleFirstPassword = isGoogleUser && profile?.has_local_password !== true;
+
+  useRouteContentReady(loadingBookings || loadingSubmissions);
+
+  useEffect(() => {
+    if (showProfileEditor && profileTabs.every((t) => t.key !== profileEditorTab)) {
+      setProfileEditorTab("basic");
+    }
+  }, [showProfileEditor, profileEditorTab]);
 
   useEffect(() => {
     setProfile(user || null);
@@ -294,7 +355,13 @@ function UserDashboardPage() {
   }, [profile]);
 
   useEffect(() => {
-    if (!showProfileEditor && !showPasswordModal) {
+    const overlayOpen =
+      showProfileEditor ||
+      showPasswordModal ||
+      creatorHubOpen ||
+      eventsWorkspaceOpen ||
+      Boolean(creatorModal);
+    if (!overlayOpen) {
       return undefined;
     }
     const prevBody = document.body.style.overflow;
@@ -305,7 +372,7 @@ function UserDashboardPage() {
       document.body.style.overflow = prevBody;
       document.documentElement.style.overflow = prevHtml;
     };
-  }, [showProfileEditor, showPasswordModal]);
+  }, [showProfileEditor, showPasswordModal, creatorHubOpen, eventsWorkspaceOpen, creatorModal]);
 
   const renderInPortal = (node) => {
     if (typeof document === "undefined") {
@@ -402,6 +469,169 @@ function UserDashboardPage() {
     });
   }, [bookings, bookingFilter]);
 
+  useEffect(() => {
+    if (location.hash === "#host-events") {
+      requestAnimationFrame(() => setEventsWorkspaceOpen(true));
+    }
+  }, [location.hash, location.pathname]);
+
+  useEffect(() => {
+    if (!eventsWorkspaceOpen) {
+      setOrganizerWorkspaceReady(false);
+    }
+  }, [eventsWorkspaceOpen]);
+
+  const handleOrganizerWorkspaceInitialReady = useCallback(() => {
+    setOrganizerWorkspaceReady(true);
+  }, []);
+
+  const showHostingWorkspaceLoading =
+    enablingOrganizer || (eventsWorkspaceOpen && !organizerWorkspaceReady);
+
+  const enableHostingIfNeeded = async () => {
+    if (!canOrganize) {
+      try {
+        setOrganizerEnableError("");
+        setEnablingOrganizer(true);
+        await enableOrganizer();
+        const refreshTokenValue = localStorage.getItem("refreshToken");
+        if (refreshTokenValue) {
+          const refreshed = await refreshAccessToken(refreshTokenValue);
+          const payload = refreshed?.data;
+          if (payload?.accessToken && payload?.refreshToken && payload?.user) {
+            login(payload);
+          }
+        }
+      } catch (_err) {
+        setOrganizerEnableError("We couldn’t turn on hosting just now. Try again in a moment.");
+      } finally {
+        setEnablingOrganizer(false);
+      }
+    }
+  };
+
+  const onListExperienceClick = async () => {
+    await enableHostingIfNeeded();
+    setEventsWorkspaceOpen(true);
+  };
+
+  const onPostEventClick = async () => {
+    await enableHostingIfNeeded();
+    requestAnimationFrame(() => {
+      organizerFormShellRef.current?.openCreateEvent();
+    });
+  };
+
+  const openInfluencerSpotlightModal = () => {
+    if (infStatusLower === "pending") {
+      return;
+    }
+    setProfileError("");
+    setProfileMessage("");
+    setProfileForm((s) => ({ ...s, wants_influencer: true }));
+    setCreatorModal("influencer");
+  };
+
+  const toNumberOrUndefined = (value) => {
+    if (value === "" || value === null || value === undefined) {
+      return undefined;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const persistInfluencerFromModal = async () => {
+    if (isInfluencerPending) {
+      setProfileError("Your creator profile is awaiting review. You can edit after a decision.");
+      return;
+    }
+    setProfileError("");
+    setProfileMessage("");
+    try {
+      setSavingProfile(true);
+      const response = await updateMyProfile({
+        first_name: profileForm.first_name,
+        last_name: profileForm.last_name,
+        email: profileForm.email,
+        mobile_number: profileForm.mobile_number,
+        city_id: toNumberOrUndefined(profileForm.city_id),
+        interests: profileForm.interests,
+        wants_influencer: true,
+        wants_deal: profileForm.wants_deal,
+        influencer_profile: {
+          ...influencerProfile,
+          category_id: toNumberOrUndefined(influencerProfile.category_id)
+        },
+        deal_profile: profileForm.wants_deal
+          ? { ...dealProfile, category_id: toNumberOrUndefined(dealProfile.category_id) }
+          : undefined
+      });
+      const latestProfile = response?.data || null;
+      setProfile(latestProfile);
+      if (latestProfile && accessToken) {
+        login({ accessToken, refreshToken, user: latestProfile });
+      }
+      setProfileMessage(response?.message || "Creator profile saved.");
+      setCreatorModal(null);
+      const influencerResult = await fetchMyInfluencerSubmissions();
+      setMyInfluencerSubmissions(influencerResult?.data || []);
+    } catch (err) {
+      setProfileError(err?.response?.data?.message || "Could not save creator profile.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const openDealerOnboardingModal = () => {
+    setProfileError("");
+    setProfileMessage("");
+    setProfileForm((s) => ({ ...s, wants_deal: true }));
+    setCreatorModal("dealer");
+  };
+
+  const persistDealerFromModal = async () => {
+    if (isDealerPending) {
+      setProfileError("Your dealer profile is awaiting review. You can edit after a decision.");
+      return;
+    }
+    setProfileError("");
+    setProfileMessage("");
+    try {
+      setSavingProfile(true);
+      const response = await updateMyProfile({
+        first_name: profileForm.first_name,
+        last_name: profileForm.last_name,
+        email: profileForm.email,
+        mobile_number: profileForm.mobile_number,
+        city_id: toNumberOrUndefined(profileForm.city_id),
+        interests: profileForm.interests,
+        wants_influencer: profileForm.wants_influencer,
+        wants_deal: true,
+        influencer_profile: profileForm.wants_influencer
+          ? {
+              ...influencerProfile,
+              category_id: toNumberOrUndefined(influencerProfile.category_id)
+            }
+          : undefined,
+        deal_profile: {
+          ...dealProfile,
+          category_id: toNumberOrUndefined(dealProfile.category_id)
+        }
+      });
+      const latestProfile = response?.data || null;
+      setProfile(latestProfile);
+      if (latestProfile && accessToken) {
+        login({ accessToken, refreshToken, user: latestProfile });
+      }
+      setProfileMessage(response?.message || "Business profile saved.");
+      setCreatorModal(null);
+    } catch (err) {
+      setProfileError(err?.response?.data?.message || "Could not save business profile.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -411,16 +641,20 @@ function UserDashboardPage() {
     >
       {/* Mobile + Tablet layout (does not affect desktop). */}
       <div className="lg:hidden space-y-4">
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white shadow-soft">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-lg font-bold text-white ring-1 ring-white/15">
-                {profileInitial || <FiUser className="h-5 w-5" />}
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-3.5 text-white shadow-soft sm:rounded-3xl sm:p-4">
+          <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+              <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sm font-bold text-white ring-1 ring-white/15 sm:h-11 sm:w-11 sm:rounded-2xl sm:text-base">
+                {profileInitial || <FiUser className="h-4 w-4 sm:h-5 sm:w-5" />}
               </div>
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold">{profile?.name || user?.name || "User"}</p>
-                <p className="truncate text-xs text-white/70">{profile?.email || user?.email}</p>
-                <p className="truncate text-xs text-white/60">{profile?.mobile_number || "Add mobile number"}</p>
+              <div className="min-w-0 flex-1">
+                <div className="min-w-0">
+                  <p className="min-w-0 truncate text-[13px] font-semibold leading-snug text-white sm:text-sm">
+                    {profile?.name || user?.name || "User"}
+                  </p>
+                </div>
+                <p className="truncate text-[11px] leading-tight text-white/70 sm:text-xs">{profile?.email || user?.email}</p>
+                <p className="truncate text-[11px] leading-tight text-white/55 sm:text-xs">{profile?.mobile_number || "Add mobile number"}</p>
               </div>
             </div>
             <button
@@ -431,13 +665,63 @@ function UserDashboardPage() {
                 setProfileEditorTab("basic");
                 setShowProfileEditor(true);
               }}
-              className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold ring-1 ring-white/15 hover:bg-white/15"
+              className="group flex shrink-0 flex-col items-center gap-0.5 rounded-xl border border-white/20 bg-white/[0.12] px-2 py-1.5 text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97] sm:rounded-2xl sm:px-3 sm:py-2"
             >
-              Edit
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/10 sm:h-9 sm:w-9">
+                <FiEdit2 className="h-3.5 w-3.5 text-white/95 sm:h-4 sm:w-4" aria-hidden />
+              </span>
+              <span className="max-w-[4.5rem] text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-white/90 sm:max-w-none sm:text-[10px]">
+                Edit profile
+              </span>
             </button>
           </div>
 
           {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-200">{profileMessage}</p> : null}
+          {profileError ? <p className="mt-2 text-sm font-medium text-rose-200">{profileError}</p> : null}
+
+          <button
+            type="button"
+            onClick={() => setCreatorHubOpen(true)}
+            disabled={enablingOrganizer}
+            className="mt-4 w-full rounded-2xl bg-gradient-to-r from-amber-200/95 via-yellow-100 to-amber-100 px-4 py-3.5 text-left shadow-lg shadow-amber-900/20 ring-1 ring-amber-300/60 transition hover:brightness-[1.02] disabled:opacity-60"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-900/70">Host &amp; promote</p>
+            <p className="mt-1 text-sm font-bold text-slate-900">Hosting &amp; spotlight workspace</p>
+            <p className="mt-0.5 text-xs text-slate-700/90">Shortcuts without cluttering this page.</p>
+          </button>
+
+          <button
+            type="button"
+            disabled={enablingOrganizer}
+            onClick={() => void onPostEventClick()}
+            className="mt-2 w-full rounded-2xl bg-white/15 px-4 py-3 text-left ring-1 ring-white/20 transition hover:bg-white/20 disabled:opacity-60"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/90">Events</p>
+            <p className="mt-1 text-sm font-bold text-white">Post an event</p>
+            <p className="mt-0.5 text-xs text-white/70">Listings, tickets, bookings — same organizer tools.</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void openDealerOnboardingModal()}
+            disabled={businessProfileCta.disabled}
+            className="mt-2 w-full rounded-2xl bg-white/10 px-4 py-3 text-left ring-1 ring-white/15 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">Business</p>
+            <p className="mt-1 text-sm font-bold text-white">{businessProfileCta.label}</p>
+            {businessProfileCta.sub ? <p className="mt-0.5 text-xs text-white/70">{businessProfileCta.sub}</p> : null}
+          </button>
+
+          <button
+            type="button"
+            onClick={openInfluencerSpotlightModal}
+            disabled={infStatusLower === "pending"}
+            className="mt-2 w-full rounded-2xl bg-white/10 px-4 py-3 text-left ring-1 ring-white/15 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-200/90">Creator spotlight</p>
+            <p className="mt-1 text-sm font-bold text-white">{influencerSpotlightCta.label}</p>
+            <p className="mt-0.5 text-xs text-white/70">{influencerSpotlightCta.sub}</p>
+          </button>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <button
@@ -468,7 +752,7 @@ function UserDashboardPage() {
               to="/dashboard/user/submissions"
               className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10 hover:bg-white/15"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Deal Submissions</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Offer workspace</p>
               <p className="mt-1 text-sm font-semibold">
                 {dealerStatus && String(dealerStatus).toLowerCase() === "approved" ? myDealSubmissions.length : 0}
               </p>
@@ -476,72 +760,11 @@ function UserDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Quick actions</h2>
-              <p className="mt-1 text-sm text-slate-600">Everything you need, faster on mobile.</p>
-            </div>
-            {canOrganize ? (
-              <Link
-                to="/dashboard/organizer"
-                className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-              >
-                Organizer
-              </Link>
-            ) : null}
-          </div>
-
-          {!canOrganize ? (
-            <button
-              type="button"
-              disabled={enablingOrganizer}
-              onClick={async () => {
-                try {
-                  setOrganizerEnableError("");
-                  setEnablingOrganizer(true);
-                  await enableOrganizer();
-                  const refreshTokenValue = localStorage.getItem("refreshToken");
-                  if (refreshTokenValue) {
-                    const refreshed = await refreshAccessToken(refreshTokenValue);
-                    const payload = refreshed?.data;
-                    if (payload?.accessToken && payload?.refreshToken && payload?.user) {
-                      login(payload);
-                    }
-                  }
-                } catch (_err) {
-                  setOrganizerEnableError("Could not enable organizer capabilities. Please try again.");
-                } finally {
-                  setEnablingOrganizer(false);
-                }
-              }}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {enablingOrganizer ? "Enabling..." : "Enable Organizer"}
-            </button>
-          ) : null}
-          {organizerEnableError ? <p className="mt-2 text-sm font-medium text-rose-600">{organizerEnableError}</p> : null}
-        </section>
-
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-base font-bold text-slate-900">My Content Submissions</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Influencer and deal submissions currently under admin review.
-              </p>
-            </div>
-            <Link
-              to="/dashboard/user/submissions"
-              className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
-            >
-              Open Submissions
-            </Link>
-          </div>
-
-          {loadingSubmissions ? <p className="mt-2 text-sm text-slate-500">Loading submissions...</p> : null}
-          {submissionsError ? <p className="mt-2 text-sm text-rose-600">{submissionsError}</p> : null}
-        </section>
+        {organizerEnableError ? (
+          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            {organizerEnableError}
+          </p>
+        ) : null}
 
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
           <div className="flex items-center justify-between gap-3">
@@ -609,6 +832,7 @@ function UserDashboardPage() {
                       alt={b.event_title}
                       className="aspect-[4/3] w-full object-cover"
                       loading="lazy"
+                      data-route-splash-ignore
                     />
                     <div className="space-y-2 p-4">
                       <div className="min-w-0">
@@ -676,7 +900,7 @@ function UserDashboardPage() {
 
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-bold text-slate-900">Saved Items</h2>
+            <h2 className="text-base font-bold text-slate-900">Saved for later</h2>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
               {favorites.length}
             </span>
@@ -699,6 +923,7 @@ function UserDashboardPage() {
                       alt={item.title}
                       className="h-20 w-20 rounded-lg object-cover"
                       loading="lazy"
+                      data-route-splash-ignore
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-semibold uppercase text-slate-500">{item.listing_type}</p>
@@ -744,8 +969,67 @@ function UserDashboardPage() {
 
       {/* Desktop layout (unchanged). */}
       <div className="hidden lg:block space-y-4">
-      <h1 className="text-2xl font-bold">My Dashboard</h1>
-      <p className="text-sm text-slate-600">Track your bookings, saved listings, and account activity in one place.</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your space</p>
+          <h1 className="mt-1 text-2xl font-bold leading-tight text-slate-900">
+            <YayUserGreeting name={profile?.name || user?.name || "User"} variant="light" size="lg" />
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Your hub for plans you&apos;re attending. Hosting, deals, and creator tools stay tucked behind a single workspace so this page stays calm.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openInfluencerSpotlightModal}
+          disabled={infStatusLower === "pending"}
+          className="shrink-0 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-yellow-50 to-white px-4 py-3 text-left shadow-sm ring-1 ring-amber-100 transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-55 lg:max-w-[300px]"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-900/80">Creator spotlight</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{influencerSpotlightCta.label}</p>
+          <p className="text-xs leading-snug text-slate-600">{influencerSpotlightCta.sub}</p>
+        </button>
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/80 to-cyan-50/30 p-5 shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Host &amp; promote</p>
+        <h2 className="mt-1 text-lg font-bold text-slate-900">Posting &amp; management workspace</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Host events and check spotlight status — open the hub for shortcuts, or jump straight into your organizer tools.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreatorHubOpen(true)}
+            disabled={enablingOrganizer}
+            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+          >
+            Open workspace
+          </button>
+          <button
+            type="button"
+            disabled={enablingOrganizer}
+            onClick={() => void onPostEventClick()}
+            className="inline-flex items-center justify-center rounded-xl border border-brand-400/80 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-950 transition hover:bg-brand-100/90 disabled:opacity-60"
+          >
+            Post an event
+          </button>
+          <button
+            type="button"
+            onClick={() => void openDealerOnboardingModal()}
+            disabled={businessProfileCta.disabled}
+            title={businessProfileCta.sub || undefined}
+            className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            {businessProfileCta.label}
+          </button>
+        </div>
+      </section>
+
+      {organizerEnableError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{organizerEnableError}</p>
+      ) : null}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
@@ -753,7 +1037,9 @@ function UserDashboardPage() {
               {profileInitial || <FiUser className="h-6 w-6" />}
             </div>
             <div className="min-w-0">
-              <p className="text-base font-semibold text-slate-900">{profile?.name || user?.name || "User"}</p>
+              <p className="min-w-0 truncate text-sm font-semibold leading-tight text-slate-900 sm:text-base">
+                {profile?.name || user?.name || "User"}
+              </p>
               <p className="text-sm text-slate-600">{profile?.email || user?.email}</p>
               <p className="text-xs text-slate-500">{profile?.mobile_number || "Add mobile number"}</p>
             </div>
@@ -789,99 +1075,36 @@ function UserDashboardPage() {
           </div>
         </div>
         {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
+        {profileError ? <p className="mt-2 text-sm font-medium text-rose-600">{profileError}</p> : null}
       </section>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">My Registered Events</p>
+          <p className="text-sm text-slate-500">Events you&apos;re going to</p>
           <p className="mt-1 text-2xl font-bold">{bookings.length}</p>
         </div>
         <div className="rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">Favorites</p>
+          <p className="text-sm text-slate-500">Saved for later</p>
           <p className="mt-1 text-2xl font-bold">{favorites.length}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">Influencer Submissions</p>
+        <Link
+          to="/dashboard/user/submissions"
+          className="rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          <p className="text-sm text-slate-500">Creator spotlights</p>
           <p className="mt-1 text-2xl font-bold">{myInfluencerSubmissions.length}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">Deal Submissions</p>
+          <p className="mt-1 text-xs font-semibold text-slate-600">Manage →</p>
+        </Link>
+        <Link
+          to="/dashboard/user/submissions"
+          className="rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          <p className="text-sm text-slate-500">Live offers</p>
           <p className="mt-1 text-2xl font-bold">
             {dealerStatus && String(dealerStatus).toLowerCase() === "approved" ? myDealSubmissions.length : 0}
           </p>
-        </div>
+          <p className="mt-1 text-xs font-semibold text-slate-600">Manage →</p>
+        </Link>
       </div>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
-        {canOrganize ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">Organizer capabilities enabled</p>
-              <p className="text-sm text-slate-600">Manage your events in the Organizer Dashboard.</p>
-            </div>
-            <Link
-              to="/dashboard/organizer"
-              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-            >
-              Open Organizer Dashboard
-            </Link>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">Want to create events?</p>
-              <p className="text-sm text-slate-600">Enable organizer capabilities to create and manage your events.</p>
-              {organizerEnableError ? (
-                <p className="mt-1 text-sm font-medium text-rose-600">{organizerEnableError}</p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              disabled={enablingOrganizer}
-              onClick={async () => {
-                try {
-                  setOrganizerEnableError("");
-                  setEnablingOrganizer(true);
-                  await enableOrganizer();
-
-                  // Refresh auth state so `canOrganize` flips to true without leaving the page.
-                  const refreshTokenValue = localStorage.getItem("refreshToken");
-                  if (refreshTokenValue) {
-                    const refreshed = await refreshAccessToken(refreshTokenValue);
-                    const payload = refreshed?.data;
-                    if (payload?.accessToken && payload?.refreshToken && payload?.user) {
-                      login(payload);
-                    }
-                  }
-                } catch (_err) {
-                  setOrganizerEnableError("Could not enable organizer capabilities. Please try again.");
-                } finally {
-                  setEnablingOrganizer(false);
-                }
-              }}
-              className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-            >
-              {enablingOrganizer ? "Enabling..." : "Enable Organizer"}
-            </button>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold">My Content Submissions</h2>
-            <p className="text-sm text-slate-600">Manage influencer and deal submissions in a dedicated workspace.</p>
-          </div>
-          <Link
-            to="/dashboard/user/submissions"
-            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-          >
-            Open Submissions
-          </Link>
-        </div>
-        {loadingSubmissions ? <p className="mt-2 text-sm text-slate-500">Loading submission counts...</p> : null}
-        {submissionsError ? <p className="mt-2 text-sm text-rose-600">{submissionsError}</p> : null}
-      </section>
 
       <section className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -950,6 +1173,8 @@ function UserDashboardPage() {
                   src={booking.event_image || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=900"}
                   alt={booking.event_title}
                   className="aspect-[4/3] w-full object-cover"
+                  loading="lazy"
+                  data-route-splash-ignore
                 />
                 <div className="space-y-2 p-4">
                   <h3 className="text-base font-bold text-slate-900">{booking.event_title}</h3>
@@ -1023,7 +1248,7 @@ function UserDashboardPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-bold">Saved Items</h2>
+        <h2 className="text-lg font-bold">Saved for later</h2>
         {loading ? <p className="text-sm text-slate-500">Loading favorites...</p> : null}
         {!loading && favorites.length === 0 ? (
           <p className="text-sm text-slate-500">You have no saved listings yet.</p>
@@ -1037,6 +1262,8 @@ function UserDashboardPage() {
                   src={item.image_url || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600"}
                   alt={item.title}
                   className="h-20 w-20 rounded-lg object-cover"
+                  loading="lazy"
+                  data-route-splash-ignore
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold uppercase text-slate-500">{item.listing_type}</p>
@@ -1069,21 +1296,28 @@ function UserDashboardPage() {
 
       {showProfileEditor ? renderInPortal(
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 px-3 py-4 sm:px-6"
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 px-0 py-0 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6 lg:items-center lg:justify-center lg:bg-slate-900/50 lg:px-6 lg:py-8 lg:backdrop-blur-none"
         >
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="flex h-[min(74vh,620px)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
+            className="flex max-h-[min(96dvh,100vh)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.35rem] border border-b-0 border-slate-200/90 bg-white shadow-[0_-12px_48px_rgba(15,23,42,0.2)] sm:max-h-[min(90vh,720px)] sm:rounded-3xl sm:border sm:shadow-xl lg:h-[min(74vh,620px)] lg:max-h-[min(74vh,620px)] lg:rounded-3xl lg:border-slate-200 lg:shadow-xl"
           >
-            <div className="border-b border-slate-200 px-5 pb-4 pt-5 sm:px-6">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Edit profile</h3>
-                  <p className="text-sm text-slate-600">Keep your account details updated for a smoother experience.</p>
+            <div className="shrink-0 border-b border-slate-200 px-4 pb-3 pt-3 sm:px-5 sm:pb-4 sm:pt-4 lg:px-6 lg:pt-5">
+              <div
+                className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-200/90 lg:hidden"
+                aria-hidden
+              />
+              <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold tracking-tight text-slate-900 sm:text-lg lg:text-lg">Edit profile</h3>
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-600 sm:text-sm">
+                    <span className="hidden lg:inline">Keep your account details updated for a smoother experience.</span>
+                    <span className="lg:hidden">Update your details below.</span>
+                  </p>
                 {dealerStatus ? (
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
                     Dealer profile:{" "}
                     <span
                       className={
@@ -1099,11 +1333,11 @@ function UserDashboardPage() {
                   </p>
                 ) : null}
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  Step {currentTabIndex + 1} of {profileTabs.length}
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 sm:px-3 sm:py-1 sm:text-xs">
+                  {currentTabIndex + 1}/{profileTabs.length}
                 </span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 sm:h-2">
                 <motion.div
                   initial={false}
                   animate={{ width: `${progressPercent}%` }}
@@ -1112,14 +1346,14 @@ function UserDashboardPage() {
                 />
               </div>
             </div>
-            <div className="border-b border-slate-200 px-5 py-3 sm:px-6">
-              <div className="inline-flex w-full rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <div className="shrink-0 border-b border-slate-200 px-4 py-2.5 sm:px-5 sm:py-3 lg:px-6">
+              <div className="inline-flex w-full rounded-lg border border-slate-200 bg-slate-50 p-0.5 sm:rounded-xl sm:p-1">
               {profileTabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setProfileEditorTab(tab.key)}
-                  className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition sm:rounded-lg sm:px-3 sm:py-2 sm:text-xs ${
                     profileEditorTab === tab.key
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-600 hover:text-slate-900"
@@ -1191,18 +1425,18 @@ function UserDashboardPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18, ease: "easeOut" }}
-                className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4 sm:px-6"
+                className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 py-3 sm:space-y-3 sm:px-5 sm:py-4 lg:px-6"
               >
                 {profileEditorTab === "basic" ? (
                   <>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
                       <input
                         type="text"
                         required
                         value={profileForm.first_name}
                         onChange={(e) => setProfileForm((s) => ({ ...s, first_name: e.target.value }))}
                         placeholder="First name"
-                        className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] leading-snug placeholder:text-slate-400 sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm lg:rounded-xl"
                       />
                       <input
                         type="text"
@@ -1210,7 +1444,7 @@ function UserDashboardPage() {
                         value={profileForm.last_name}
                         onChange={(e) => setProfileForm((s) => ({ ...s, last_name: e.target.value }))}
                         placeholder="Last name"
-                        className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] leading-snug placeholder:text-slate-400 sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm lg:rounded-xl"
                       />
                     </div>
                     <input
@@ -1219,20 +1453,20 @@ function UserDashboardPage() {
                       value={profileForm.email}
                       onChange={(e) => setProfileForm((s) => ({ ...s, email: e.target.value }))}
                       placeholder="Email"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] leading-snug placeholder:text-slate-400 sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm lg:rounded-xl"
                     />
                     <input
                       type="text"
                       value={profileForm.mobile_number}
                       onChange={(e) => setProfileForm((s) => ({ ...s, mobile_number: e.target.value }))}
                       placeholder="Mobile number"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] leading-snug placeholder:text-slate-400 sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm lg:rounded-xl"
                     />
                     <select
                       required
                       value={profileForm.city_id}
                       onChange={(e) => setProfileForm((s) => ({ ...s, city_id: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm lg:rounded-xl"
                     >
                       <option value="">Select city</option>
                       {cities.map((city) => (
@@ -1246,9 +1480,11 @@ function UserDashboardPage() {
 
                 {profileEditorTab === "preferences" ? (
                   <>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Interested in</p>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:rounded-xl sm:p-3 lg:rounded-xl">
+                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 sm:mb-2 sm:text-xs">
+                        Interested in
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 sm:gap-2">
                         {interestOptions.map((interest) => {
                           const active = profileForm.interests.includes(interest);
                           return (
@@ -1263,8 +1499,8 @@ function UserDashboardPage() {
                                     : [...s.interests, interest]
                                 }))
                               }
-                              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                                active ? "bg-slate-900 text-white" : "bg-white text-slate-700"
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${
+                                active ? "bg-slate-900 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200/80"
                               }`}
                             >
                               {interest}
@@ -1273,130 +1509,15 @@ function UserDashboardPage() {
                         })}
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={profileForm.wants_influencer}
-                          disabled={isDealerPending || isInfluencerPending}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            if (!checked && hasInfluencerDetails) {
-                              setProfileError("Influencer option cannot be unchecked after profile details are added.");
-                              return;
-                            }
-                            if (isInfluencerPending) {
-                              setProfileError("Influencer profile is pending admin review. This toggle is locked until review is complete.");
-                              return;
-                            }
-                            if (isDealerPending) {
-                              setProfileError("Dealer profile is pending admin review. Influencer and dealer toggles are locked until review is complete.");
-                              return;
-                            }
-                            if (!checked && isInfluencerPending) {
-                              setProfileError("Influencer profile is pending admin review. You can change this after approval or rejection.");
-                              return;
-                            }
-                            setProfileError("");
-                            setProfileForm((s) => ({ ...s, wants_influencer: checked }));
-                            if (checked) {
-                              setActiveCreatorModal("influencer");
-                            }
-                          }}
-                        />
-                        I am an influencer
-                      </label>
-                      <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={profileForm.wants_deal}
-                          disabled={isDealerPending}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            if (!checked && hasDealerDetails) {
-                              setProfileError("Dealer option cannot be unchecked after profile details are added.");
-                              return;
-                            }
-                            if (isDealerPending) {
-                              setProfileError("Dealer profile is pending admin review. Influencer and dealer toggles are locked until review is complete.");
-                              return;
-                            }
-                            if (!checked && isDealerPending) {
-                              setProfileError("Dealer profile is pending admin review. You can change this after approval or rejection.");
-                              return;
-                            }
-                            setProfileError("");
-                            setProfileForm((s) => ({ ...s, wants_deal: checked }));
-                            if (checked) {
-                              setActiveCreatorModal("dealer");
-                            }
-                          }}
-                        />
-                        I offer deals
-                      </label>
-                    </div>
-                  </>
-                ) : null}
-
-                {profileEditorTab === "creator" ? (
-                  <>
-                    {profileForm.wants_influencer ? (
-                      <div className="rounded-xl border border-slate-200 p-3">
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Influencer profile</p>
-                        {hasInfluencerDetails ? (
-                          <div className="space-y-1 text-sm text-slate-700">
-                            <p className="font-semibold text-slate-900">{influencerProfile.name}</p>
-                            <p>{influencerProfile.bio}</p>
-                            <p>Category: {categories.find((c) => c.value === influencerProfile.category_id)?.label || "-"}</p>
-                            <p>Contact: {influencerProfile.contact_email}</p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-slate-500">No influencer details added yet.</p>
-                        )}
-                        <button
-                          type="button"
-                          disabled={isInfluencerPending}
-                          onClick={() => setActiveCreatorModal("influencer")}
-                          className="mt-3 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {isInfluencerPending ? "Pending Review" : "Edit Influencer"}
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-500">Enable “I am an influencer” in Preferences to edit influencer details.</p>
-                    )}
-                    {profileForm.wants_deal ? (
-                      <div className="rounded-xl border border-slate-200 p-3">
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Dealer profile</p>
-                        {hasDealerDetails ? (
-                          <div className="space-y-1 text-sm text-slate-700">
-                            <p className="font-semibold text-slate-900">{dealProfile.name}</p>
-                            <p>{dealProfile.bio}</p>
-                            <p>Location: {dealProfile.location_text}</p>
-                            <p>Business Email: {dealProfile.business_email}</p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-slate-500">No dealer details added yet.</p>
-                        )}
-                        <button
-                          type="button"
-                          disabled={isDealerPending}
-                          onClick={() => setActiveCreatorModal("dealer")}
-                          className="mt-3 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {isDealerPending ? "Pending Review" : "Edit Dealer"}
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-500">Enable “I offer deals” in Preferences to edit deal details.</p>
-                    )}
                   </>
                 ) : null}
               </motion.div>
-              <div className="border-t border-slate-200 px-5 py-4 sm:px-6">
-              {profileError ? <p className="mb-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+              <div className="border-t border-slate-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:px-5 sm:py-4 lg:px-6 lg:pb-4">
+              {profileError ? (
+                <p className="mb-2 text-xs font-medium text-rose-600 sm:mb-3 sm:text-sm">{profileError}</p>
+              ) : null}
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
+                <div className="flex items-center justify-center gap-1.5 sm:justify-start sm:gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -1405,7 +1526,7 @@ function UserDashboardPage() {
                       }
                     }}
                     disabled={currentTabIndex === 0}
-                    className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40"
+                    className="min-h-[40px] flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
                   >
                     Back
                   </button>
@@ -1417,25 +1538,32 @@ function UserDashboardPage() {
                       }
                     }}
                     disabled={currentTabIndex >= profileTabs.length - 1}
-                    className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40"
+                    className="min-h-[40px] flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
                   >
                     Next
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center gap-2 sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setShowProfileEditor(false)}
-                  className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                  className="min-h-[40px] flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={savingProfile}
-                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  className="min-h-[40px] flex-[1.15] rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
                 >
-                  {savingProfile ? "Saving..." : "Save Changes"}
+                  {savingProfile ? (
+                    "Saving…"
+                  ) : (
+                    <>
+                      <span className="lg:hidden">Save</span>
+                      <span className="hidden lg:inline">Save changes</span>
+                    </>
+                  )}
                 </button>
                 </div>
               </div>
@@ -1575,9 +1703,100 @@ function UserDashboardPage() {
           )
         : null}
 
-      {showProfileEditor && activeCreatorModal === "influencer"
+      {creatorModal === "dealer"
         ? renderInPortal(
-            <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6">
+            <div className="fixed inset-0 z-[205] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6">
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="flex h-[min(76vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
+              >
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                  <h3 className="text-lg font-semibold">
+                    {hasRegisteredDealer ? "Dealer profile" : "Register your business"}
+                  </h3>
+                  <p className="mb-4 text-sm text-slate-600">
+                    {hasRegisteredDealer
+                      ? "Keep your dealer profile updated for admin moderation."
+                      : "Tell us about your business. You can post offers after approval."}
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 pb-16 sm:grid-cols-2">
+                    <FormField label="Business Name" hint="Enter your store or brand name." example="Glow City Deals" className="sm:col-span-2">
+                      <input value={dealProfile.name} onChange={(e) => setDealProfile((s) => ({ ...s, name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                    <FormField label="Business Email" hint="Use your official business contact email." example="hello@glowcity.com">
+                      <input type="email" value={dealProfile.business_email} onChange={(e) => setDealProfile((s) => ({ ...s, business_email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                    <FormField label="Business Mobile" hint="Primary WhatsApp/contact number for deal inquiries." example="+1 512 555 0199">
+                      <input value={dealProfile.business_mobile} onChange={(e) => setDealProfile((s) => ({ ...s, business_mobile: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                    <FormField label="Business Location" hint="Choose your city or Virtual / Online as business location.">
+                      <select
+                        value={dealerLocationOptions.find((opt) => opt.label === dealProfile.location_text)?.value || ""}
+                        onChange={(e) => {
+                          const option = dealerLocationOptions.find((opt) => String(opt.value) === String(e.target.value));
+                          if (!option) return;
+                          setDealProfile((s) => ({ ...s, location_text: option.label }));
+                          if (option.cityId) setProfileForm((s) => ({ ...s, city_id: String(option.cityId) }));
+                        }}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      >
+                        <option value="">Select location</option>
+                        {dealerLocationOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </FormField>
+                    <FormField label="Category" hint="Select the closest category for your business offerings.">
+                      <select value={dealProfile.category_id} onChange={(e) => setDealProfile((s) => ({ ...s, category_id: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                        <option value="">Select category</option>
+                        {categories.map((item) => (
+                          <option key={item.value} value={item.value}>{item.label}</option>
+                        ))}
+                      </select>
+                    </FormField>
+                    <FormField label="About / Bio" hint="Add a short summary of your business and what you offer." example="Curating premium beauty and wellness offers in NYC." className="sm:col-span-2">
+                      <textarea rows={4} value={dealProfile.bio} onChange={(e) => setDealProfile((s) => ({ ...s, bio: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                    <FormField label="Website / Social Link" hint="Add your business website or social page URL." example="https://instagram.com/glowcitydeals">
+                      <input value={dealProfile.website_or_social_link} onChange={(e) => setDealProfile((s) => ({ ...s, website_or_social_link: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                    <FormField label="Profile Image / Logo URL" hint="Paste a public logo or profile image URL." example="https://images.example.com/logo.png">
+                      <input value={dealProfile.profile_image_url} onChange={(e) => setDealProfile((s) => ({ ...s, profile_image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    </FormField>
+                  </div>
+                </div>
+                <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur sm:px-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!hasDealerDetails) {
+                        setProfileForm((s) => ({ ...s, wants_deal: false }));
+                      }
+                      setCreatorModal(null);
+                    }}
+                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingProfile}
+                    onClick={() => void persistDealerFromModal()}
+                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {savingProfile ? "Saving…" : "Save & sync profile"}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )
+        : null}
+
+      {creatorModal === "influencer"
+        ? renderInPortal(
+            <div className="fixed inset-0 z-[205] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6">
               <motion.div
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1641,96 +1860,131 @@ function UserDashboardPage() {
                       if (!hasInfluencerDetails) {
                         setProfileForm((s) => ({ ...s, wants_influencer: false }));
                       }
-                      setActiveCreatorModal(null);
+                      setCreatorModal(null);
                     }}
                     className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
                   >
                     Cancel
                   </button>
-                  <button type="button" onClick={() => setActiveCreatorModal(null)} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Save details</button>
+                  <button
+                    type="button"
+                    disabled={savingProfile}
+                    onClick={() => void persistInfluencerFromModal()}
+                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {savingProfile ? "Saving…" : "Save & sync profile"}
+                  </button>
                 </div>
               </motion.div>
             </div>
           )
         : null}
 
-      {showProfileEditor && activeCreatorModal === "dealer"
+      {creatorHubOpen
         ? renderInPortal(
-            <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6">
+            <div
+              className="fixed inset-0 z-[196] flex items-center justify-center bg-slate-950/55 px-4 py-8"
+              onClick={() => setCreatorHubOpen(false)}
+              role="presentation"
+            >
               <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="flex h-[min(76vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
+                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
               >
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-                  <h3 className="text-lg font-semibold">Dealer profile onboarding</h3>
-                  <p className="mb-4 text-sm text-slate-600">Keep your dealer profile updated for admin moderation.</p>
-                  <div className="grid grid-cols-1 gap-3 pb-16 sm:grid-cols-2">
-                    <FormField label="Business Name" hint="Enter your store or brand name." example="Glow City Deals" className="sm:col-span-2">
-                      <input value={dealProfile.name} onChange={(e) => setDealProfile((s) => ({ ...s, name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-                    </FormField>
-                    <FormField label="Business Email" hint="Use your official business contact email." example="hello@glowcity.com">
-                      <input type="email" value={dealProfile.business_email} onChange={(e) => setDealProfile((s) => ({ ...s, business_email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-                    </FormField>
-                    <FormField label="Business Mobile" hint="Primary WhatsApp/contact number for deal inquiries." example="+1 512 555 0199">
-                      <input value={dealProfile.business_mobile} onChange={(e) => setDealProfile((s) => ({ ...s, business_mobile: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-                    </FormField>
-                    <FormField label="Business Location" hint="Choose your city or Virtual / Online as business location.">
-                      <select
-                        value={dealerLocationOptions.find((opt) => opt.label === dealProfile.location_text)?.value || ""}
-                        onChange={(e) => {
-                          const option = dealerLocationOptions.find((opt) => String(opt.value) === String(e.target.value));
-                          if (!option) return;
-                          setDealProfile((s) => ({ ...s, location_text: option.label }));
-                          if (option.cityId) setProfileForm((s) => ({ ...s, city_id: String(option.cityId) }));
-                        }}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      >
-                        <option value="">Select location</option>
-                        {dealerLocationOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField label="Category" hint="Select the closest category for your business offerings.">
-                      <select value={dealProfile.category_id} onChange={(e) => setDealProfile((s) => ({ ...s, category_id: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
-                        <option value="">Select category</option>
-                        {categories.map((item) => (
-                          <option key={item.value} value={item.value}>{item.label}</option>
-                        ))}
-                      </select>
-                    </FormField>
-                    <FormField label="About / Bio" hint="Add a short summary of your business and what you offer." example="Curating premium beauty and wellness offers in NYC." className="sm:col-span-2">
-                      <textarea rows={4} value={dealProfile.bio} onChange={(e) => setDealProfile((s) => ({ ...s, bio: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-                    </FormField>
-                    <FormField label="Website / Social Link" hint="Add your business website or social page URL." example="https://instagram.com/glowcitydeals">
-                      <input value={dealProfile.website_or_social_link} onChange={(e) => setDealProfile((s) => ({ ...s, website_or_social_link: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-                    </FormField>
-                    <FormField label="Profile Image / Logo URL" hint="Paste a public logo or profile image URL." example="https://images.example.com/logo.png">
-                      <input value={dealProfile.profile_image_url} onChange={(e) => setDealProfile((s) => ({ ...s, profile_image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-                    </FormField>
-                  </div>
-                </div>
-                <div className="sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur sm:px-6">
+                <h3 className="text-lg font-bold text-slate-900">Hosting workspace</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Jump into events and submission status — your dashboard stays clean.
+                </p>
+                <div className="mt-5 space-y-3">
+                  <button
+                    type="button"
+                    disabled={enablingOrganizer}
+                    onClick={() => {
+                      setCreatorHubOpen(false);
+                      void onListExperienceClick();
+                    }}
+                    className="flex w-full flex-col rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-brand-700">Events</span>
+                    <span className="mt-1 font-semibold text-slate-900">Host &amp; manage experiences</span>
+                    <span className="mt-0.5 text-xs text-slate-600">Listings, tickets, bookings — full organizer tools.</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
-                      if (!hasDealerDetails) {
-                        setProfileForm((s) => ({ ...s, wants_deal: false }));
-                      }
-                      setActiveCreatorModal(null);
+                      setCreatorHubOpen(false);
+                      navigate("/dashboard/user/submissions");
                     }}
-                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                    className="flex w-full flex-col rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50"
                   >
-                    Cancel
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600">Status</span>
+                    <span className="mt-1 font-semibold text-slate-900">Spotlights &amp; submitted offers</span>
+                    <span className="mt-0.5 text-xs text-slate-600">See what&apos;s live, pending, or needs edits.</span>
                   </button>
-                  <button type="button" onClick={() => setActiveCreatorModal(null)} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Save details</button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setCreatorHubOpen(false)}
+                  className="mt-5 w-full rounded-xl border border-slate-300 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Close
+                </button>
               </motion.div>
             </div>
           )
         : null}
+
+      {renderInPortal(
+        <AnimatePresence>
+          {showHostingWorkspaceLoading ? (
+            <AppLoadingOverlay
+              key="hosting-workspace-loading"
+              ariaLabel="Loading hosting workspace"
+              caption="Loading your workspace"
+              zIndexClass="z-[220]"
+            />
+          ) : null}
+        </AnimatePresence>
+      )}
+
+      {eventsWorkspaceOpen
+        ? renderInPortal(
+            <div className="fixed inset-0 z-[198] flex flex-col bg-slate-50">
+              <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Host &amp; manage events</h2>
+                  {canOrganize ? (
+                    <p className="text-xs font-semibold text-emerald-700">Hosting enabled</p>
+                  ) : (
+                    <p className="text-xs text-slate-600">We&apos;ll enable hosting on first open if needed.</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEventsWorkspaceOpen(false)}
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                <OrganizerDashboardPage embedded onEmbeddedWorkspaceInitialReady={handleOrganizerWorkspaceInitialReady} />
+              </div>
+            </div>
+          )
+        : null}
+
+      <div hidden aria-hidden="true" data-route-splash-ignore>
+        <OrganizerDashboardPage
+          ref={organizerFormShellRef}
+          embedded
+          suppressChrome
+          suppressRouteContentReadySignal
+        />
+      </div>
 
     </motion.div>
   );

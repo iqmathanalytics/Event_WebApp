@@ -10,22 +10,25 @@ const baseItems = [
 ];
 
 function MobileBottomNav() {
-  const { isAuthenticated, isAdmin, isOrganizer } = useAuth();
+  const { isAuthenticated, isAdmin, user } = useAuth();
   const profileTarget = isAdmin ? "/dashboard/admin" : "/dashboard/user";
+  const profileName = String(user?.name || "").trim();
 
   const items = [
     ...baseItems,
-    { to: isAuthenticated ? profileTarget : "/login", label: isAuthenticated ? "Dashboard" : "Profile", icon: FiUser }
+    { to: isAuthenticated ? profileTarget : "/login", label: "Profile", icon: FiUser }
   ];
 
   return (
     <nav className="mobile-bottom-nav lg:hidden" aria-label="Bottom navigation">
       {items.map((item) => {
         const Icon = item.icon;
+        const isProfile = item.icon === FiUser;
         return (
           <NavLink
-            key={item.to}
+            key={`${item.to}-${item.label}`}
             to={item.to}
+            title={isProfile && isAuthenticated && profileName ? `Yay! – ${profileName}` : undefined}
             className={({ isActive }) =>
               `inline-flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-1 text-[11px] font-semibold transition ${
                 isActive ? "text-brand-600" : "text-slate-500"
@@ -33,7 +36,7 @@ function MobileBottomNav() {
             }
           >
             <Icon className="h-5 w-5" />
-            <span>{item.label}</span>
+            <span className="max-w-[4.5rem] truncate text-center">{item.label}</span>
           </NavLink>
         );
       })}

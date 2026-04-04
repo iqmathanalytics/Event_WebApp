@@ -1,5 +1,6 @@
-import { createContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { invalidateNewsletterStatusCache } from "../services/newsletterService";
 
 const AuthContext = createContext(null);
 
@@ -15,10 +16,15 @@ function getStoredUser() {
   }
 }
 
+const LOGOUT_CLEAR_MS = 260;
+const LOGOUT_OVERLAY_HOLD_MS = 520;
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(getStoredUser());
   const [accessToken, setAccessToken] = useState(localStorage.getItem("accessToken"));
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem("refreshToken"));
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const logoutOnceRef = useRef(false);
 
   useEffect(() => {
     if (accessToken) {
@@ -53,17 +59,25 @@ export function AuthProvider({ children }) {
     } else {
       localStorage.removeItem("refreshToken");
     }
-    if (payload?.user) {
-      localStorage.setItem("user", JSON.stringify(payload.user));
+    let nextUser = payload?.user ?? null;
+    const uid = payload?.userId ?? payload?.user?.id;
+    if (nextUser && uid != null && nextUser.id == null) {
+      const idNum = Number(uid);
+      nextUser = { ...nextUser, id: Number.isFinite(idNum) ? idNum : uid };
     }
+    if (nextUser) {
+      localStorage.setItem("user", JSON.stringify(nextUser));
+    }
+    invalidateNewsletterStatusCache();
     flushSync(() => {
       setAccessToken(payload.accessToken ?? null);
       setRefreshToken(payload.refreshToken || null);
-      setUser(payload.user ?? null);
+      setUser(nextUser);
     });
   };
 
-  const logout = () => {
+  const clearSession = useCallback(() => {
+    invalidateNewsletterStatusCache();
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
@@ -72,7 +86,22 @@ export function AuthProvider({ children }) {
       setRefreshToken(null);
       setUser(null);
     });
-  };
+  }, []);
+
+  const logout = useCallback(() => {
+    if (logoutOnceRef.current) {
+      return;
+    }
+    logoutOnceRef.current = true;
+    setIsLoggingOut(true);
+    window.setTimeout(() => {
+      clearSession();
+    }, LOGOUT_CLEAR_MS);
+    window.setTimeout(() => {
+      setIsLoggingOut(false);
+      logoutOnceRef.current = false;
+    }, LOGOUT_CLEAR_MS + LOGOUT_OVERLAY_HOLD_MS);
+  }, [clearSession]);
 
   const value = useMemo(
     () => ({
@@ -87,9 +116,10 @@ export function AuthProvider({ children }) {
       canCreateInfluencerProfile: Boolean(user?.can_create_influencer_profile),
       canPostDeals: Boolean(user?.can_post_deals),
       login,
-      logout
+      logout,
+      isLoggingOut
     }),
-    [user, accessToken, refreshToken]
+    [user, accessToken, refreshToken, isLoggingOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

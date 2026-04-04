@@ -10,12 +10,13 @@ const SPARKLE_POS = [
   { left: "50%", top: "2%", d: 0.25 }
 ];
 
-/**
- * Animated Yay! Tickets logo for login / register / staff pages.
- */
-export default function AuthBrandLogo() {
+/** Animated Yay! Tickets logo for auth pages; `compact` saves vertical space on split layouts. */
+export default function AuthBrandLogo({ compact = false }) {
+  const shell = compact
+    ? "relative mx-auto mb-1 flex h-[5.25rem] w-full max-w-[220px] items-center justify-center sm:mb-1.5 sm:h-[5.75rem] sm:max-w-[240px] lg:h-[5.5rem]"
+    : "relative mx-auto mb-2 flex h-[7.5rem] w-full max-w-[300px] items-center justify-center sm:h-[8.5rem] sm:max-w-[340px]";
   return (
-    <div className="relative mx-auto mb-2 flex h-[7.5rem] w-full max-w-[300px] items-center justify-center sm:h-[8.5rem] sm:max-w-[340px]">
+    <div className={shell}>
       {SPARKLE_POS.map((p, i) => (
         <motion.span
           key={i}
@@ -50,7 +51,11 @@ export default function AuthBrandLogo() {
         <motion.img
           src="/branding/yay-tickets-logo.png"
           alt="Yay! Tickets"
-          className="h-20 w-auto max-w-[min(100%,280px)] object-contain drop-shadow-[0_8px_24px_rgba(15,23,42,0.12)] sm:h-24"
+          className={`w-auto object-contain drop-shadow-[0_8px_24px_rgba(15,23,42,0.12)] ${
+            compact
+              ? "h-14 max-w-[min(100%,220px)] sm:h-16"
+              : "h-20 max-w-[min(100%,280px)] sm:h-24"
+          }`}
           animate={{
             filter: [
               "drop-shadow(0 0 0px rgba(251,191,36,0))",
@@ -66,7 +71,7 @@ export default function AuthBrandLogo() {
           transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
           aria-hidden
         >
-          <Sparkles className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={2} />
+          <Sparkles className={compact ? "h-5 w-5 sm:h-5 sm:w-5" : "h-6 w-6 sm:h-7 sm:w-7"} strokeWidth={2} />
         </motion.span>
       </motion.div>
     </div>

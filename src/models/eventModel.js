@@ -19,6 +19,26 @@ function parseHighlights(value) {
   }
 }
 
+function parseGalleryImageUrls(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.map((u) => String(u || "").trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed)
+        ? parsed.map((u) => String(u || "").trim()).filter(Boolean)
+        : [];
+    } catch (_err) {
+      return [];
+    }
+  }
+  return [];
+}
+
 function normalizeEventRow(row) {
   if (!row) {
     return row;
@@ -26,6 +46,7 @@ function normalizeEventRow(row) {
   return {
     ...row,
     event_highlights: parseHighlights(row.event_highlights),
+    gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
     event_dates: normalizeDateList(
       (() => {
         if (!row.event_dates_json) {
@@ -64,6 +85,7 @@ async function createEvent(payload) {
     organizer_id,
     ticket_link,
     image_url,
+    gallery_image_urls,
     price,
     duration_hours,
     age_limit,
@@ -89,14 +111,17 @@ async function createEvent(payload) {
       ? String(deal_event_discount_code).trim()
       : null;
 
+  const galleryUrls = parseGalleryImageUrls(gallery_image_urls);
+  const galleryJson = galleryUrls.length ? JSON.stringify(galleryUrls) : null;
+
   const [result] = await pool.query(
     `INSERT INTO events
       (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
        venue_name, venue_address, google_maps_link, organizer_id, ticket_link,
-       image_url, price, duration_hours, age_limit, languages, genres, event_highlights,
+       image_url, gallery_image_urls, price, duration_hours, age_limit, languages, genres, event_highlights,
        is_yay_deal_event, deal_event_discount_code,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
     [
       title,
       description || null,
@@ -115,6 +140,7 @@ async function createEvent(payload) {
       organizer_id,
       ticket_link || null,
       image_url || null,
+      galleryJson,
       perDayPrice || 0,
       duration_hours || null,
       age_limit || null,
@@ -207,6 +233,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "category_id",
     "ticket_link",
     "image_url",
+    "gallery_image_urls",
     "price",
     "price_per_day",
     "duration_hours",
@@ -239,6 +266,10 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
           return [key, null];
         }
         return [key, String(value).trim()];
+      }
+      if (key === "gallery_image_urls") {
+        const urls = parseGalleryImageUrls(value);
+        return [key, urls.length ? JSON.stringify(urls) : null];
       }
       return [key, value];
     });

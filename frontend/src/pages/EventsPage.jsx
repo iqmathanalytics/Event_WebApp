@@ -11,6 +11,92 @@ import useAuth from "../hooks/useAuth";
 import { enableOrganizer } from "../services/userService";
 import { refreshAccessToken } from "../services/authService";
 import { formatDateUS } from "../utils/format";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import { FiAlertCircle, FiCheckCircle, FiClock, FiInfo } from "react-icons/fi";
+import { CalendarDays, MousePointerClick, Sparkles, Ticket } from "lucide-react";
+
+function OrganizerReadyRibbon() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="relative mt-3 flex gap-3 overflow-hidden rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/95 via-white to-teal-50/50 px-3 py-3 sm:items-start sm:gap-3.5 sm:px-4"
+    >
+      <div className="pointer-events-none absolute -right-6 top-0 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl" />
+      <motion.span
+        className="relative mt-0.5 grid h-10 w-10 shrink-0 place-content-center rounded-xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100"
+        animate={{ scale: [1, 1.06, 1] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <FiCheckCircle className="h-6 w-6" aria-hidden />
+      </motion.span>
+      <div className="relative min-w-0">
+        <p className="text-sm font-semibold text-slate-900">Host tools on — you&apos;re cleared to list</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">
+          Publish or edit events from My Hub. New listings still get a quick review before they go live to the city.
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+function OrganizerInviteCard() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="relative mt-3 flex gap-3 overflow-hidden rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white to-teal-50/40 px-3 py-3 sm:items-start sm:gap-3.5 sm:px-4"
+    >
+      <motion.span
+        className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100"
+        animate={{ scale: [1, 1.06, 1] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <CalendarDays className="h-5 w-5" aria-hidden />
+      </motion.span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-900">Blank calendar — your move</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">
+          Request organizer access once. After approval, you&apos;ll list dates, tickets, and details straight from My Hub.
+        </p>
+        <p className="mt-2 text-xs font-medium text-emerald-800/80">Tip: use &quot;Request Organizer Access&quot; above when you&apos;re ready.</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function OrganizerPendingRibbon() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      className="relative mt-3 flex gap-3 overflow-hidden rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50/90 via-white to-amber-50/40 px-3 py-3 sm:items-start sm:gap-3.5 sm:px-4"
+    >
+      <motion.span
+        className="relative mt-0.5 grid h-10 w-10 shrink-0 place-content-center rounded-xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100"
+        animate={{ y: [0, -3, 0] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <FiClock className="h-6 w-6" aria-hidden />
+      </motion.span>
+      <div className="relative min-w-0">
+        <p className="text-sm font-semibold text-slate-900">Almost there — publishing unlocks soon</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">
+          Your host profile is active; we&apos;re finishing the last check so you can post events. Watch My Hub for updates.
+        </p>
+        <Link
+          to={{ pathname: "/dashboard/user", hash: "host-events" }}
+          className="mt-2 inline-flex text-sm font-semibold text-sky-700 underline-offset-2 hover:text-sky-800 hover:underline"
+        >
+          Open My Hub — Events
+        </Link>
+      </div>
+    </motion.div>
+  );
+}
 
 function EventsPage() {
   const navigate = useNavigate();
@@ -41,11 +127,13 @@ function EventsPage() {
   const [page, setPage] = useState(1);
   const [events, setEvents] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [organizerCtaLoading, setOrganizerCtaLoading] = useState(false);
   const [organizerCtaError, setOrganizerCtaError] = useState("");
   const { isFavorite, toggleFavorite } = useFavorites();
-  const canOpenOrganizerDashboard = Boolean(Number(user?.organizer_enabled) === 1 && canPostEvents);
+  useRouteContentReady(loading);
+  const organizerEnabled = Number(user?.organizer_enabled) === 1;
+  const canOpenOrganizerDashboard = Boolean(organizerEnabled && canPostEvents);
 
   const handlePageChange = (nextPage) => {
     // Guest users can browse only first page. Prompt login/register for deeper pagination.
@@ -195,75 +283,171 @@ function EventsPage() {
         <p className="text-sm text-slate-600">Explore verified city events with smart filters, clear pricing, and real-time availability.</p>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-900">Create your Event Organizer profile</p>
-            <p className="text-sm text-slate-600">
-              Become an Event Organizer and submit events for admin approval.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isAuthenticated ? (
-              <>
+      <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-amber-50/20 to-sky-50/25 p-4 shadow-soft ring-1 ring-amber-500/[0.07] sm:p-5">
+        <div className="pointer-events-none absolute -right-14 -top-14 h-52 w-52 rounded-full bg-gradient-to-br from-amber-400/25 to-sky-400/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-orange-400/15 blur-3xl" />
+
+        {!isAuthenticated ? (
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+            <div className="min-w-0 flex-1">
+              <motion.p
+                className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-900/85"
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35 }}
+              >
+                <motion.span
+                  className="inline-flex text-amber-600"
+                  animate={{ rotate: [0, -12, 10, 0], scale: [1, 1.08, 1] }}
+                  transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+                  aria-hidden
+                >
+                  <Sparkles className="h-4 w-4" />
+                </motion.span>
+                Hosts &amp; happenings
+              </motion.p>
+              <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+                Put your event where the city looks first
+              </h2>
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-slate-600">
+                Create a free account, request host tools once, then publish experiences from My Hub — we keep listings trustworthy.
+              </p>
+              <ul className="mt-3 flex flex-col gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
+                <li className="inline-flex items-center gap-1.5">
+                  <motion.span
+                    className="text-amber-600"
+                    animate={{ y: [0, -2, 0] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                    aria-hidden
+                  >
+                    <MousePointerClick className="h-4 w-4" />
+                  </motion.span>
+                  Sign up — tickets, tweaks, one dashboard
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-sky-600" aria-hidden />
+                  Nights out, workshops, family days
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                  <Ticket className="h-4 w-4 shrink-0 text-orange-600" aria-hidden />
+                  Yay! Tickets — checkout-ready when you&apos;re approved
+                </li>
+              </ul>
+            </div>
+            <div className="relative flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:flex-col xl:flex-row">
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <Link
                   to="/register"
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-amber-500/25 transition hover:from-amber-400 hover:to-sky-500 sm:min-h-0 sm:w-auto"
                 >
-                  Create Account
+                  Host on Yay! — join free
                 </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Link
                   to="/login"
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-slate-200 bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-amber-300 hover:bg-white sm:min-h-0 sm:w-auto"
                 >
-                  Login to Request Organizer Access
+                  Have an account? Sign in to host
                 </Link>
-              </>
-            ) : canOpenOrganizerDashboard ? (
-              <Link
-                to="/dashboard/organizer"
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-              >
-                Open Organizer Dashboard
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled={organizerCtaLoading}
-                onClick={async () => {
-                  try {
-                    setOrganizerCtaError("");
-                    setOrganizerCtaLoading(true);
-                    await enableOrganizer();
-                    let canOpenAfterRefresh = false;
-                    const refreshTokenValue = localStorage.getItem("refreshToken");
-                    if (refreshTokenValue) {
-                      const refreshed = await refreshAccessToken(refreshTokenValue);
-                      const payload = refreshed?.data;
-                      if (payload?.accessToken && payload?.refreshToken && payload?.user) {
-                        login(payload);
-                        canOpenAfterRefresh = Boolean(payload.user?.can_post_events);
-                      }
-                    }
-                    if (canOpenAfterRefresh) {
-                      navigate("/dashboard/organizer");
-                    } else {
-                      setOrganizerCtaError("Organizer access request submitted. You can open Organizer Dashboard after admin approval.");
-                    }
-                  } catch (_err) {
-                    setOrganizerCtaError("Could not submit organizer access request. Please try again.");
-                  } finally {
-                    setOrganizerCtaLoading(false);
-                  }
-                }}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {organizerCtaLoading ? "Submitting..." : "Request Organizer Access"}
-              </button>
-            )}
+              </motion.div>
+            </div>
           </div>
-        </div>
-        {organizerCtaError ? <p className="mt-2 text-sm font-medium text-rose-600">{organizerCtaError}</p> : null}
+        ) : (
+          <>
+            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">List your own experiences</p>
+                <p className="text-sm text-slate-600">
+                  Host gatherings on Yay! Tickets — submit details for review, then welcome guests from your hub.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {canOpenOrganizerDashboard ? (
+                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                    <Link
+                      to={{ pathname: "/dashboard/user", hash: "host-events" }}
+                      className="inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
+                    >
+                      Go to My Hub — Events
+                    </Link>
+                  </motion.div>
+                ) : organizerEnabled && !canPostEvents ? (
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Link
+                      to={{ pathname: "/dashboard/user", hash: "host-events" }}
+                      className="inline-flex rounded-xl border-2 border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-50/80"
+                    >
+                      Open My Hub
+                    </Link>
+                  </motion.div>
+                ) : (
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <button
+                      type="button"
+                      disabled={organizerCtaLoading}
+                      onClick={async () => {
+                        try {
+                          setOrganizerCtaError("");
+                          setOrganizerCtaLoading(true);
+                          await enableOrganizer();
+                          let canOpenAfterRefresh = false;
+                          const refreshTokenValue = localStorage.getItem("refreshToken");
+                          if (refreshTokenValue) {
+                            const refreshed = await refreshAccessToken(refreshTokenValue);
+                            const payload = refreshed?.data;
+                            if (payload?.accessToken && payload?.refreshToken && payload?.user) {
+                              login(payload);
+                              canOpenAfterRefresh = Boolean(payload.user?.can_post_events);
+                            }
+                          }
+                          if (canOpenAfterRefresh) {
+                            navigate({ pathname: "/dashboard/user", hash: "host-events" });
+                          } else {
+                            setOrganizerCtaError(
+                              "We’ve received your request. You’ll be able to list events from My Hub after approval."
+                            );
+                          }
+                        } catch (_err) {
+                          setOrganizerCtaError("Could not submit organizer access request. Please try again.");
+                        } finally {
+                          setOrganizerCtaLoading(false);
+                        }
+                      }}
+                      className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {organizerCtaLoading ? "Submitting..." : "Request Organizer Access"}
+                    </button>
+                  </motion.div>
+                )}
+              </div>
+            </div>
+            {canOpenOrganizerDashboard ? <OrganizerReadyRibbon /> : null}
+            {isAuthenticated && !organizerEnabled && !organizerCtaError ? <OrganizerInviteCard /> : null}
+            {isAuthenticated && organizerEnabled && !canPostEvents ? <OrganizerPendingRibbon /> : null}
+            {organizerCtaError ? (
+              organizerCtaError.toLowerCase().includes("could not") ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-3 flex gap-3 rounded-xl border border-rose-200/80 bg-rose-50/90 px-3 py-3 text-sm text-rose-900 sm:px-4"
+                >
+                  <FiAlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" aria-hidden />
+                  <span className="leading-relaxed">{organizerCtaError}</span>
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-3 flex gap-3 rounded-xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 to-white px-3 py-3 text-sm leading-relaxed text-slate-700 sm:px-4"
+                >
+                  <FiInfo className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" aria-hidden />
+                  <span>{organizerCtaError}</span>
+                </motion.div>
+              )
+            ) : null}
+          </>
+        )}
       </section>
 
       <EventFilterBar
@@ -315,7 +499,7 @@ function EventsPage() {
                   item.is_yay_deal_event === true ||
                   String(item.is_yay_deal_event || "") === "1"
                 }
-                showPremiumBadge={isAuthenticated}
+                showPremiumBadge
                 tags={item.tags || []}
                 isFavorite={isFavorite("event", item.id)}
                 onToggleFavorite={() =>

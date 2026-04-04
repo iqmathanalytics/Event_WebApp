@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function NotFoundPage() {
+  useRouteContentReady(false);
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}

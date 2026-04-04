@@ -5,6 +5,7 @@ import EventFilterBar from "../components/EventFilterBar";
 import { fetchServices } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function ServicesPage() {
   const { selectedCity, setSelectedCity } = useCityFilter();
@@ -25,8 +26,9 @@ function ServicesPage() {
     sortBy: "popularity"
   });
   const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { isFavorite, toggleFavorite } = useFavorites();
+  useRouteContentReady(loading);
   const canApply =
     query !== appliedFilters.query ||
     city !== appliedFilters.city ||

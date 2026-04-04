@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FiHeart } from "react-icons/fi";
@@ -17,8 +18,9 @@ function EventCard({
 }) {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const [premiumGateOpen, setPremiumGateOpen] = useState(false);
   const locked = Boolean(isYayDealEvent) && !isAuthenticated;
-  const showBadge = Boolean(showPremiumBadge) && Boolean(isYayDealEvent) && isAuthenticated;
+  const showBadge = Boolean(showPremiumBadge) && Boolean(isYayDealEvent);
   const dateTimeText = item.time ? `${item.date} • ${item.time}` : item.date;
   const visibleTags = tags.slice(0, 2);
   const overflowTags = tags.slice(2);
@@ -42,13 +44,15 @@ function EventCard({
       transition={{ duration: 0.2, ease: "easeOut" }}
       className="group relative flex h-full min-h-[22.5rem] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
     >
-      {locked ? <PremiumLockOverlay variant="event" /> : null}
-
       {showBadge ? (
-        <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-900 shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
-          Premium
+        <div className="pointer-events-none absolute right-3 top-3 z-20 max-w-[6.75rem] rounded-lg border border-amber-300/80 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2 py-1.5 text-center shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl sm:max-w-[8rem] sm:rounded-full sm:px-2.5 sm:py-1">
+          <span className="block text-[9px] font-bold uppercase leading-tight tracking-wide text-slate-900 sm:text-[10px]">
+            Yay! Deal Event
+          </span>
         </div>
       ) : null}
+
+      {locked ? <PremiumLockOverlay open={premiumGateOpen} onClose={() => setPremiumGateOpen(false)} variant="event" /> : null}
 
       <button
         type="button"
@@ -67,7 +71,7 @@ function EventCard({
         alt={item.title}
         loading="lazy"
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-        className={`aspect-[4/3] w-full object-cover ${locked ? "blur-sm scale-105" : ""}`}
+        className="aspect-[4/3] w-full object-cover"
       />
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2">
@@ -115,17 +119,27 @@ function EventCard({
 
         <div className="flex items-center justify-between pt-1">
           <span className="text-xs font-semibold text-slate-900 sm:text-sm">{formatCurrency(item.price)}</span>
-          <Link
-            to={`/events/${item.id}`}
-            className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
-            onClick={(e) => {
-              e.preventDefault();
-              void trackEventClick?.(item.id);
-              navigate(`/events/${item.id}`);
-            }}
-          >
-            View Details
-          </Link>
+          {locked ? (
+            <button
+              type="button"
+              className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
+              onClick={() => setPremiumGateOpen(true)}
+            >
+              View Details
+            </button>
+          ) : (
+            <Link
+              to={`/events/${item.id}`}
+              className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
+              onClick={(e) => {
+                e.preventDefault();
+                void trackEventClick?.(item.id);
+                navigate(`/events/${item.id}`);
+              }}
+            >
+              View Details
+            </Link>
+          )}
         </div>
       </div>
     </motion.article>

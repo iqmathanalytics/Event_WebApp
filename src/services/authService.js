@@ -12,6 +12,10 @@ const { upsertUserOnboardingProfile } = require("../models/userOnboardingProfile
 const { createInfluencer } = require("../models/influencerModel");
 const { createDealerProfile } = require("../models/dealerProfileModel");
 const { createAdminNotification } = require("../models/adminModel");
+const {
+  alignNewsletterRowsToCanonicalEmail,
+  linkNewsletterSubscriberToUser
+} = require("../models/newsletterModel");
 
 function splitDisplayName(full) {
   const t = String(full || "User").trim() || "User";
@@ -42,8 +46,9 @@ function buildAuthUser(user) {
 }
 
 function tokensForUser(user) {
+  const uid = user?.id;
   const tokenPayload = {
-    id: user.id,
+    id: uid != null && typeof uid === "bigint" ? Number(uid) : uid,
     email: user.email,
     role: user.role,
     organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
@@ -76,7 +81,10 @@ async function verifyGoogleIdToken(idToken) {
 }
 
 async function register(payload) {
-  const existing = await findUserByEmail(payload.email);
+  const email = String(payload.email || "")
+    .trim()
+    .toLowerCase();
+  const existing = await findUserByEmail(email);
   if (existing) {
     throw new ApiError(409, "Email already in use");
   }
@@ -85,21 +93,24 @@ async function register(payload) {
   const name = `${payload.first_name} ${payload.last_name}`.trim();
   const userId = await createUser({
     name,
-    email: payload.email,
-    mobileNumber: payload.mobile_number,
+    email,
+    mobileNumber: payload.mobile_number || null,
     passwordHash,
     role: "user",
     organizerEnabled: false
   });
+
+  await alignNewsletterRowsToCanonicalEmail(email).catch(() => {});
+  await linkNewsletterSubscriberToUser(userId, email).catch(() => {});
 
   try {
     await upsertUserOnboardingProfile({
       userId,
       firstName: payload.first_name,
       lastName: payload.last_name,
-      mobileNumber: payload.mobile_number,
-      cityId: payload.city_id,
-      interests: payload.interests || [],
+      mobileNumber: payload.mobile_number || null,
+      cityId: payload.city_id ?? null,
+      interests: Array.isArray(payload.interests) ? payload.interests : [],
       wantsInfluencer: Boolean(payload.wants_influencer),
       wantsDeal: Boolean(payload.wants_deal)
     });
@@ -116,7 +127,7 @@ async function register(payload) {
       city_id: payload.city_id,
       category_id: payload.influencer_profile.category_id,
       social_links: null,
-      contact_email: payload.influencer_profile.contact_email || payload.email,
+      contact_email: payload.influencer_profile.contact_email || email,
       profile_image_url: payload.influencer_profile.profile_image_url || null,
       created_by: userId
     });
@@ -126,8 +137,8 @@ async function register(payload) {
     const dealerId = await createDealerProfile({
       created_by: userId,
       name: payload.deal_profile.name,
-      business_email: payload.deal_profile.business_email || payload.email,
-      business_mobile: payload.deal_profile.business_mobile || payload.mobile_number,
+      business_email: payload.deal_profile.business_email || email,
+      business_mobile: payload.deal_profile.business_mobile || payload.mobile_number || "",
       location_text: payload.deal_profile.location_text || "",
       city_id: payload.city_id,
       category_id: payload.deal_profile.category_id,
@@ -149,8 +160,8 @@ async function register(payload) {
     ...tokensForUser({
       id: userId,
       name,
-      email: payload.email,
-      mobile_number: payload.mobile_number,
+      email,
+      mobile_number: payload.mobile_number || null,
       role: "user",
       organizer_enabled: 0,
       can_post_events: 1,
@@ -163,7 +174,10 @@ async function register(payload) {
 }
 
 async function login({ email, password, portal }) {
-  const user = await findUserByEmail(email);
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+  const user = await findUserByEmail(normalizedEmail);
   if (!user) {
     throw new ApiError(401, "Invalid email or password");
   }
@@ -183,18 +197,21 @@ async function login({ email, password, portal }) {
   // Users remain role='user' even when organizer capabilities are enabled.
   // They should still be able to log in via the regular user portal.
   if (portal === "user" && user.role !== "user") {
-    throw new ApiError(403, "Please use staff login for this account");
+    throw new ApiError(403, "Invalid email or password");
   }
   if (portal === "staff") {
     const allowed =
       user.role === "admin" || user.organizer_enabled === 1 || user.role === "organizer";
     if (!allowed) {
-      throw new ApiError(403, "Please use user login for this account");
+      throw new ApiError(403, "Invalid email or password");
     }
   }
 
   const fresh = await findUserById(user.id);
-  return tokensForUser(fresh || user);
+  const sessionUser = fresh || user;
+  await alignNewsletterRowsToCanonicalEmail(sessionUser.email).catch(() => {});
+  await linkNewsletterSubscriberToUser(sessionUser.id, sessionUser.email).catch(() => {});
+  return tokensForUser(sessionUser);
 }
 
 async function readGoogleIdentity(idToken) {
@@ -217,6 +234,8 @@ async function finalizeGoogleUserSession(userId) {
   if (!user) {
     throw new ApiError(500, "Could not complete Google sign-in.");
   }
+  await alignNewsletterRowsToCanonicalEmail(user.email).catch(() => {});
+  await linkNewsletterSubscriberToUser(user.id, user.email).catch(() => {});
   return tokensForUser(user);
 }
 
@@ -238,7 +257,7 @@ async function loginWithGoogleIdToken(idToken) {
     throw new ApiError(403, "Account is deactivated.");
   }
   if (user.role !== "user") {
-    throw new ApiError(403, "Please use staff login for this account.");
+    throw new ApiError(403, "This sign-in method is not available for this account.");
   }
   if (user.google_id && user.google_id !== sub) {
     throw new ApiError(
@@ -283,6 +302,9 @@ async function registerWithGoogleIdToken(idToken) {
     profileImageUrl: picture
   });
 
+  await alignNewsletterRowsToCanonicalEmail(email).catch(() => {});
+  await linkNewsletterSubscriberToUser(userId, email).catch(() => {});
+
   try {
     const { first, last } = splitDisplayName(name);
     await upsertUserOnboardingProfile({
@@ -319,6 +341,9 @@ async function refreshAccessToken(refreshToken) {
   if (!user.is_active) {
     throw new ApiError(403, "Account is deactivated");
   }
+
+  await alignNewsletterRowsToCanonicalEmail(user.email).catch(() => {});
+  await linkNewsletterSubscriberToUser(user.id, user.email).catch(() => {});
 
   return tokensForUser(user);
 }

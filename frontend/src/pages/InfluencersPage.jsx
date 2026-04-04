@@ -13,8 +13,10 @@ import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { FiInfo } from "react-icons/fi";
+import { FiCheckCircle, FiInfo } from "react-icons/fi";
+import { MousePointerClick, PenLine, Sparkles } from "lucide-react";
 import { categories } from "../utils/filterOptions";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function FormField({ label, hint, example, className = "", children }) {
   return (
@@ -104,7 +106,7 @@ function InfluencersPage() {
     sortBy: "popularity"
   });
   const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
@@ -123,6 +125,7 @@ function InfluencersPage() {
   const [mySubmissions, setMySubmissions] = useState([]);
   const [loadingMySubmissions, setLoadingMySubmissions] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
+  useRouteContentReady(loading || loadingMySubmissions);
   const canApply =
     query !== appliedFilters.query ||
     city !== appliedFilters.city ||
@@ -263,40 +266,155 @@ function InfluencersPage() {
         <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Influencers</h1>
         <p className="text-sm text-slate-600">Discover local creators and lifestyle experts by city, category, and audience reach.</p>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Create your influencer profile</p>
-            <p className="text-sm text-slate-600">Submit your profile for admin approval before it is published.</p>
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-fuchsia-50/20 to-indigo-50/30 p-4 shadow-soft ring-1 ring-fuchsia-500/[0.07] sm:p-5">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-400/30 to-violet-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-12 -left-12 h-40 w-40 rounded-full bg-indigo-400/20 blur-3xl" />
+
+        {!isAuthenticated ? (
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+            <div className="min-w-0 flex-1">
+              <motion.p
+                className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-fuchsia-800/90"
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35 }}
+              >
+                <motion.span
+                  className="inline-flex text-fuchsia-600"
+                  animate={{ rotate: [0, 14, -10, 0], scale: [1, 1.08, 1] }}
+                  transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                  aria-hidden
+                >
+                  <Sparkles className="h-4 w-4" />
+                </motion.span>
+                Creators wanted
+              </motion.p>
+              <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+                Your spotlight is one signup away
+              </h2>
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-slate-600">
+                Join free, drop your story, and get reviewed fast — then show up next to the city&apos;s best voices.
+              </p>
+              <ul className="mt-3 flex flex-col gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
+                <li className="inline-flex items-center gap-1.5">
+                  <motion.span
+                    className="text-fuchsia-600"
+                    animate={{ y: [0, -2, 0] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                    aria-hidden
+                  >
+                    <MousePointerClick className="h-4 w-4" />
+                  </motion.span>
+                  Click to apply — we guide the rest
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                  <PenLine className="h-4 w-4 shrink-0 text-violet-500" aria-hidden />
+                  Tweak your profile anytime after you&apos;re in
+                </li>
+              </ul>
+            </div>
+            <div className="relative flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:flex-col xl:flex-row">
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  to="/register"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-fuchsia-600 to-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-fuchsia-500/25 transition hover:from-fuchsia-500 hover:to-violet-500 sm:min-h-0 sm:w-auto"
+                >
+                  Join Yay! — it&apos;s free
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link
+                  to="/login"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-slate-200 bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-fuchsia-300 hover:bg-white sm:min-h-0 sm:w-auto"
+                >
+                  Already have an account? Sign in
+                </Link>
+              </motion.div>
+            </div>
           </div>
-          {!isAuthenticated ? (
-            <Link to="/login" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-              Login to Submit
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled={!canCreateInfluencerProfile || hasAnyInfluencerSubmission || loadingMySubmissions}
-              onClick={() => {
-                setSubmitError("");
-                setSubmitMessage("");
-                setSubmitOpen(true);
-              }}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Submit Influencer Profile
-            </button>
-          )}
-        </div>
-        {isAuthenticated && !canCreateInfluencerProfile ? (
-          <p className="mt-2 text-sm text-rose-600">Influencer profile capability is disabled for your account.</p>
-        ) : null}
-        {isAuthenticated && canCreateInfluencerProfile && hasAnyInfluencerSubmission ? (
-          <p className="mt-2 text-sm text-amber-700">
-            You already submitted an influencer profile. To make changes, edit your submission from your user dashboard.
-          </p>
-        ) : null}
-        {submitMessage ? <p className="mt-2 text-sm font-medium text-emerald-700">{submitMessage}</p> : null}
+        ) : (
+          <>
+            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Create your influencer profile</p>
+                <p className="text-sm text-slate-600">Submit your profile for admin approval before it is published.</p>
+              </div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <button
+                  type="button"
+                  disabled={!canCreateInfluencerProfile || hasAnyInfluencerSubmission || loadingMySubmissions}
+                  onClick={() => {
+                    setSubmitError("");
+                    setSubmitMessage("");
+                    setSubmitOpen(true);
+                  }}
+                  className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Submit Influencer Profile
+                </button>
+              </motion.div>
+            </div>
+            {isAuthenticated && !canCreateInfluencerProfile ? (
+              <div className="relative mt-3 flex gap-3 rounded-xl border border-slate-200/90 bg-slate-50/95 px-3 py-3 sm:px-4">
+                <span className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-lg bg-white text-slate-500 shadow-sm ring-1 ring-slate-200">
+                  <FiInfo className="h-5 w-5" aria-hidden />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Spotlight signup isn&apos;t on for this account yet</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                    If you think that&apos;s a mistake, reach out through support — we&apos;re happy to help.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {isAuthenticated &&
+            canCreateInfluencerProfile &&
+            !hasAnyInfluencerSubmission &&
+            !loadingMySubmissions ? (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="relative mt-3 flex gap-3 overflow-hidden rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white to-teal-50/40 px-3 py-3 sm:items-start sm:gap-3.5 sm:px-4"
+              >
+                <motion.span
+                  className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100"
+                  animate={{ scale: [1, 1.06, 1] }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <PenLine className="h-5 w-5" aria-hidden />
+                </motion.span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">Blank canvas — your move</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                    Nothing submitted yet. Add your bio, socials, and a photo — we&apos;ll review and publish when it shines.
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-emerald-800/80">Tip: hit &quot;Submit Influencer Profile&quot; above when you&apos;re ready.</p>
+                </div>
+              </motion.div>
+            ) : null}
+            {isAuthenticated && canCreateInfluencerProfile && hasAnyInfluencerSubmission ? (
+              <div className="relative mt-3 flex gap-3 rounded-xl border border-fuchsia-200/70 bg-gradient-to-br from-fuchsia-50/90 via-white to-indigo-50/50 px-3 py-3 sm:items-start sm:gap-3.5 sm:px-4">
+                <span className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-white/90 text-fuchsia-600 shadow-sm ring-1 ring-fuchsia-100">
+                  <FiCheckCircle className="h-5 w-5" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">You&apos;re on the list — spotlight submitted</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                    Tweak your story, photos, or links anytime from your hub; updates stay in one tidy place.
+                  </p>
+                  <Link
+                    to="/dashboard/user/submissions"
+                    className="mt-2 inline-flex text-sm font-semibold text-brand-600 underline-offset-2 hover:text-brand-700 hover:underline"
+                  >
+                    Open submissions &amp; edits
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+            {submitMessage ? <p className="mt-2 text-sm font-medium text-emerald-700">{submitMessage}</p> : null}
+          </>
+        )}
       </div>
       <EventFilterBar
         query={query}

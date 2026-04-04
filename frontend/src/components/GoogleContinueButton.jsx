@@ -5,9 +5,9 @@ export function isGoogleAuthConfigured() {
   return Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
 }
 
-export function AuthDividerOr() {
+export function AuthDividerOr({ className = "" }) {
   return (
-    <div className="relative my-5" role="separator" aria-orientation="horizontal">
+    <div className={["relative my-5", className].filter(Boolean).join(" ")} role="separator" aria-orientation="horizontal">
       <div className="absolute inset-0 flex items-center" aria-hidden>
         <span className="w-full border-t border-slate-200" />
       </div>

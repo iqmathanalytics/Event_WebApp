@@ -1,3 +1,4 @@
+import "./utils/homeSplashPolicy";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -6,6 +7,7 @@ import App from "./App";
 import "./index.css";
 import { AuthProvider } from "./context/AuthContext";
 import { CityFilterProvider } from "./context/CityFilterContext";
+import { RouteContentReadyProvider } from "./context/RouteContentReadyContext";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || "";
 
@@ -13,7 +15,9 @@ const app = (
   <BrowserRouter>
     <AuthProvider>
       <CityFilterProvider>
-        <App />
+        <RouteContentReadyProvider>
+          <App />
+        </RouteContentReadyProvider>
       </CityFilterProvider>
     </AuthProvider>
   </BrowserRouter>

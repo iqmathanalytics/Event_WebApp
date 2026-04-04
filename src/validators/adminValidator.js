@@ -81,6 +81,7 @@ const editListingSchema = z.object({
     google_maps_link: z.string().url().max(500).optional(),
     ticket_link: z.string().url().max(500).optional(),
     image_url: z.string().url().max(500).optional(),
+    gallery_image_urls: z.array(z.string().url().max(1000)).max(12).optional(),
     duration_hours: z.coerce.number().int().positive().max(168).optional(),
     age_limit: z.string().max(50).optional(),
     languages: z.string().max(255).optional(),
@@ -251,6 +252,14 @@ const adminNewsletterSyncSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const adminNewsletterDeleteSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
 module.exports = {
   analyticsSchema,
   listListingsSchema,
@@ -270,6 +279,7 @@ module.exports = {
   adminContactListSchema,
   adminContactExportSchema,
   adminNewsletterSyncSchema,
+  adminNewsletterDeleteSchema,
   adminNotificationsListSchema,
   adminNotificationsReadSchema,
   adminNotificationsDeleteSchema

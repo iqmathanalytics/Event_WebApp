@@ -3,7 +3,7 @@ import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 
-function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all", children }) {
+function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all", variant = "carousel", children }) {
   const sliderRef = useRef(null);
 
   const scrollByAmount = (direction) => {
@@ -11,9 +11,12 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
     if (!node) {
       return;
     }
-    const amount = Math.max(280, Math.round(node.clientWidth * 0.8));
+    const base = variant === "landing-grid3" ? node.clientWidth : Math.round(node.clientWidth * 0.8);
+    const amount = Math.max(280, base);
     node.scrollBy({ left: direction * amount, behavior: "smooth" });
   };
+
+  const isGrid3 = variant === "landing-grid3";
 
   return (
     <motion.section
@@ -34,7 +37,9 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
           <button
             type="button"
             onClick={() => scrollByAmount(-1)}
-            className="hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid"
+            className={`hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid ${
+              isGrid3 ? "" : ""
+            }`}
             aria-label={`Scroll ${title} left`}
           >
             <FiChevronLeft />
@@ -42,7 +47,9 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
           <button
             type="button"
             onClick={() => scrollByAmount(1)}
-            className="hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid"
+            className={`hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid ${
+              isGrid3 ? "" : ""
+            }`}
             aria-label={`Scroll ${title} right`}
           >
             <FiChevronRight />
@@ -52,7 +59,11 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
 
       <div
         ref={sliderRef}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={
+          isGrid3
+            ? "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        }
       >
         {children}
       </div>

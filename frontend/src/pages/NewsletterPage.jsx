@@ -2,9 +2,11 @@ import { motion } from "framer-motion";
 import { FiArrowRight, FiCheck, FiMail } from "react-icons/fi";
 import NewsletterSignup from "../components/NewsletterSignup";
 import useCityFilter from "../hooks/useCityFilter";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function NewsletterPage() {
   const { selectedCity } = useCityFilter();
+  useRouteContentReady(false);
 
   return (
     <motion.div
@@ -65,7 +67,6 @@ function NewsletterPage() {
 
           <div className="mt-3">
             <NewsletterSignup
-              variant="page"
               cityId={selectedCity || undefined}
               title={null}
               description={null}
@@ -113,7 +114,6 @@ function NewsletterPage() {
         </header>
 
         <NewsletterSignup
-          variant="page"
           cityId={selectedCity || undefined}
           title="Get weekly updates"
           description="We’ll use your selected city (from the header) when relevant. You can change it anytime."

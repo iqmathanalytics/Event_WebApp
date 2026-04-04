@@ -236,12 +236,15 @@ const exportNewsletterSubscribers = asyncHandler(async (req, res) => {
         mobile_number: r.mobile_number || "",
         city: r.city_name || "",
         interested_in: (() => {
+          const note = String(r.interests_note || "").trim();
+          let fromJson = "";
           try {
             const arr = JSON.parse(r.interests_json || "[]");
-            return Array.isArray(arr) ? arr.join(", ") : "";
+            fromJson = Array.isArray(arr) ? arr.join(", ") : "";
           } catch (_err) {
-            return "";
+            fromJson = "";
           }
+          return [fromJson, note].filter(Boolean).join(" | ");
         })(),
         influencer: Number(r.wants_influencer) === 1 ? "Yes" : "No",
         dealer: Number(r.wants_deal) === 1 ? "Yes" : "No"
@@ -274,12 +277,15 @@ const exportNewsletterSubscribers = asyncHandler(async (req, res) => {
       r.mobile_number || "",
       r.city_name || "",
       (() => {
+        const note = String(r.interests_note || "").trim();
+        let fromJson = "";
         try {
           const arr = JSON.parse(r.interests_json || "[]");
-          return Array.isArray(arr) ? arr.join(", ") : "";
+          fromJson = Array.isArray(arr) ? arr.join(", ") : "";
         } catch (_err) {
-          return "";
+          fromJson = "";
         }
+        return [fromJson, note].filter(Boolean).join(" | ");
       })(),
       Number(r.wants_influencer) === 1 ? "Yes" : "No",
       Number(r.wants_deal) === 1 ? "Yes" : "No"
@@ -397,6 +403,15 @@ const syncNewsletterSubscribersToMailchimp = asyncHandler(async (_req, res) => {
   });
 });
 
+const deleteNewsletterSubscriber = asyncHandler(async (req, res) => {
+  const id = Number(req.validated.params.id);
+  await adminService.removeNewsletterSubscriberById(id);
+  return res.status(200).json({
+    success: true,
+    message: "Subscriber removed"
+  });
+});
+
 module.exports = {
   getModerationQueue,
   getAnalytics,
@@ -418,6 +433,7 @@ module.exports = {
   listContactMessages,
   exportContactMessages,
   syncNewsletterSubscribersToMailchimp,
+  deleteNewsletterSubscriber,
   listAdminNotifications,
   markAdminNotificationsRead,
   deleteAdminNotification

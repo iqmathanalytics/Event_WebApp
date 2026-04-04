@@ -17,8 +17,9 @@ body {
   overflow-x: hidden;
 }
 
+/* Mobile/tablet: unchanged rhythm. Desktop (lg+): wider max width + slightly tighter horizontal padding. */
 .container-page {
-  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  @apply mx-auto w-full px-4 sm:px-6 lg:max-w-[min(100%,100rem)] lg:px-5 xl:px-6 2xl:px-8;
 }
 
 @media (max-width: 767px) {
@@ -418,9 +419,9 @@ textarea {
 }
 
 .hero-brand-logo-mobile-only {
-  width: 50vw !important;
-  max-width: 20rem !important;
-  font-size: 2.5rem !important;
+  width: 46vw !important;
+  max-width: 17rem !important;
+  font-size: 2.15rem !important;
   transform: scaleX(0.94) !important;
 }
 
@@ -428,13 +429,13 @@ textarea {
   .hero-brand-logo-mobile-only {
     width: auto !important;
     max-width: none !important;
-    font-size: 2.65rem !important;
+    font-size: 2.35rem !important;
   }
 }
 
 @media (min-width: 1024px) {
   .hero-brand-logo-mobile-only {
-    font-size: 3.5rem !important;
+    font-size: 3rem !important;
   }
 }
 

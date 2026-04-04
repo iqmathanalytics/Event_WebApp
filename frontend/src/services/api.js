@@ -19,7 +19,7 @@ function redirectToLogin() {
     return;
   }
   const isStaffArea = window.location.pathname.startsWith("/organizer") || window.location.pathname.startsWith("/admin");
-  const loginPath = isStaffArea ? "/staff-login" : "/login";
+  const loginPath = isStaffArea ? "/admin" : "/login";
   if (window.location.pathname !== loginPath) {
     window.location.href = loginPath;
   }

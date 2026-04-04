@@ -7,6 +7,7 @@ const highlightsSchema = z
   .union([z.array(z.string().min(1).max(80)).max(20), z.string().max(4000)])
   .optional();
 const dateArraySchema = z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(366).optional();
+const galleryImageUrlsSchema = z.array(z.string().url().max(1000)).max(12).optional();
 
 const submitEventBodySchema = z
   .object({
@@ -26,6 +27,7 @@ const submitEventBodySchema = z
     category_id: z.number().int().positive(),
     ticket_link: z.string().url().optional(),
     image_url: z.string().url().optional(),
+    gallery_image_urls: galleryImageUrlsSchema,
     price: z.number().min(0).optional(),
     price_per_day: z.number().min(0).optional(),
     duration_hours: z.number().int().min(1).max(168).optional(),
@@ -147,6 +149,7 @@ const editOwnEventBodySchema = z
     category_id: z.coerce.number().int().positive().optional(),
     ticket_link: z.string().url().optional(),
     image_url: z.string().url().optional(),
+    gallery_image_urls: galleryImageUrlsSchema,
     price: z.coerce.number().min(0).optional(),
     price_per_day: z.coerce.number().min(0).optional(),
     duration_hours: z.coerce.number().int().min(1).max(168).optional(),

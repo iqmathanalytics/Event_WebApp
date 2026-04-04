@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS events (
   organizer_id BIGINT UNSIGNED NOT NULL,
   ticket_link VARCHAR(500) NULL,
   image_url VARCHAR(500) NULL,
+  gallery_image_urls JSON NULL,
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   duration_hours INT NULL,
   age_limit VARCHAR(50) NULL,
@@ -198,13 +199,18 @@ CREATE TABLE IF NOT EXISTS favorites (
 CREATE TABLE IF NOT EXISTS newsletter_subscribers (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   email VARCHAR(190) NOT NULL,
+  user_id BIGINT UNSIGNED NULL DEFAULT NULL,
+  first_name VARCHAR(80) NULL DEFAULT NULL,
+  last_name VARCHAR(80) NULL DEFAULT NULL,
   city_id BIGINT UNSIGNED NULL,
+  interests_note VARCHAR(500) NULL DEFAULT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   subscribed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   unsubscribed_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_newsletter_email_city (email, city_id)
+  UNIQUE KEY uq_newsletter_email (email),
+  KEY idx_newsletter_subscribers_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS contact_messages (

@@ -3,9 +3,9 @@ const ApiError = require("../utils/ApiError");
 function validateRequest(schema) {
   return (req, _res, next) => {
     const result = schema.safeParse({
-      body: req.body,
-      query: req.query,
-      params: req.params
+      body: req.body == null ? {} : req.body,
+      query: req.query == null ? {} : req.query,
+      params: req.params == null ? {} : req.params
     });
 
     if (!result.success) {

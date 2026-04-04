@@ -22,6 +22,7 @@ const {
   adminContactListSchema,
   adminContactExportSchema,
   adminNewsletterSyncSchema,
+  adminNewsletterDeleteSchema,
   adminNotificationsListSchema,
   adminNotificationsReadSchema,
   adminNotificationsDeleteSchema
@@ -75,6 +76,11 @@ router.post(
   "/newsletter/subscribers/sync-mailchimp",
   validateRequest(adminNewsletterSyncSchema),
   adminController.syncNewsletterSubscribersToMailchimp
+);
+router.delete(
+  "/newsletter/subscribers/:id",
+  validateRequest(adminNewsletterDeleteSchema),
+  adminController.deleteNewsletterSubscriber
 );
 router.get("/contact/messages", validateRequest(adminContactListSchema), adminController.listContactMessages);
 router.get(

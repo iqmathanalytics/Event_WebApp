@@ -6,13 +6,21 @@ const registerSchema = z.object({
     last_name: z.string().trim().min(1).max(80),
     email: z.string().email(),
     mobile_number: z
-      .string()
-      .trim()
-      .min(8)
-      .max(25)
-      .regex(/^[0-9+()\-\s]+$/, "Mobile number can include digits, spaces, +, -, and parentheses"),
-    city_id: z.coerce.number().int().positive(),
-    interests: z.array(z.string().trim().min(2).max(80)).min(1).max(8),
+      .preprocess((v) => {
+        if (v === null || v === undefined) {
+          return "";
+        }
+        return String(v).trim();
+      }, z.union([z.literal(""), z.string().min(8).max(25)]))
+      .transform((s) => s || null)
+      .refine((s) => s === null || /^[0-9+()\-\s]+$/.test(s), {
+        message: "Mobile number can include digits, spaces, +, -, and parentheses"
+      }),
+    city_id: z
+      .union([z.coerce.number().int().positive(), z.null()])
+      .optional()
+      .transform((v) => (v === undefined ? null : v)),
+    interests: z.array(z.string().trim().min(2).max(80)).max(8).optional().default([]),
     wants_influencer: z.boolean().optional().default(false),
     wants_deal: z.boolean().optional().default(false),
     influencer_profile: z
