@@ -119,7 +119,7 @@ The API is a **Node web service** on [Render](https://render.com). Repo: [Event_
 
 ### Blueprint (optional)
 
-`render.yaml` defines a service named **`yay-tickets-api`**. You can use **New → Blueprint** and point at this repo; then set **sync: false** secrets in the dashboard.
+`render.yaml` defines a service named **`city-events-lifestyle-hub-api`**. You can use **New → Blueprint** and point at this repo; then set **sync: false** secrets in the dashboard.
 
 ### Redeploy after a git push
 

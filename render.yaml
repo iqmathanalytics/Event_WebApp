@@ -2,7 +2,7 @@
 # or link the repo and apply this file. Set secrets in the dashboard: DB_*, JWT_*, CORS_ORIGIN, GOOGLE_CLIENT_ID, etc.
 services:
   - type: web
-    name: yay-tickets-api
+    name: city-events-lifestyle-hub-api
     runtime: node
     region: oregon
     plan: free

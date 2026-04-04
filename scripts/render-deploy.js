@@ -6,7 +6,7 @@
  *   $env:RENDER_SERVICE_ID = "srv-..." # optional if name match works
  *   npm run deploy:render
  *
- * Or set RENDER_SERVICE_NAME=yay-tickets-api (default) to pick service by name.
+ * Or set RENDER_SERVICE_NAME (default: city-events-lifestyle-hub-api) to pick service by name.
  * You can also put RENDER_API_KEY in the repo root `.env` (never commit it).
  */
 require("dotenv").config({ path: require("path").resolve(__dirname, "..", ".env") });
@@ -15,7 +15,7 @@ const API = "https://api.render.com/v1";
 
 const token = process.env.RENDER_API_KEY;
 const explicitId = process.env.RENDER_SERVICE_ID;
-const serviceName = (process.env.RENDER_SERVICE_NAME || "yay-tickets-api").trim();
+const serviceName = (process.env.RENDER_SERVICE_NAME || "city-events-lifestyle-hub-api").trim();
 
 async function api(path, opts = {}) {
   const res = await fetch(`${API}${path}`, {
