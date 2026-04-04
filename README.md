@@ -82,7 +82,60 @@ src/
 3. Start dev server:
    - `npm run dev`
 
-## Deploy to Render
+## Deploy to Render (backend API)
 
-- `render.yaml` included.
-- Set secrets in Render dashboard for DB + JWT env vars.
+The API is a **Node web service** on [Render](https://render.com). Repo: [Event_WebApp](https://github.com/iqmathanalytics/Event_WebApp).
+
+### First-time setup
+
+1. **Push to GitHub** (already configured for this repo).
+2. In [Render Dashboard](https://dashboard.render.com) → **New** → **Web Service** → connect **iqmathanalytics / Event_WebApp**.
+3. Configure:
+   - **Root directory:** `.` (repo root)
+   - **Build command:** `npm install`
+   - **Start command:** `npm start`
+   - **Health check path:** `/health`
+4. **Environment variables** (match your TiDB/JWT setup; use **Secret** type for passwords/keys):
+
+   | Key | Notes |
+   |-----|--------|
+   | `NODE_ENV` | `production` |
+   | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | TiDB Cloud (or MySQL) |
+   | `DB_SSL` | `true` for TiDB Cloud |
+   | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_*_EXPIRES_IN` | Strong random strings |
+   | `CORS_ORIGIN` | Your Netlify site URL(s), comma-separated if needed |
+   | `GOOGLE_CLIENT_ID` | If using Google sign-in |
+   | `CSC_API_KEY` | Optional; city catalog |
+
+   See `.env.example` for optional Mailchimp, SendGrid, etc.
+
+5. **Database migrations:** After the first successful deploy, run SQL migrations against the **same** DB Render uses (TiDB console, or from your PC with production `DB_*` in env):
+
+   ```bash
+   npm run db:migrate
+   ```
+
+   For a new empty database, use once: `npm run db:migrate:fresh` (runs bootstrap + migrations; destructive on existing data).
+
+### Blueprint (optional)
+
+`render.yaml` defines a service named **`yay-tickets-api`**. You can use **New → Blueprint** and point at this repo; then set **sync: false** secrets in the dashboard.
+
+### Redeploy after a git push
+
+- Render **auto-deploys** on push to the connected branch (usually `main`), or  
+- From your machine (API key: Render → **Account** → **API keys**):
+
+  ```bash
+  # PowerShell: set RENDER_API_KEY, or add it to .env (do not commit)
+  npm run deploy:render
+  ```
+
+## Frontend (Netlify)
+
+The Vite app lives under `frontend/`. **Netlify** is configured via `netlify.toml` (build base `frontend`, publish `dist`).
+
+1. **New site from Git** → same GitHub repo → base directory **`frontend`**, build `npm run build`, publish `dist`.
+2. In Netlify **Environment variables**, optional: `VITE_API_BASE_URL` = your Render API URL + `/api/v1` (e.g. `https://<your-service>.onrender.com/api/v1`). If unset, production builds use the default URL in `frontend/src/services/api.js`.
+
+3. Set **`CORS_ORIGIN`** on Render to your Netlify URL (e.g. `https://your-site.netlify.app`).
