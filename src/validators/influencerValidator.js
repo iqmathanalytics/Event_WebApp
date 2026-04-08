@@ -1,5 +1,12 @@
 const { z } = require("zod");
 
+/** Client forms often send "" for optional inputs; treat as omitted before .url() etc. */
+function emptyStringToUndefined(val) {
+  if (val === null || val === undefined) return undefined;
+  if (typeof val === "string" && val.trim() === "") return undefined;
+  return val;
+}
+
 const fetchInfluencersSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({
@@ -20,11 +27,11 @@ const submitInfluencerSchema = z.object({
     bio: z.string().trim().min(10).max(2000),
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
-    instagram: z.string().trim().max(255).optional(),
-    instagram_followers_count: z.coerce.number().int().min(0).optional(),
-    youtube: z.string().trim().max(255).optional(),
+    instagram: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
+    instagram_followers_count: z.preprocess(emptyStringToUndefined, z.coerce.number().int().min(0).optional()),
+    youtube: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
     contact_email: z.string().trim().email(),
-    profile_image_url: z.string().trim().url().optional()
+    profile_image_url: z.preprocess(emptyStringToUndefined, z.string().trim().url().optional())
   }),
   query: z.object({}).passthrough(),
   params: z.object({}).passthrough()
@@ -42,11 +49,11 @@ const editOwnInfluencerSchema = z.object({
     bio: z.string().trim().min(10).max(2000),
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
-    instagram: z.string().trim().max(255).optional(),
-    instagram_followers_count: z.coerce.number().int().min(0).optional(),
-    youtube: z.string().trim().max(255).optional(),
+    instagram: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
+    instagram_followers_count: z.preprocess(emptyStringToUndefined, z.coerce.number().int().min(0).optional()),
+    youtube: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
     contact_email: z.string().trim().email(),
-    profile_image_url: z.string().trim().url().optional()
+    profile_image_url: z.preprocess(emptyStringToUndefined, z.string().trim().url().optional())
   }),
   query: z.object({}).passthrough(),
   params: z.object({

@@ -518,7 +518,14 @@ function InfluencersPage() {
               <input required value={submitForm.name} onChange={(e) => setSubmitForm((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
             <FormField label="Bio" hint="Write a short summary of your niche and audience." example="Fashion and lifestyle creator in New York." className="sm:col-span-2">
-              <textarea required value={submitForm.bio} onChange={(e) => setSubmitForm((p) => ({ ...p, bio: e.target.value }))} rows={4} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+              <textarea
+                required
+                minLength={10}
+                value={submitForm.bio}
+                onChange={(e) => setSubmitForm((p) => ({ ...p, bio: e.target.value }))}
+                rows={4}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
             </FormField>
             <FormField label="City" hint="Choose your primary operating city.">
               <select

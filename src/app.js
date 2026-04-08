@@ -8,6 +8,14 @@ const { corsOrigin, nodeEnv } = require("./config/env");
 const { notFoundMiddleware, errorMiddleware } = require("./middleware/errorMiddleware");
 
 const app = express();
+
+// Behind Render/nginx/Cloudflare, clients must be identified via X-Forwarded-For.
+// Without this, req.ip is the proxy and every user shares one rate-limit bucket → 429s.
+if (nodeEnv === "production") {
+  const hops = Number(process.env.TRUST_PROXY_HOPS);
+  app.set("trust proxy", Number.isFinite(hops) && hops >= 1 ? hops : 1);
+}
+
 const allowedOrigins = String(corsOrigin || "")
   .split(",")
   .map((item) => item.trim())
@@ -49,11 +57,21 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan(nodeEnv === "production" ? "combined" : "dev"));
 
+const rateLimitWindowMs = (() => {
+  const n = Number(process.env.RATE_LIMIT_WINDOW_MS);
+  return Number.isFinite(n) && n > 0 ? n : 15 * 60 * 1000;
+})();
+const rateLimitMax = (() => {
+  const n = Number(process.env.RATE_LIMIT_MAX);
+  return Number.isFinite(n) && n > 0 ? n : 300;
+})();
+
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
+  windowMs: rateLimitWindowMs,
+  max: rateLimitMax,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: (req) => req.path === "/health"
 });
 app.use(globalLimiter);
 
