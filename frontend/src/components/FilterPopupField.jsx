@@ -10,21 +10,23 @@ function FilterPopupField({
   onToggle,
   panelContent,
   panelClassName = "w-full min-w-[220px]",
-  usePortal = true
+  usePortal = true,
+  /** Must sit above app modals (often z-[221]); portal panels used to default to z-[220] and hid behind them. */
+  portalZIndexClass = "z-[260]"
 }) {
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
+  const repositionRafRef = useRef(null);
+  const resizeObserverRef = useRef(null);
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 8 });
   const [portalWidth, setPortalWidth] = useState(null);
   const showDateIcon = /date|when/i.test(String(label || ""));
-  const triggerVisible =
-    Boolean(triggerRef.current) &&
-    triggerRef.current.offsetParent !== null &&
-    triggerRef.current.getClientRects().length > 0;
-  const canPortal = Boolean(usePortal && isActive && triggerVisible);
+  const triggerClientOk =
+    Boolean(triggerRef.current) && triggerRef.current.getClientRects().length > 0;
+  const canPortal = Boolean(usePortal && isActive && triggerClientOk);
 
   const updatePortalPosition = useCallback(() => {
-    if (!usePortal || !isActive || !triggerRef.current || triggerRef.current.offsetParent === null) {
+    if (!usePortal || !isActive || !triggerRef.current || triggerRef.current.getClientRects().length === 0) {
       return;
     }
     const triggerRect = triggerRef.current.getBoundingClientRect();
@@ -55,22 +57,70 @@ function FilterPopupField({
     setPortalPosition({ top, left });
   }, [isActive, panelClassName, usePortal]);
 
-  useLayoutEffect(() => {
+  const scheduleReposition = useCallback(() => {
     if (!usePortal || !isActive) {
       return;
     }
-    updatePortalPosition();
-    window.requestAnimationFrame(updatePortalPosition);
+    if (repositionRafRef.current != null) {
+      cancelAnimationFrame(repositionRafRef.current);
+    }
+    repositionRafRef.current = requestAnimationFrame(() => {
+      repositionRafRef.current = null;
+      updatePortalPosition();
+    });
+  }, [usePortal, isActive, updatePortalPosition]);
 
-    const onViewportChange = () => updatePortalPosition();
+  useLayoutEffect(() => {
+    if (!usePortal || !isActive) {
+      return undefined;
+    }
+
+    updatePortalPosition();
+    scheduleReposition();
+
+    const onViewportChange = () => scheduleReposition();
     window.addEventListener("resize", onViewportChange);
     window.addEventListener("scroll", onViewportChange, true);
+
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", onViewportChange);
+      vv.addEventListener("scroll", onViewportChange);
+    }
+
+    let innerObserveRaf = null;
+    const outerObserveRaf = requestAnimationFrame(() => {
+      innerObserveRaf = requestAnimationFrame(() => {
+        innerObserveRaf = null;
+        const el = panelRef.current;
+        if (el && typeof ResizeObserver !== "undefined") {
+          resizeObserverRef.current = new ResizeObserver(() => scheduleReposition());
+          resizeObserverRef.current.observe(el);
+        }
+      });
+    });
+
     return () => {
+      cancelAnimationFrame(outerObserveRaf);
+      if (innerObserveRaf != null) {
+        cancelAnimationFrame(innerObserveRaf);
+      }
+      if (repositionRafRef.current != null) {
+        cancelAnimationFrame(repositionRafRef.current);
+        repositionRafRef.current = null;
+      }
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       window.removeEventListener("resize", onViewportChange);
       window.removeEventListener("scroll", onViewportChange, true);
+      if (vv) {
+        vv.removeEventListener("resize", onViewportChange);
+        vv.removeEventListener("scroll", onViewportChange);
+      }
     };
-  }, [isActive, updatePortalPosition, usePortal]);
+  }, [isActive, updatePortalPosition, usePortal, scheduleReposition]);
 
+  /* No translateY on portal: transforms + scroll reposition caused the calendar to drift from the trigger. */
   const panelNode = (
     <motion.div
       ref={panelRef}
@@ -78,10 +128,10 @@ function FilterPopupField({
       onClick={(event) => event.stopPropagation()}
       data-filter-popup-portal={usePortal ? "true" : "false"}
       key={`${label}-panel`}
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
       style={
         usePortal
           ? {
@@ -92,7 +142,7 @@ function FilterPopupField({
             }
           : undefined
       }
-      className={`${usePortal ? "z-[220]" : "absolute left-0 top-[calc(100%+8px)] z-30"} rounded-3xl border border-slate-200 bg-white p-3 shadow-soft ${panelClassName}`}
+      className={`${usePortal ? portalZIndexClass : "absolute left-0 top-[calc(100%+8px)] z-30"} max-h-[min(85dvh,calc(100vh-24px))] overflow-y-auto overscroll-contain rounded-3xl border border-slate-200 bg-white p-3 shadow-soft ${panelClassName}`}
     >
       <div onMouseDown={(event) => event.stopPropagation()}>{panelContent}</div>
     </motion.div>

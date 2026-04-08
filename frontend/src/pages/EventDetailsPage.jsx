@@ -370,7 +370,7 @@ function EventDetailsPage() {
 }
 
 function formatEventScheduleLabel(event) {
-  const toDate = (value) => formatDateUS(String(value || "").slice(0, 10));
+  const toDate = (value) => formatDateUS(value);
   if (event.schedule_type === "range" && event.event_start_date && event.event_end_date) {
     return `${toDate(event.event_start_date)} - ${toDate(event.event_end_date)}`;
   }

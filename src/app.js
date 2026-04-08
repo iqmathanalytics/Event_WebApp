@@ -9,49 +9,74 @@ const { notFoundMiddleware, errorMiddleware } = require("./middleware/errorMiddl
 
 const app = express();
 
-// Behind Render/nginx/Cloudflare, clients must be identified via X-Forwarded-For.
-// Without this, req.ip is the proxy and every user shares one rate-limit bucket → 429s.
+// Required behind MilesWeb / nginx / CDN so req.ip + rate-limit sees real clients.
 if (nodeEnv === "production") {
-  const hops = Number(process.env.TRUST_PROXY_HOPS);
-  app.set("trust proxy", Number.isFinite(hops) && hops >= 1 ? hops : 1);
+  app.set("trust proxy", 1);
 }
 
-const allowedOrigins = String(corsOrigin || "")
+const explicitCorsOrigins = ["https://yayeventz.com", "https://www.yayeventz.com"];
+const envOrigins = String(corsOrigin || "")
   .split(",")
   .map((item) => item.trim())
-  .filter(Boolean);
-const wildcardOriginSuffixes = allowedOrigins
+  .filter((item) => item && item !== "*");
+const wildcardOriginSuffixes = envOrigins
   .filter((item) => item.startsWith("*.") && item.length > 2)
-  .map((item) => item.slice(1)); // "*.netlify.app" -> ".netlify.app"
+  .map((item) => item.slice(1));
+const corsOriginAllowlist = [...new Set([...explicitCorsOrigins, ...envOrigins.filter((o) => !o.startsWith("*."))])];
 
-app.use(helmet());
+function isHttpsYayeventzOrigin(origin) {
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    return host === "yayeventz.com" || host.endsWith(".yayeventz.com");
+  } catch (_e) {
+    return false;
+  }
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (corsOriginAllowlist.includes(origin)) {
+      callback(null, origin);
+      return;
+    }
+    if (nodeEnv === "production" && isHttpsYayeventzOrigin(origin)) {
+      callback(null, origin);
+      return;
+    }
+    if (wildcardOriginSuffixes.some((suffix) => origin.endsWith(suffix))) {
+      callback(null, origin);
+      return;
+    }
+    if (nodeEnv === "production" && origin.endsWith(".netlify.app")) {
+      callback(null, origin);
+      return;
+    }
+    if (nodeEnv !== "production" && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
+      callback(null, origin);
+      return;
+    }
+    if (nodeEnv !== "production" && /^http:\/\/localhost:\d+$/.test(origin)) {
+      callback(null, origin);
+      return;
+    }
+    callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true,
+  optionsSuccessStatus: 204
+};
+
+// CORS before helmet so responses stay readable from www → api (different hostnames).
+app.use(cors(corsOptions));
 app.use(
-  cors({
-    origin(origin, callback) {
-      if (allowedOrigins.includes("*")) {
-        callback(null, true);
-        return;
-      }
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-      if (wildcardOriginSuffixes.some((suffix) => origin.endsWith(suffix))) {
-        callback(null, true);
-        return;
-      }
-      // Netlify preview + new site URLs change often; allow by suffix in production.
-      if (nodeEnv === "production" && origin.endsWith(".netlify.app")) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
   })
 );
 app.use(express.json({ limit: "1mb" }));
@@ -94,14 +119,18 @@ app.get("/", (_req, res) => {
   <p>If you see “invalid response,” you likely opened <code>https://</code> — switch to <code>http://</code>.</p>
   <ul>
     <li><a href="/health">GET /health</a> — JSON health check</li>
-    <li>API routes under <code>/api/v1/…</code></li>
+    <li>API routes (behind proxy) under <code>/api/…</code></li>
   </ul>
   <p>Run the <strong>frontend</strong> separately (e.g. Vite on port 5173) for the web app.</p>
 </body>
 </html>`);
 });
 
-app.use("/api/v1", routes);
+app.get("/api", (_req, res) => {
+  res.status(200).send("API WORKING");
+});
+
+app.use("/", routes);
 
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);

@@ -172,14 +172,27 @@ function PopupSelect({ value, onChange, options = [], placeholder = "Select opti
   );
 }
 
-function PopupDateField({ value, onChange, placeholder = "Select date" }) {
+function AdminDatePickerField({ label, value, onChange, placeholder = "Select date" }) {
+  const [open, setOpen] = useState(false);
   return (
-    <input
-      type="date"
-      value={value || ""}
-      onChange={(e) => onChange?.(e.target.value)}
-      placeholder={placeholder}
-      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+    <FilterPopupField
+      label={label}
+      value={value ? formatDateUS(value) : placeholder}
+      isActive={open}
+      onToggle={(e) => {
+        e.stopPropagation();
+        setOpen((prev) => !prev);
+      }}
+      usePortal
+      panelClassName="w-fit max-w-[calc(100vw-2rem)]"
+      panelContent={
+        <AirbnbDatePickerPanel
+          value={value}
+          onChange={(next) => onChange?.(next)}
+          closeOnSelect
+          onClose={() => setOpen(false)}
+        />
+      }
     />
   );
 }
@@ -1732,7 +1745,20 @@ function AdminDashboardPage() {
           <section className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <h2 className="text-lg font-semibold text-slate-900">All Event Bookings</h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBookingFilters({ event_id: "", organizer_id: "", city: "", date: "" });
+                    setBookingEventQuery("");
+                    setBookingCityQuery("");
+                    setActiveBookingPanel(null);
+                    setMobileBookingsPage(1);
+                  }}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Reset filters
+                </button>
                 <button
                   type="button"
                   onClick={() => exportBookings("csv")}
@@ -2668,8 +2694,9 @@ function AdminDashboardPage() {
                     />
                   </FormField>
                   {(editForm.schedule_type || "single") === "single" ? (
-                  <FormField label="Event Date" hint="Primary event date." className="sm:col-span-2">
-                    <PopupDateField
+                  <FormField label="Event Date" hint="Primary event date (MM/DD/YYYY)." className="sm:col-span-2">
+                    <AdminDatePickerField
+                      label="Event Date"
                       value={editForm.event_date || ""}
                       onChange={(next) => setEditForm((prev) => ({ ...prev, event_date: next }))}
                       placeholder="Select event date"
@@ -2678,15 +2705,17 @@ function AdminDashboardPage() {
                   ) : null}
                   {(editForm.schedule_type || "single") === "range" ? (
                     <>
-                      <FormField label="Start Date" hint="First day of the event range.">
-                        <PopupDateField
+                      <FormField label="Start Date" hint="First day of the event range (MM/DD/YYYY).">
+                        <AdminDatePickerField
+                          label="Start Date"
                           value={editForm.event_start_date || ""}
                           onChange={(next) => setEditForm((prev) => ({ ...prev, event_start_date: next }))}
                           placeholder="Select start date"
                         />
                       </FormField>
-                      <FormField label="End Date" hint="Last day of the event range.">
-                        <PopupDateField
+                      <FormField label="End Date" hint="Last day of the event range (MM/DD/YYYY).">
+                        <AdminDatePickerField
+                          label="End Date"
                           value={editForm.event_end_date || ""}
                           onChange={(next) => setEditForm((prev) => ({ ...prev, event_end_date: next }))}
                           placeholder="Select end date"
@@ -2747,7 +2776,7 @@ function AdminDashboardPage() {
                               }
                               className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
                             >
-                              {dateItem} ×
+                              {formatDateUS(dateItem)} ×
                             </button>
                           ))
                         ) : (
@@ -2984,8 +3013,9 @@ function AdminDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
-                  <FormField label="Valid Until" hint="Last date this deal stays active." className="sm:col-span-2">
-                    <PopupDateField
+                  <FormField label="Valid Until" hint="Last date this deal stays active (MM/DD/YYYY)." className="sm:col-span-2">
+                    <AdminDatePickerField
+                      label="Valid Until"
                       value={editForm.expiry_date || ""}
                       onChange={(next) => setEditForm((prev) => ({ ...prev, expiry_date: next }))}
                       placeholder="Select expiry date"
@@ -3122,8 +3152,9 @@ function AdminDashboardPage() {
                   />
                 </FormField>
                 {(reviewForm.schedule_type || "single") === "single" ? (
-                  <FormField label="Event Date" hint="Primary event date." className="sm:col-span-2">
-                    <PopupDateField
+                  <FormField label="Event Date" hint="Primary event date (MM/DD/YYYY)." className="sm:col-span-2">
+                    <AdminDatePickerField
+                      label="Event Date"
                       value={reviewForm.event_date || ""}
                       onChange={(next) => setReviewForm((prev) => ({ ...prev, event_date: next }))}
                       placeholder="Select event date"
@@ -3132,15 +3163,17 @@ function AdminDashboardPage() {
                 ) : null}
                 {(reviewForm.schedule_type || "single") === "range" ? (
                   <>
-                    <FormField label="Start Date" hint="First day of the event range.">
-                      <PopupDateField
+                    <FormField label="Start Date" hint="First day of the event range (MM/DD/YYYY).">
+                      <AdminDatePickerField
+                        label="Start Date"
                         value={reviewForm.event_start_date || ""}
                         onChange={(next) => setReviewForm((prev) => ({ ...prev, event_start_date: next }))}
                         placeholder="Select start date"
                       />
                     </FormField>
-                    <FormField label="End Date" hint="Last day of the event range.">
-                      <PopupDateField
+                    <FormField label="End Date" hint="Last day of the event range (MM/DD/YYYY).">
+                      <AdminDatePickerField
+                        label="End Date"
                         value={reviewForm.event_end_date || ""}
                         onChange={(next) => setReviewForm((prev) => ({ ...prev, event_end_date: next }))}
                         placeholder="Select end date"
@@ -3201,7 +3234,7 @@ function AdminDashboardPage() {
                             }
                             className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
                           >
-                            {dateItem} ×
+                            {formatDateUS(dateItem)} ×
                           </button>
                         ))
                       ) : (

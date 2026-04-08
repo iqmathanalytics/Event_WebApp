@@ -4,7 +4,7 @@ export const events = [
     title: "Downtown Jazz Night",
     category: "Music",
     city: "New York",
-    date: "Apr 12, 2026",
+    date: "04/12/2026",
     price: 35
   },
   {
@@ -12,7 +12,7 @@ export const events = [
     title: "Sunset Rooftop Party",
     category: "Nightlife",
     city: "Los Angeles",
-    date: "Apr 20, 2026",
+    date: "04/20/2026",
     price: 50
   },
   {
@@ -20,7 +20,7 @@ export const events = [
     title: "Art & Wine Weekend",
     category: "Lifestyle",
     city: "Miami",
-    date: "May 2, 2026",
+    date: "05/02/2026",
     price: 45
   }
 ];

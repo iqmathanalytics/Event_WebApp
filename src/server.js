@@ -7,9 +7,10 @@ async function startServer() {
   try {
     await testConnection();
     startYoutubeSubscriberRefreshJob();
-    app.listen(port, () => {
+    const PORT = Number(process.env.PORT || port || 3000);
+    app.listen(PORT, "0.0.0.0", () => {
       // eslint-disable-next-line no-console
-      console.log(`Server running on port ${port}`);
+      console.log(`Server running on port ${PORT}`);
     });
   } catch (err) {
     // eslint-disable-next-line no-console

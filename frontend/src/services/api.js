@@ -1,9 +1,12 @@
 import axios from "axios";
 
-const renderBaseURL = "https://city-events-lifestyle-hub-api.onrender.com/api/v1";
-const localBaseURL = "http://localhost:5000/api/v1";
-const configuredBaseURL = (import.meta.env.VITE_API_BASE_URL || "").trim();
-const baseURL = import.meta.env.PROD ? renderBaseURL : configuredBaseURL || localBaseURL;
+const localBaseURL = "http://localhost:5000";
+const configuredBaseURL = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/+$/, "");
+const sameOriginProdBaseURL =
+  typeof window !== "undefined"
+    ? `${window.location.origin}/api`
+    : "https://www.yayeventz.com/api";
+const baseURL = configuredBaseURL || (import.meta.env.PROD ? sameOriginProdBaseURL : localBaseURL);
 const api = axios.create({
   baseURL,
   timeout: 15000

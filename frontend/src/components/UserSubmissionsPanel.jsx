@@ -14,6 +14,8 @@ import {
 } from "../services/listingService";
 import { formatDateUS } from "../utils/format";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import FilterPopupField from "./FilterPopupField";
+import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 
 function parseDealOfferMeta(description) {
   const text = String(description || "");
@@ -143,6 +145,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
   const [editInfluencerForm, setEditInfluencerForm] = useState({});
   const [editDealItem, setEditDealItem] = useState(null);
   const [editDealForm, setEditDealForm] = useState({});
+  const [editDealExpiryPickerOpen, setEditDealExpiryPickerOpen] = useState(false);
 
   const hasModalOpen = useMemo(() => Boolean(editInfluencerItem || editDealItem), [editInfluencerItem, editDealItem]);
 
@@ -167,6 +170,12 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
       document.body.style.overflow = previous;
     };
   }, [hasModalOpen]);
+
+  useEffect(() => {
+    if (!editDealItem) {
+      setEditDealExpiryPickerOpen(false);
+    }
+  }, [editDealItem]);
 
   const loadSubmissions = async () => {
     const [influencerResult, dealResult] = await Promise.allSettled([
@@ -635,6 +644,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                               }
                             })()
                           : parseDealOfferMeta(item.description);
+                        setEditDealExpiryPickerOpen(false);
                         setEditDealForm({
                           title: item.title || "",
                           description: stripDealOfferMeta(item.description || ""),
@@ -771,6 +781,10 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
           onClose={() => setEditDealItem(null)}
           onSubmit={async (e) => {
             e.preventDefault();
+            if (!String(editDealForm.expiry_date || "").trim()) {
+              setSubmissionActionError("Please choose a valid until date.");
+              return;
+            }
             try {
               setSubmissionActionError("");
               setSubmissionActionLoading(true);
@@ -857,13 +871,25 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
             <FormField label="Brand / Store Name" hint="Business offering this deal." example="Burger District">
               <input required value={editDealForm.provider_name || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, provider_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Valid Until" hint="Last date users can claim the deal.">
-              <input
-                required
-                type="date"
-                value={editDealForm.expiry_date || ""}
-                onChange={(e) => setEditDealForm((p) => ({ ...p, expiry_date: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            <FormField label="Valid Until" hint="Last date users can claim the deal. Format: MM/DD/YYYY.">
+              <FilterPopupField
+                label="Valid Until"
+                value={editDealForm.expiry_date ? formatDateUS(editDealForm.expiry_date) : "Select valid until date"}
+                isActive={editDealExpiryPickerOpen}
+                onToggle={(ev) => {
+                  ev.stopPropagation();
+                  setEditDealExpiryPickerOpen((prev) => !prev);
+                }}
+                usePortal
+                panelClassName="w-fit max-w-[calc(100vw-2rem)]"
+                panelContent={
+                  <AirbnbDatePickerPanel
+                    value={editDealForm.expiry_date}
+                    onChange={(next) => setEditDealForm((p) => ({ ...p, expiry_date: next }))}
+                    closeOnSelect
+                    onClose={() => setEditDealExpiryPickerOpen(false)}
+                  />
+                }
               />
             </FormField>
             <FormField label="Original Price" hint="Optional base price before offer." example="49.99">
