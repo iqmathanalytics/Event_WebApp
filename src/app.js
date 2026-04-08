@@ -65,15 +65,18 @@ const rateLimitMax = (() => {
   const n = Number(process.env.RATE_LIMIT_MAX);
   return Number.isFinite(n) && n > 0 ? n : 300;
 })();
+const isRateLimitDisabled = String(process.env.RATE_LIMIT_DISABLED || "").toLowerCase() === "true";
 
-const globalLimiter = rateLimit({
-  windowMs: rateLimitWindowMs,
-  max: rateLimitMax,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.path === "/health"
-});
-app.use(globalLimiter);
+if (!isRateLimitDisabled) {
+  const globalLimiter = rateLimit({
+    windowMs: rateLimitWindowMs,
+    max: rateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.path === "/health"
+  });
+  app.use(globalLimiter);
+}
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ success: true, message: "OK" });
