@@ -28,7 +28,7 @@ function Footer() {
           </div>
         </div>
         <div className="flex flex-col gap-4 border-t border-slate-200/80 pt-8 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">© {new Date().getFullYear()} Yay! Tickets</p>
+          <p className="text-sm text-slate-500">© {new Date().getFullYear()} Yay! Eventz</p>
           <div className="flex flex-wrap gap-4 text-sm text-slate-600">
             <Link to="/newsletter" className="transition hover:text-slate-900">
               City Newsletter

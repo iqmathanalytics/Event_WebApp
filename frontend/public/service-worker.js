@@ -1,5 +1,5 @@
-const IMAGE_CACHE = "yaytickets-images-v1";
-const APP_CACHE = "yaytickets-app-v1";
+const IMAGE_CACHE = "yayeventz-images-v1";
+const APP_CACHE = "yayeventz-app-v1";
 const IMAGE_CACHE_MAX_ENTRIES = 120;
 
 self.addEventListener("install", (event) => {

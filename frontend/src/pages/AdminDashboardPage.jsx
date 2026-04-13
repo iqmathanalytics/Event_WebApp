@@ -2220,7 +2220,7 @@ function AdminDashboardPage() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
-              <FormField label="Email Address" hint="Use a valid email for immediate login access." example="riya@yaytickets.com">
+              <FormField label="Email Address" hint="Use a valid email for immediate login access." example="riya@yayeventz.com">
                 <input
                   type="email"
                   required

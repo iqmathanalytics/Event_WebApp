@@ -1,7 +1,7 @@
 {
   "name": "city-events-lifestyle-hub-backend",
   "version": "1.0.0",
-  "description": "Backend API for Yay! Tickets",
+  "description": "Backend API for Yay! Eventz",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {

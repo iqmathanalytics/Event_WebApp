@@ -174,7 +174,7 @@ function LandingSplash({ busy, onRevealed, onExitComplete, headerLogoRef, startL
           </motion.div>
 
           <div className="relative z-[1] flex flex-col items-center px-6">
-            <span className="sr-only">Loading Yay Tickets</span>
+            <span className="sr-only">Loading Yay! Eventz</span>
 
             <motion.div
               className="relative flex items-center justify-center"

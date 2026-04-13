@@ -47,7 +47,7 @@ async function sendSendGridEmail({ to, subject, text, html }) {
     logSkip("SendGrid skipped: SENDGRID_API_KEY or SENDGRID_FROM_EMAIL not set");
     return { sent: false, skipped: true };
   }
-  const fromName = process.env.SENDGRID_FROM_NAME || "Yay! Tickets";
+  const fromName = process.env.SENDGRID_FROM_NAME || "Yay! Eventz";
   const body = {
     personalizations: [{ to: [{ email: to }] }],
     from: { email: fromEmail, name: fromName },

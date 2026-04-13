@@ -98,7 +98,7 @@ function RegisterPage() {
           <div className="text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">New member registration</p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">
-              Create your Yay! Tickets account
+              Create your Yay! Eventz account
             </h1>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-[0.9375rem]">
               Welcome to the side of the city that stays alive after dark—where the lights, the crowds, and the quiet
@@ -162,7 +162,7 @@ function RegisterPage() {
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                 />
                 <span className="text-sm font-semibold leading-snug text-slate-800">
-                  I have read and agree to the acknowledgment above, and I understand that the Yay! Tickets Terms of
+                  I have read and agree to the acknowledgment above, and I understand that the Yay! Eventz Terms of
                   Service and Privacy Policy apply to my use of the platform.
                 </span>
               </label>

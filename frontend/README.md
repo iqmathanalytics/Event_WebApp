@@ -1,6 +1,6 @@
-# Yay! Tickets Frontend
+# Yay! Eventz Frontend
 
-React + Vite + Tailwind frontend for Yay! Tickets.
+React + Vite + Tailwind frontend for Yay! Eventz.
 
 ## Stack
 

@@ -330,7 +330,7 @@ function EventsPage() {
                 </li>
                 <li className="inline-flex items-center gap-1.5">
                   <Ticket className="h-4 w-4 shrink-0 text-orange-600" aria-hidden />
-                  Yay! Tickets — checkout-ready when you&apos;re approved
+                  Yay! Eventz — checkout-ready when you&apos;re approved
                 </li>
               </ul>
             </div>
@@ -359,7 +359,7 @@ function EventsPage() {
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-slate-900">List your own experiences</p>
                 <p className="text-sm text-slate-600">
-                  Host gatherings on Yay! Tickets — submit details for review, then welcome guests from your hub.
+                  Host gatherings on Yay! Eventz — submit details for review, then welcome guests from your hub.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

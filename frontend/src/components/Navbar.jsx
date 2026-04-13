@@ -190,7 +190,7 @@ function Navbar({
             <motion.img
               ref={headerLogoRef}
               src="/branding/yay-tickets-logo.png"
-              alt="Yay! Tickets"
+              alt="Yay! Eventz"
               loading="eager"
               className="h-8 w-auto max-w-[128px] object-contain sm:h-9 sm:max-w-[140px]"
               initial={false}
@@ -210,7 +210,7 @@ function Navbar({
               }}
             />
           </motion.span>
-          <span className="hidden sm:inline">Yay! Tickets</span>
+          <span className="hidden sm:inline">Yay! Eventz</span>
         </Link>
 
         <nav className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm lg:flex">

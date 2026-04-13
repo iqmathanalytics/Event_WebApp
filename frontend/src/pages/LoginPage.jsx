@@ -68,7 +68,7 @@ function LoginPage() {
               <AuthBrandLogo compact />
               <h1 className="mt-1.5 text-xl font-bold tracking-tight text-slate-900 sm:mt-2 sm:text-2xl">Welcome back</h1>
               <p className="mx-auto mt-1 max-w-[20rem] text-xs leading-snug text-slate-600 text-balance sm:text-sm sm:leading-relaxed">
-                Sign in to save favorites, unlock offers, and keep track of your Yay! Tickets world.
+                Sign in to save favorites, unlock offers, and keep track of your Yay! Eventz world.
               </p>
             </div>
 

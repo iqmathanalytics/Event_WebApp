@@ -36,7 +36,7 @@ const bangExtra = {
 function BrandHeroLogo({ className = "", entranceActive = true }) {
   return (
     <motion.div
-      aria-label="Yay! Tickets"
+      aria-label="Yay! Eventz"
       className={`yay-hero-logo ${className}`}
       style={{
         fontFamily: '"Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -61,7 +61,7 @@ function BrandHeroLogo({ className = "", entranceActive = true }) {
         className="yay-hero-word yay-hero-soft yay-hero-gradient-text inline-block"
         variants={logoBit}
       >
-        &nbsp;Tickets
+        &nbsp;Eventz
       </motion.span>
     </motion.div>
   );

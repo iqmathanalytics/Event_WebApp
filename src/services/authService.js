@@ -249,7 +249,7 @@ async function loginWithGoogleIdToken(idToken) {
   if (!user) {
     throw new ApiError(
       404,
-      "We could not find a Yay! Tickets account for this Google sign-in. Please create an account first, then sign in here."
+      "We could not find a Yay! Eventz account for this Google sign-in. Please create an account first, then sign in here."
     );
   }
 

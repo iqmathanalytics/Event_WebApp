@@ -10,7 +10,7 @@ const SPARKLE_POS = [
   { left: "50%", top: "2%", d: 0.25 }
 ];
 
-/** Animated Yay! Tickets logo for auth pages; `compact` saves vertical space on split layouts. */
+/** Animated Yay! Eventz logo for auth pages; `compact` saves vertical space on split layouts. */
 export default function AuthBrandLogo({ compact = false }) {
   const shell = compact
     ? "relative mx-auto mb-1 flex h-[5.25rem] w-full max-w-[220px] items-center justify-center sm:mb-1.5 sm:h-[5.75rem] sm:max-w-[240px] lg:h-[5.5rem]"
@@ -50,7 +50,7 @@ export default function AuthBrandLogo({ compact = false }) {
       >
         <motion.img
           src="/branding/yay-tickets-logo.png"
-          alt="Yay! Tickets"
+          alt="Yay! Eventz"
           className={`w-auto object-contain drop-shadow-[0_8px_24px_rgba(15,23,42,0.12)] ${
             compact
               ? "h-14 max-w-[min(100%,220px)] sm:h-16"

@@ -1,6 +1,6 @@
-# Yay! Tickets - Backend
+# Yay! Eventz - Backend
 
-Production-grade Node.js + Express backend for the Yay! Tickets platform.
+Production-grade Node.js + Express backend for the Yay! Eventz platform.
 
 ## Tech
 
