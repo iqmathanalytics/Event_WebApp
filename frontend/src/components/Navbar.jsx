@@ -5,6 +5,7 @@ import { FiCheck, FiChevronDown, FiMapPin, FiMenu, FiSearch, FiUser, FiX } from 
 import useAuth from "../hooks/useAuth";
 import useCityFilter from "../hooks/useCityFilter";
 import YayUserGreeting from "./YayUserGreeting";
+import BrandHeroLogo from "./BrandHeroLogo";
 
 const navItems = [
   { to: "/events", label: "Events" },
@@ -142,7 +143,13 @@ function Navbar({
       return cities;
     }
     return cities.filter((city) => city.label.toLowerCase().includes(query));
-  }, [cityMenuQuery]);
+  }, [cityMenuQuery, cities]);
+
+  const headerLogoEntranceActive = !(
+    brandLogoPhase === "splash" ||
+    brandLogoPhase === "exit" ||
+    (logoFlightActive && brandLogoPhase !== "settling")
+  );
 
   const reopenHeroSearch = (panel = "where") => {
     const target = document.getElementById("home-hero-search-anchor");
@@ -168,7 +175,7 @@ function Navbar({
       className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 backdrop-blur-md"
     >
       <div className="container-page flex h-16 items-center justify-between gap-3 sm:h-20">
-        <Link to="/" className="flex items-center gap-2.5 text-sm font-extrabold tracking-wide text-brand-600 sm:text-base">
+        <Link to="/" className="flex items-center gap-2.5 text-slate-900">
           <motion.span
             className="relative inline-flex origin-[center_62%] will-change-[transform,filter]"
             animate={headerLogoCelebrateControls}
@@ -195,12 +202,7 @@ function Navbar({
               className="h-8 w-auto max-w-[128px] object-contain sm:h-9 sm:max-w-[140px]"
               initial={false}
               animate={{
-                opacity:
-                  brandLogoPhase === "splash" ||
-                  brandLogoPhase === "exit" ||
-                  (logoFlightActive && brandLogoPhase !== "settling")
-                    ? 0
-                    : 1
+                opacity: headerLogoEntranceActive ? 1 : 0
               }}
               transition={{
                 opacity: {
@@ -210,7 +212,20 @@ function Navbar({
               }}
             />
           </motion.span>
-          <span className="hidden sm:inline">Yay! Eventz</span>
+          <motion.div
+            initial={false}
+            animate={{
+              opacity: headerLogoEntranceActive ? 1 : 0
+            }}
+            transition={{
+              opacity: {
+                duration: brandLogoPhase === "settling" ? 0.28 : 0.16,
+                ease: [0.22, 1, 0.36, 1]
+              }
+            }}
+          >
+            <BrandHeroLogo className="navbar-brand-wordmark" entranceActive={headerLogoEntranceActive} />
+          </motion.div>
         </Link>
 
         <nav className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm lg:flex">

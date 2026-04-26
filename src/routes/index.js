@@ -10,6 +10,7 @@ const adminRoutes = require("./adminRoutes");
 const favoriteRoutes = require("./favoriteRoutes");
 const bookingRoutes = require("./bookingRoutes");
 const metaRoutes = require("./metaRoutes");
+const uploadRoutes = require("./uploadRoutes");
 
 const router = express.Router();
 
@@ -24,5 +25,6 @@ router.use("/admin", adminRoutes);
 router.use("/favorites", favoriteRoutes);
 router.use("/bookings", bookingRoutes);
 router.use("/meta", metaRoutes);
+router.use("/uploads", uploadRoutes);
 
 module.exports = router;

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { forwardRef } from "react";
 import { motion } from "framer-motion";
 
 /** Smooth deceleration — avoids filter/blur glitches with gradient text */
@@ -33,9 +33,10 @@ const bangExtra = {
   }
 };
 
-function BrandHeroLogo({ className = "", entranceActive = true }) {
+const BrandHeroLogo = forwardRef(function BrandHeroLogo({ className = "", entranceActive = true }, ref) {
   return (
     <motion.div
+      ref={ref}
       aria-label="Yay! Eventz"
       className={`yay-hero-logo ${className}`}
       style={{
@@ -65,6 +66,6 @@ function BrandHeroLogo({ className = "", entranceActive = true }) {
       </motion.span>
     </motion.div>
   );
-}
+});
 
 export default BrandHeroLogo;

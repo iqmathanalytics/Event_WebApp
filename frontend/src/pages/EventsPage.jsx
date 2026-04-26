@@ -283,170 +283,93 @@ function EventsPage() {
         <p className="text-sm text-slate-600">Explore verified city events with smart filters, clear pricing, and real-time availability.</p>
       </div>
 
-      <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-amber-50/20 to-sky-50/25 p-4 shadow-soft ring-1 ring-amber-500/[0.07] sm:p-5">
+      <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-amber-50/20 to-sky-50/25 p-3 shadow-soft ring-1 ring-amber-500/[0.07] sm:p-3.5">
         <div className="pointer-events-none absolute -right-14 -top-14 h-52 w-52 rounded-full bg-gradient-to-br from-amber-400/25 to-sky-400/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-orange-400/15 blur-3xl" />
 
         {!isAuthenticated ? (
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-            <div className="min-w-0 flex-1">
-              <motion.p
-                className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-900/85"
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.35 }}
+          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="min-w-0 truncate text-sm font-medium text-slate-700">
+              <span className="mr-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-800">
+                <Sparkles className="h-3.5 w-3.5" /> Hosts &amp; happenings
+              </span>
+              Put your event where the city looks first.
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                to="/register"
+                className="inline-flex rounded-lg bg-gradient-to-r from-amber-500 to-sky-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-amber-400 hover:to-sky-500"
               >
-                <motion.span
-                  className="inline-flex text-amber-600"
-                  animate={{ rotate: [0, -12, 10, 0], scale: [1, 1.08, 1] }}
-                  transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
-                  aria-hidden
-                >
-                  <Sparkles className="h-4 w-4" />
-                </motion.span>
-                Hosts &amp; happenings
-              </motion.p>
-              <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
-                Put your event where the city looks first
-              </h2>
-              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-slate-600">
-                Create a free account, request host tools once, then publish experiences from My Hub — we keep listings trustworthy.
-              </p>
-              <ul className="mt-3 flex flex-col gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
-                <li className="inline-flex items-center gap-1.5">
-                  <motion.span
-                    className="text-amber-600"
-                    animate={{ y: [0, -2, 0] }}
-                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                    aria-hidden
-                  >
-                    <MousePointerClick className="h-4 w-4" />
-                  </motion.span>
-                  Sign up — tickets, tweaks, one dashboard
-                </li>
-                <li className="inline-flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4 shrink-0 text-sky-600" aria-hidden />
-                  Nights out, workshops, family days
-                </li>
-                <li className="inline-flex items-center gap-1.5">
-                  <Ticket className="h-4 w-4 shrink-0 text-orange-600" aria-hidden />
-                  Yay! Eventz — checkout-ready when you&apos;re approved
-                </li>
-              </ul>
-            </div>
-            <div className="relative flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:flex-col xl:flex-row">
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                <Link
-                  to="/register"
-                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-amber-500/25 transition hover:from-amber-400 hover:to-sky-500 sm:min-h-0 sm:w-auto"
-                >
-                  Host on Yay! — join free
-                </Link>
-              </motion.div>
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Link
-                  to="/login"
-                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-slate-200 bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-amber-300 hover:bg-white sm:min-h-0 sm:w-auto"
-                >
-                  Have an account? Sign in to host
-                </Link>
-              </motion.div>
+                Join free
+              </Link>
+              <Link
+                to="/login"
+                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:border-amber-300"
+              >
+                Sign in
+              </Link>
             </div>
           </div>
         ) : (
-          <>
-            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900">List your own experiences</p>
-                <p className="text-sm text-slate-600">
-                  Host gatherings on Yay! Eventz — submit details for review, then welcome guests from your hub.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {canOpenOrganizerDashboard ? (
-                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                    <Link
-                      to={{ pathname: "/dashboard/user", hash: "host-events" }}
-                      className="inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
-                    >
-                      Go to My Hub — Events
-                    </Link>
-                  </motion.div>
-                ) : organizerEnabled && !canPostEvents ? (
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Link
-                      to={{ pathname: "/dashboard/user", hash: "host-events" }}
-                      className="inline-flex rounded-xl border-2 border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-50/80"
-                    >
-                      Open My Hub
-                    </Link>
-                  </motion.div>
-                ) : (
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <button
-                      type="button"
-                      disabled={organizerCtaLoading}
-                      onClick={async () => {
-                        try {
-                          setOrganizerCtaError("");
-                          setOrganizerCtaLoading(true);
-                          await enableOrganizer();
-                          let canOpenAfterRefresh = false;
-                          const refreshTokenValue = localStorage.getItem("refreshToken");
-                          if (refreshTokenValue) {
-                            const refreshed = await refreshAccessToken(refreshTokenValue);
-                            const payload = refreshed?.data;
-                            if (payload?.accessToken && payload?.refreshToken && payload?.user) {
-                              login(payload);
-                              canOpenAfterRefresh = Boolean(payload.user?.can_post_events);
-                            }
-                          }
-                          if (canOpenAfterRefresh) {
-                            navigate({ pathname: "/dashboard/user", hash: "host-events" });
-                          } else {
-                            setOrganizerCtaError(
-                              "We’ve received your request. You’ll be able to list events from My Hub after approval."
-                            );
-                          }
-                        } catch (_err) {
-                          setOrganizerCtaError("Could not submit organizer access request. Please try again.");
-                        } finally {
-                          setOrganizerCtaLoading(false);
-                        }
-                      }}
-                      className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {organizerCtaLoading ? "Submitting..." : "Request Organizer Access"}
-                    </button>
-                  </motion.div>
-                )}
-              </div>
-            </div>
-            {canOpenOrganizerDashboard ? <OrganizerReadyRibbon /> : null}
-            {isAuthenticated && !organizerEnabled && !organizerCtaError ? <OrganizerInviteCard /> : null}
-            {isAuthenticated && organizerEnabled && !canPostEvents ? <OrganizerPendingRibbon /> : null}
-            {organizerCtaError ? (
-              organizerCtaError.toLowerCase().includes("could not") ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-3 flex gap-3 rounded-xl border border-rose-200/80 bg-rose-50/90 px-3 py-3 text-sm text-rose-900 sm:px-4"
+          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="min-w-0 truncate text-sm font-medium text-slate-700">
+              <span className="mr-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-800">
+                <Sparkles className="h-3.5 w-3.5" /> Host tools
+              </span>
+              List experiences from your hub.
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              {canOpenOrganizerDashboard ? (
+                <Link
+                  to={{ pathname: "/dashboard/user", hash: "host-events" }}
+                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
                 >
-                  <FiAlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" aria-hidden />
-                  <span className="leading-relaxed">{organizerCtaError}</span>
-                </motion.div>
+                  Go to My Hub
+                </Link>
+              ) : organizerEnabled && !canPostEvents ? (
+                <Link
+                  to={{ pathname: "/dashboard/user", hash: "host-events" }}
+                  className="inline-flex rounded-lg border border-sky-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-sky-50/80"
+                >
+                  Open My Hub
+                </Link>
               ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-3 flex gap-3 rounded-xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 to-white px-3 py-3 text-sm leading-relaxed text-slate-700 sm:px-4"
+                <button
+                  type="button"
+                  disabled={organizerCtaLoading}
+                  onClick={async () => {
+                    try {
+                      setOrganizerCtaError("");
+                      setOrganizerCtaLoading(true);
+                      await enableOrganizer();
+                      let canOpenAfterRefresh = false;
+                      const refreshTokenValue = localStorage.getItem("refreshToken");
+                      if (refreshTokenValue) {
+                        const refreshed = await refreshAccessToken(refreshTokenValue);
+                        const payload = refreshed?.data;
+                        if (payload?.accessToken && payload?.refreshToken && payload?.user) {
+                          login(payload);
+                          canOpenAfterRefresh = Boolean(payload.user?.can_post_events);
+                        }
+                      }
+                      if (canOpenAfterRefresh) {
+                        navigate({ pathname: "/dashboard/user", hash: "host-events" });
+                      } else {
+                        setOrganizerCtaError("Organizer access requested. Listing unlocks after approval.");
+                      }
+                    } catch (_err) {
+                      setOrganizerCtaError("Could not submit organizer access request. Please try again.");
+                    } finally {
+                      setOrganizerCtaLoading(false);
+                    }
+                  }}
+                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <FiInfo className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" aria-hidden />
-                  <span>{organizerCtaError}</span>
-                </motion.div>
-              )
-            ) : null}
-          </>
+                  {organizerCtaLoading ? "Submitting..." : "Request Access"}
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </section>
 
@@ -492,7 +415,8 @@ function EventsPage() {
                   date: formatDateUS(item.event_date),
                   time: item.event_time ? String(item.event_time).slice(0, 5) : "",
                   price: item.price,
-                  image: item.image_url
+                  image: item.image_url,
+                  galleryImages: item.gallery_image_urls
                 }}
                 isYayDealEvent={
                   item.is_yay_deal_event === 1 ||

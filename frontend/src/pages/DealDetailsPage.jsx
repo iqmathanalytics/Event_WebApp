@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { FiCalendar, FiExternalLink, FiMapPin, FiTag } from "react-icons/fi";
+import { FiCalendar, FiExternalLink, FiImage, FiMapPin, FiTag } from "react-icons/fi";
 import useAuth from "../hooks/useAuth";
 import { fetchDealById, trackDealView } from "../services/listingService";
 import { formatCurrency, formatDateUS } from "../utils/format";
@@ -53,6 +53,7 @@ function DealDetailsPage() {
     }
     return 0;
   }, [deal]);
+  const hasPricing = Number(deal?.original_price || 0) > 0 || Number(deal?.discounted_price || 0) > 0;
 
   useRouteContentReady(loading);
 
@@ -82,11 +83,23 @@ function DealDetailsPage() {
       className="space-y-4 lg:space-y-6"
     >
       <div className="overflow-hidden rounded-2xl ring-1 ring-slate-900/10 lg:h-[75vh] lg:max-h-[920px] lg:min-h-[280px] lg:rounded-3xl lg:ring-0">
-        <img
-          src={deal.image_url || "https://images.unsplash.com/photo-1556740749-887f6717d7e4?w=1400"}
-          alt={deal.title}
-          className={`aspect-[16/9] w-full object-cover object-center sm:aspect-[16/8] lg:aspect-auto lg:h-full ${lockedPremium ? "blur-sm" : ""}`}
-        />
+        {deal.image_url ? (
+          <img
+            src={deal.image_url}
+            alt={deal.title}
+            className={`aspect-[16/9] w-full object-cover object-center sm:aspect-[16/8] lg:aspect-auto lg:h-full ${lockedPremium ? "blur-sm" : ""}`}
+          />
+        ) : (
+          <div className="relative flex aspect-[16/9] h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 sm:aspect-[16/8] lg:aspect-auto">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(244,63,94,0.2),transparent_40%),radial-gradient(circle_at_75%_80%,rgba(16,185,129,0.18),transparent_42%)]" />
+            <div className="relative z-10 flex flex-col items-center gap-2 text-white/85">
+              <div className="grid h-14 w-14 place-content-center rounded-2xl bg-white/10 ring-1 ring-white/20 backdrop-blur-sm">
+                <FiImage className="h-7 w-7" />
+              </div>
+              <p className="text-sm font-semibold">No deal banner image</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:gap-5">
@@ -131,9 +144,15 @@ function DealDetailsPage() {
               </p>
             </div>
             <div className={`col-span-2 flex flex-wrap items-center gap-2 ${metaCard} lg:col-span-1 lg:flex-nowrap`}>
-              <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200/80">
-                {dealDiscount}% OFF
-              </span>
+              {dealDiscount > 0 ? (
+                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200/80">
+                  {dealDiscount}% OFF
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700 ring-1 ring-slate-200/80">
+                  Special offer
+                </span>
+              )}
               {isPremium ? (
                 <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900 ring-1 ring-amber-200/80">
                   Premium
@@ -157,14 +176,20 @@ function DealDetailsPage() {
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 lg:text-sm lg:font-semibold lg:normal-case lg:tracking-normal lg:text-slate-900">
               Price details
             </p>
-            <div className="mt-2 flex flex-wrap items-baseline gap-2">
-              <span className="text-lg font-bold text-slate-900 lg:text-xl">
-                {formatCurrency(Number(deal.discounted_price || deal.original_price || 0))}
-              </span>
-              <span className="text-sm text-slate-500 line-through">
-                {formatCurrency(Number(deal.original_price || deal.discounted_price || 0))}
-              </span>
-            </div>
+            {hasPricing ? (
+              <div className="mt-2 flex flex-wrap items-baseline gap-2">
+                <span className="text-lg font-bold text-slate-900 lg:text-xl">
+                  {formatCurrency(Number(deal.discounted_price || deal.original_price || 0))}
+                </span>
+                {Number(deal.original_price || 0) > 0 && Number(deal.discounted_price || 0) > 0 ? (
+                  <span className="text-sm text-slate-500 line-through">
+                    {formatCurrency(Number(deal.original_price))}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-slate-600">Pricing is shared by the provider at redemption.</p>
+            )}
             {deal.promo_code ? (
               guestLocked ? (
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">

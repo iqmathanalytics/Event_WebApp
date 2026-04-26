@@ -7,14 +7,20 @@ import useFavorites from "../hooks/useFavorites";
 import useAuth from "../hooks/useAuth";
 import YayUserGreeting from "../components/YayUserGreeting";
 import { fetchMyBookings } from "../services/bookingService";
-import { fetchMyDealSubmissions, fetchMyInfluencerSubmissions } from "../services/listingService";
+import { createDeal, fetchMyDealSubmissions, fetchMyInfluencerSubmissions } from "../services/listingService";
+import DealSubmissionModal, { emptyDealSubmitForm } from "../components/DealSubmissionModal";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { refreshAccessToken } from "../services/authService";
 import { changeMyPassword, enableOrganizer, fetchMyProfile, updateMyProfile } from "../services/userService";
-import { categories, cities } from "../utils/filterOptions";
+import { categories } from "../utils/filterOptions";
+import { parseInfluencerSocialLinks } from "../utils/influencerSocial";
+import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import AppLoadingOverlay from "../components/AppLoadingOverlay";
 import OrganizerDashboardPage from "./OrganizerDashboardPage";
+import CloudinaryImageInput from "../components/CloudinaryImageInput";
+import UserSubmissionsPanel from "../components/UserSubmissionsPanel";
+import { fetchMyEvents } from "../services/eventService";
 
 const interestOptions = [
   "Events",
@@ -76,27 +82,6 @@ function getLocationUrl(booking) {
   return null;
 }
 
-function parseInfluencerSocialLinks(value) {
-  if (!value) {
-    return { instagram: "", youtube: "" };
-  }
-  if (typeof value === "object" && !Array.isArray(value)) {
-    return {
-      instagram: String(value.instagram || "").trim(),
-      youtube: String(value.youtube || "").trim()
-    };
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return {
-      instagram: String(parsed?.instagram || "").trim(),
-      youtube: String(parsed?.youtube || "").trim()
-    };
-  } catch (_err) {
-    return { instagram: "", youtube: "" };
-  }
-}
-
 function getFavoriteDetailsUrl(item) {
   if (!item) return null;
   const listingType = item.listing_type;
@@ -112,12 +97,16 @@ function getFavoriteDetailsUrl(item) {
 function UserDashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, accessToken, refreshToken, login } = useAuth();
+  const { cities } = useCityFilter();
+  const { user, accessToken, refreshToken, login, canPostDeals } = useAuth();
   const { favorites, loading, toggleFavorite } = useFavorites();
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [bookingsError, setBookingsError] = useState("");
   const [bookingFilter, setBookingFilter] = useState("upcoming");
+  const [desktopWorkspaceTab, setDesktopWorkspaceTab] = useState("events");
+  const [mobileWorkspaceTab, setMobileWorkspaceTab] = useState("events");
+  const [myEventsCount, setMyEventsCount] = useState(0);
   const [enablingOrganizer, setEnablingOrganizer] = useState(false);
   const [organizerEnableError, setOrganizerEnableError] = useState("");
   const [myInfluencerSubmissions, setMyInfluencerSubmissions] = useState([]);
@@ -174,6 +163,10 @@ function UserDashboardPage() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [dealSubmitOpen, setDealSubmitOpen] = useState(false);
+  const [dealSubmitLoading, setDealSubmitLoading] = useState(false);
+  const [dealSubmitError, setDealSubmitError] = useState("");
+  const [dealSubmitForm, setDealSubmitForm] = useState(() => ({ ...emptyDealSubmitForm }));
   const canOrganize = Number(user?.organizer_enabled) === 1;
   const profileInitial = String(profile?.name || user?.name || "U").trim().charAt(0).toUpperCase();
   const currentTabIndex = Math.max(
@@ -313,6 +306,24 @@ function UserDashboardPage() {
       }
     }
     loadProfile();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadMyEventsCount() {
+      try {
+        const response = await fetchMyEvents();
+        if (!active) return;
+        setMyEventsCount(Array.isArray(response?.data) ? response.data.length : 0);
+      } catch (_err) {
+        if (!active) return;
+        setMyEventsCount(0);
+      }
+    }
+    loadMyEventsCount();
     return () => {
       active = false;
     };
@@ -476,6 +487,17 @@ function UserDashboardPage() {
   }, [location.hash, location.pathname]);
 
   useEffect(() => {
+    if (!dealSubmitOpen) {
+      return undefined;
+    }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [dealSubmitOpen]);
+
+  useEffect(() => {
     if (!eventsWorkspaceOpen) {
       setOrganizerWorkspaceReady(false);
     }
@@ -520,6 +542,20 @@ function UserDashboardPage() {
     requestAnimationFrame(() => {
       organizerFormShellRef.current?.openCreateEvent();
     });
+  };
+
+  const onSubmitDealClick = () => {
+    if (!canPostDeals) {
+      navigate("/deals");
+      return;
+    }
+    if (String(dealerStatus || "").toLowerCase() !== "approved") {
+      openDealerOnboardingModal();
+      return;
+    }
+    setDealSubmitError("");
+    setDealSubmitForm({ ...emptyDealSubmitForm });
+    setDealSubmitOpen(true);
   };
 
   const openInfluencerSpotlightModal = () => {
@@ -644,119 +680,85 @@ function UserDashboardPage() {
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-3.5 text-white shadow-soft sm:rounded-3xl sm:p-4">
           <div className="flex items-start justify-between gap-2.5 sm:gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-              <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sm font-bold text-white ring-1 ring-white/15 sm:h-11 sm:w-11 sm:rounded-2xl sm:text-base">
-                {profileInitial || <FiUser className="h-4 w-4 sm:h-5 sm:w-5" />}
-              </div>
               <div className="min-w-0 flex-1">
                 <div className="min-w-0">
-                  <p className="min-w-0 truncate text-[13px] font-semibold leading-snug text-white sm:text-sm">
-                    {profile?.name || user?.name || "User"}
-                  </p>
+                  <YayUserGreeting
+                    name={profile?.name || user?.name || "User"}
+                    variant="dark"
+                    size="sm"
+                    className="min-w-0 max-w-full truncate"
+                  />
                 </div>
                 <p className="truncate text-[11px] leading-tight text-white/70 sm:text-xs">{profile?.email || user?.email}</p>
                 <p className="truncate text-[11px] leading-tight text-white/55 sm:text-xs">{profile?.mobile_number || "Add mobile number"}</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setProfileError("");
-                setProfileMessage("");
-                setProfileEditorTab("basic");
-                setShowProfileEditor(true);
-              }}
-              className="group flex shrink-0 flex-col items-center gap-0.5 rounded-xl border border-white/20 bg-white/[0.12] px-2 py-1.5 text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97] sm:rounded-2xl sm:px-3 sm:py-2"
-            >
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/10 sm:h-9 sm:w-9">
-                <FiEdit2 className="h-3.5 w-3.5 text-white/95 sm:h-4 sm:w-4" aria-hidden />
-              </span>
-              <span className="max-w-[4.5rem] text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-white/90 sm:max-w-none sm:text-[10px]">
-                Edit profile
-              </span>
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordError("");
+                  setPasswordMessage("");
+                  setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+                  setShowPasswordModal(true);
+                }}
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
+                title={isGoogleFirstPassword ? "Set your password" : "Change password"}
+              >
+                <FiKey className="h-3.5 w-3.5" aria-hidden />
+                <span>{isGoogleFirstPassword ? "Set" : "Password"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileError("");
+                  setProfileMessage("");
+                  setProfileEditorTab("basic");
+                  setShowProfileEditor(true);
+                }}
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
+              >
+                <FiEdit2 className="h-3.5 w-3.5" aria-hidden />
+                <span>Edit</span>
+              </button>
+            </div>
           </div>
 
           {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-200">{profileMessage}</p> : null}
           {profileError ? <p className="mt-2 text-sm font-medium text-rose-200">{profileError}</p> : null}
 
-          <button
-            type="button"
-            onClick={() => setCreatorHubOpen(true)}
-            disabled={enablingOrganizer}
-            className="mt-4 w-full rounded-2xl bg-gradient-to-r from-amber-200/95 via-yellow-100 to-amber-100 px-4 py-3.5 text-left shadow-lg shadow-amber-900/20 ring-1 ring-amber-300/60 transition hover:brightness-[1.02] disabled:opacity-60"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-900/70">Host &amp; promote</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">Hosting &amp; spotlight workspace</p>
-            <p className="mt-0.5 text-xs text-slate-700/90">Shortcuts without cluttering this page.</p>
-          </button>
-
-          <button
-            type="button"
-            disabled={enablingOrganizer}
-            onClick={() => void onPostEventClick()}
-            className="mt-2 w-full rounded-2xl bg-white/15 px-4 py-3 text-left ring-1 ring-white/20 transition hover:bg-white/20 disabled:opacity-60"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/90">Events</p>
-            <p className="mt-1 text-sm font-bold text-white">Post an event</p>
-            <p className="mt-0.5 text-xs text-white/70">Listings, tickets, bookings — same organizer tools.</p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void openDealerOnboardingModal()}
-            disabled={businessProfileCta.disabled}
-            className="mt-2 w-full rounded-2xl bg-white/10 px-4 py-3 text-left ring-1 ring-white/15 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">Business</p>
-            <p className="mt-1 text-sm font-bold text-white">{businessProfileCta.label}</p>
-            {businessProfileCta.sub ? <p className="mt-0.5 text-xs text-white/70">{businessProfileCta.sub}</p> : null}
-          </button>
-
-          <button
-            type="button"
-            onClick={openInfluencerSpotlightModal}
-            disabled={infStatusLower === "pending"}
-            className="mt-2 w-full rounded-2xl bg-white/10 px-4 py-3 text-left ring-1 ring-white/15 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-200/90">Creator spotlight</p>
-            <p className="mt-1 text-sm font-bold text-white">{influencerSpotlightCta.label}</p>
-            <p className="mt-0.5 text-xs text-white/70">{influencerSpotlightCta.sub}</p>
-          </button>
-
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => {
-                setPasswordError("");
-                setPasswordMessage("");
-                setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
-                setShowPasswordModal(true);
-              }}
-              className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10 hover:bg-white/15"
+              disabled={enablingOrganizer}
+              onClick={() => void onPostEventClick()}
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Password</p>
-              <p className="mt-1 text-sm font-semibold">{isGoogleFirstPassword ? "Set password" : "Change password"}</p>
+              Post an event
             </button>
-
-            <div className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Favorites</p>
-              <p className="mt-1 text-sm font-semibold">{favorites.length}</p>
-            </div>
-
-            <div className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Bookings</p>
-              <p className="mt-1 text-sm font-semibold">{bookings.length}</p>
-            </div>
-
-            <Link
-              to="/dashboard/user/submissions"
-              className="rounded-2xl bg-white/10 px-3 py-3 text-left ring-1 ring-white/10 hover:bg-white/15"
+            <button
+              type="button"
+              onClick={onSubmitDealClick}
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Offer workspace</p>
-              <p className="mt-1 text-sm font-semibold">
-                {dealerStatus && String(dealerStatus).toLowerCase() === "approved" ? myDealSubmissions.length : 0}
-              </p>
-            </Link>
+              Submit a deal
+            </button>
+            <button
+              type="button"
+              onClick={() => void openDealerOnboardingModal()}
+              disabled={businessProfileCta.disabled}
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {hasRegisteredDealer ? "Edit business profile" : "Business profile"}
+            </button>
+            <button
+              type="button"
+              onClick={openInfluencerSpotlightModal}
+              disabled={infStatusLower === "pending"}
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              Edit creator spotlight
+            </button>
           </div>
         </section>
 
@@ -766,204 +768,38 @@ function UserDashboardPage() {
           </p>
         ) : null}
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-bold text-slate-900">My Registered Events</h2>
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 p-1">
-              <button
-                type="button"
-                onClick={() => setBookingFilter("upcoming")}
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  bookingFilter === "upcoming" ? "bg-slate-900 text-white" : "text-slate-600"
-                }`}
-              >
-                Upcoming
-              </button>
-              <button
-                type="button"
-                onClick={() => setBookingFilter("past")}
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  bookingFilter === "past" ? "bg-slate-900 text-white" : "text-slate-600"
-                }`}
-              >
-                Past
-              </button>
-              <button
-                type="button"
-                onClick={() => setBookingFilter("all")}
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  bookingFilter === "all" ? "bg-slate-900 text-white" : "text-slate-600"
-                }`}
-              >
-                All
-              </button>
-            </div>
+        <section className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-soft">
+          <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5">
+            <button
+              type="button"
+              onClick={() => setMobileWorkspaceTab("events")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                mobileWorkspaceTab === "events" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+              }`}
+            >
+              Manage Events
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">{myEventsCount}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileWorkspaceTab("offers")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                mobileWorkspaceTab === "offers" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+              }`}
+            >
+              Offers & Spotlights
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                {myDealSubmissions.length + myInfluencerSubmissions.length}
+              </span>
+            </button>
           </div>
-
-          {loadingBookings ? <p className="mt-2 text-sm text-slate-500">Loading bookings...</p> : null}
-          {bookingsError ? <p className="mt-2 text-sm text-rose-600">{bookingsError}</p> : null}
-
-          {!loadingBookings && !bookingsError && bookings.length === 0 ? (
-            <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-              <p className="text-sm font-semibold text-slate-900">No bookings yet.</p>
-              <Link to="/events" className="mt-3 inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                Explore Events
-              </Link>
-            </div>
-          ) : null}
-
-          {!loadingBookings && !bookingsError && filteredBookings.length === 0 && bookings.length > 0 ? (
-            <p className="mt-3 text-sm text-slate-500">No bookings match the selected filter.</p>
-          ) : null}
-
-          {!loadingBookings && !bookingsError && filteredBookings.length ? (
-            <div className="mt-3 space-y-3">
-              {filteredBookings.map((b) => {
-                const locationUrl = getLocationUrl(b);
-                const timeLabel = b.event_time ? String(b.event_time).slice(0, 5) : "Time not specified";
-                const totalLabel = formatCurrency(b.total_amount || b.price || 0);
-                return (
-                  <article
-                    key={b.booking_id}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft transition hover:shadow-md"
-                  >
-                    <img
-                      src={b.event_image || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=900"}
-                      alt={b.event_title}
-                      className="aspect-[4/3] w-full object-cover"
-                      loading="lazy"
-                      data-route-splash-ignore
-                    />
-                    <div className="space-y-2 p-4">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-base font-bold text-slate-900">{b.event_title}</h3>
-                        <p className="truncate text-sm text-slate-600">
-                          {b.city || "City"} • {b.venue_name || "Venue to be announced"}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="text-xs font-semibold text-slate-700">
-                          {formatReadableDate(b.booking_date)} • {timeLabel}
-                        </p>
-                        <div className="mt-2 space-y-1 text-xs text-slate-700">
-                          <p>
-                            Guests: <span className="font-semibold">{b.attendee_count ?? 0}</span>
-                          </p>
-                          <p>
-                            Days: <span className="font-semibold">{b.total_days || 1}</span>
-                          </p>
-                          <p>
-                            Total: <span className="font-semibold">{totalLabel}</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Link
-                          to={`/events/${b.event_id}`}
-                          className="inline-flex flex-1 items-center justify-center rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
-                        >
-                          View Event
-                        </Link>
-                        {locationUrl ? (
-                          <a
-                            href={locationUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-                          >
-                            View Location
-                          </a>
-                        ) : (
-                          <span className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-400">
-                            View Location
-                          </span>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled
-                        className="w-full rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-400"
-                        title="Cancel Booking coming soon"
-                      >
-                        Cancel Booking (Coming Soon)
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : null}
-        </section>
-
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-bold text-slate-900">Saved for later</h2>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              {favorites.length}
-            </span>
+          <div className="mt-3">
+            {mobileWorkspaceTab === "events" ? (
+              <OrganizerDashboardPage embedded embeddedSectionMode="my-events-only" />
+            ) : (
+              <UserSubmissionsPanel variant="standalone" showBackToHub={false} />
+            )}
           </div>
-          {loading ? <p className="mt-2 text-sm text-slate-500">Loading favorites...</p> : null}
-          {!loading && favorites.length === 0 ? <p className="mt-2 text-sm text-slate-500">No saved items yet.</p> : null}
-          {!loading && favorites.length ? (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {favorites.map((item) => {
-                const displayPrice = getDisplayPrice(item);
-                const detailsUrl = getFavoriteDetailsUrl(item);
-
-                return (
-                  <article
-                    key={item.id}
-                    className="flex gap-3 rounded-xl border border-slate-200 bg-white p-3 transition hover:bg-slate-50"
-                  >
-                    <img
-                      src={item.image_url || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600"}
-                      alt={item.title}
-                      className="h-20 w-20 rounded-lg object-cover"
-                      loading="lazy"
-                      data-route-splash-ignore
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase text-slate-500">{item.listing_type}</p>
-                      <p className="truncate text-xs font-bold text-slate-900">{item.title}</p>
-                      <p className="truncate text-xs text-slate-500">
-                        {item.category_name || "Category"} • {item.city_name || "City"}
-                      </p>
-                      {displayPrice !== null ? (
-                        <p className="mt-1 text-xs font-semibold text-slate-700">
-                          {formatCurrency(displayPrice)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-col items-end justify-between gap-2">
-                      {detailsUrl ? (
-                        <Link
-                          to={detailsUrl}
-                          className="inline-flex rounded-full bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-700"
-                        >
-                          Open
-                        </Link>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                        onClick={() =>
-                          toggleFavorite({
-                            listingType: item.listing_type,
-                            listingId: item.listing_id
-                          })
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : null}
         </section>
       </div>
 
@@ -979,16 +815,47 @@ function UserDashboardPage() {
             Your hub for plans you&apos;re attending. Hosting, deals, and creator tools stay tucked behind a single workspace so this page stays calm.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openInfluencerSpotlightModal}
-          disabled={infStatusLower === "pending"}
-          className="shrink-0 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-yellow-50 to-white px-4 py-3 text-left shadow-sm ring-1 ring-amber-100 transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-55 lg:max-w-[300px]"
-        >
-          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-900/80">Creator spotlight</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{influencerSpotlightCta.label}</p>
-          <p className="text-xs leading-snug text-slate-600">{influencerSpotlightCta.sub}</p>
-        </button>
+        <div className="shrink-0 space-y-2 lg:w-[300px]">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPasswordError("");
+                setPasswordMessage("");
+                setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+                setShowPasswordModal(true);
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              title={isGoogleFirstPassword ? "Set your password" : "Change password"}
+            >
+              <FiKey className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>{isGoogleFirstPassword ? "Set password" : "Password"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileError("");
+                setProfileMessage("");
+                setProfileEditorTab("basic");
+                setShowProfileEditor(true);
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <FiEdit2 className="h-3.5 w-3.5 shrink-0" />
+              Edit
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={openInfluencerSpotlightModal}
+            disabled={infStatusLower === "pending"}
+            className="w-full rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-yellow-50 to-white px-4 py-3 text-left shadow-sm ring-1 ring-amber-100 transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wide text-amber-900/80">Creator spotlight</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{influencerSpotlightCta.label}</p>
+            <p className="text-xs leading-snug text-slate-600">{influencerSpotlightCta.sub}</p>
+          </button>
+        </div>
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/80 to-cyan-50/30 p-5 shadow-sm">
@@ -1000,19 +867,18 @@ function UserDashboardPage() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setCreatorHubOpen(true)}
-            disabled={enablingOrganizer}
-            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
-          >
-            Open workspace
-          </button>
-          <button
-            type="button"
             disabled={enablingOrganizer}
             onClick={() => void onPostEventClick()}
             className="inline-flex items-center justify-center rounded-xl border border-brand-400/80 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-950 transition hover:bg-brand-100/90 disabled:opacity-60"
           >
             Post an event
+          </button>
+          <button
+            type="button"
+            onClick={onSubmitDealClick}
+            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/70 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-100/90"
+          >
+            Submit a deal
           </button>
           <button
             type="button"
@@ -1030,266 +896,40 @@ function UserDashboardPage() {
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{organizerEnableError}</p>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-xl font-bold text-white">
-              {profileInitial || <FiUser className="h-6 w-6" />}
-            </div>
-            <div className="min-w-0">
-              <p className="min-w-0 truncate text-sm font-semibold leading-tight text-slate-900 sm:text-base">
-                {profile?.name || user?.name || "User"}
-              </p>
-              <p className="text-sm text-slate-600">{profile?.email || user?.email}</p>
-              <p className="text-xs text-slate-500">{profile?.mobile_number || "Add mobile number"}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setPasswordError("");
-                setPasswordMessage("");
-                setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
-                setShowPasswordModal(true);
-              }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              title={isGoogleFirstPassword ? "Set your password" : "Change password"}
-            >
-              <FiKey className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span className="hidden sm:inline">{isGoogleFirstPassword ? "Set password" : "Password"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setProfileError("");
-                setProfileMessage("");
-                setProfileEditorTab("basic");
-                setShowProfileEditor(true);
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              <FiEdit2 className="h-4 w-4" />
-              Edit Profile
-            </button>
-          </div>
-        </div>
-        {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
-        {profileError ? <p className="mt-2 text-sm font-medium text-rose-600">{profileError}</p> : null}
-      </section>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">Events you&apos;re going to</p>
-          <p className="mt-1 text-2xl font-bold">{bookings.length}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">Saved for later</p>
-          <p className="mt-1 text-2xl font-bold">{favorites.length}</p>
-        </div>
-        <Link
-          to="/dashboard/user/submissions"
-          className="rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
-        >
-          <p className="text-sm text-slate-500">Creator spotlights</p>
-          <p className="mt-1 text-2xl font-bold">{myInfluencerSubmissions.length}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-600">Manage →</p>
-        </Link>
-        <Link
-          to="/dashboard/user/submissions"
-          className="rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
-        >
-          <p className="text-sm text-slate-500">Live offers</p>
-          <p className="mt-1 text-2xl font-bold">
-            {dealerStatus && String(dealerStatus).toLowerCase() === "approved" ? myDealSubmissions.length : 0}
-          </p>
-          <p className="mt-1 text-xs font-semibold text-slate-600">Manage →</p>
-        </Link>
-      </div>
-
-      <section className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-bold">My Registered Events</h2>
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setBookingFilter("upcoming")}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                bookingFilter === "upcoming" ? "bg-slate-900 text-white" : "text-slate-600"
-              }`}
-            >
-              Upcoming Events
-            </button>
-            <button
-              type="button"
-              onClick={() => setBookingFilter("past")}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                bookingFilter === "past" ? "bg-slate-900 text-white" : "text-slate-600"
-              }`}
-            >
-              Past Events
-            </button>
-            <button
-              type="button"
-              onClick={() => setBookingFilter("all")}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                bookingFilter === "all" ? "bg-slate-900 text-white" : "text-slate-600"
-              }`}
-            >
-              All
-            </button>
-          </div>
+      {profileMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
+      {profileError ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+        <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5">
+          <button
+            type="button"
+            onClick={() => setDesktopWorkspaceTab("events")}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              desktopWorkspaceTab === "events" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            Manage Events
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">{myEventsCount}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDesktopWorkspaceTab("offers")}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              desktopWorkspaceTab === "offers" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            Offers &amp; Creator Spotlights
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">
+              {myDealSubmissions.length + myInfluencerSubmissions.length}
+            </span>
+          </button>
         </div>
 
-        {loadingBookings ? <p className="text-sm text-slate-500">Loading your bookings...</p> : null}
-        {bookingsError ? <p className="text-sm text-rose-600">{bookingsError}</p> : null}
-
-        {!loadingBookings && !bookingsError && bookings.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-            <h3 className="text-base font-semibold text-slate-900">
-              You haven&apos;t registered for any events yet.
-            </h3>
-            <Link
-              to="/events"
-              className="mt-4 inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-            >
-              Explore Events
-            </Link>
-          </div>
-        ) : null}
-
-        {!loadingBookings && !bookingsError && bookings.length > 0 && filteredBookings.length === 0 ? (
-          <p className="text-sm text-slate-500">No bookings match the selected filter.</p>
-        ) : null}
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredBookings.map((booking) => {
-            const locationUrl = getLocationUrl(booking);
-            return (
-              <article
-                key={booking.booking_id}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft"
-              >
-                <img
-                  src={booking.event_image || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=900"}
-                  alt={booking.event_title}
-                  className="aspect-[4/3] w-full object-cover"
-                  loading="lazy"
-                  data-route-splash-ignore
-                />
-                <div className="space-y-2 p-4">
-                  <h3 className="text-base font-bold text-slate-900">{booking.event_title}</h3>
-                  <p className="text-sm text-slate-600">
-                    {booking.city || "City"} • {booking.venue_name || "Venue to be announced"}
-                  </p>
-                  {booking.venue_address ? (
-                    <p className="text-xs text-slate-500">{booking.venue_address}</p>
-                  ) : null}
-                  <p className="text-sm text-slate-600">
-                    {formatReadableDate(booking.booking_date)} •{" "}
-                    {booking.event_time ? String(booking.event_time).slice(0, 5) : "Time not specified"}
-                  </p>
-                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-                    <p>
-                      Guests: <span className="font-semibold">{booking.attendee_count}</span>
-                    </p>
-                    <p>
-                      Days: <span className="font-semibold">{booking.total_days || 1}</span>
-                    </p>
-                    <p>
-                      Selected Dates:{" "}
-                      <span className="font-semibold">
-                        {Array.isArray(booking.selected_dates) && booking.selected_dates.length
-                          ? booking.selected_dates.map((d) => formatReadableDate(d)).join(", ")
-                          : formatReadableDate(booking.booking_date)}
-                      </span>
-                    </p>
-                    <p>
-                      Booked On: <span className="font-semibold">{formatReadableDate(booking.created_at)}</span>
-                    </p>
-                    <p>
-                      Total: <span className="font-semibold">{formatCurrency(booking.total_amount || booking.price || 0)}</span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Link
-                      to={`/events/${booking.event_id}`}
-                      className="inline-flex flex-1 items-center justify-center rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
-                    >
-                      View Event
-                    </Link>
-                    {locationUrl ? (
-                      <a
-                        href={locationUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-                      >
-                        View Location
-                      </a>
-                    ) : (
-                      <span className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-400">
-                        View Location
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    disabled
-                    className="w-full rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-400"
-                    title="Cancel Booking coming soon"
-                  >
-                    Cancel Booking (Coming Soon)
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-bold">Saved for later</h2>
-        {loading ? <p className="text-sm text-slate-500">Loading favorites...</p> : null}
-        {!loading && favorites.length === 0 ? (
-          <p className="text-sm text-slate-500">You have no saved listings yet.</p>
-        ) : null}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {favorites.map((item) => {
-            const displayPrice = getDisplayPrice(item);
-            return (
-              <article key={item.id} className="flex gap-3 rounded-xl border border-slate-200 p-3">
-                <img
-                  src={item.image_url || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600"}
-                  alt={item.title}
-                  className="h-20 w-20 rounded-lg object-cover"
-                  loading="lazy"
-                  data-route-splash-ignore
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase text-slate-500">{item.listing_type}</p>
-                  <p className="truncate text-sm font-bold text-slate-900">{item.title}</p>
-                  <p className="text-xs text-slate-500">
-                    {item.category_name || "Category"} • {item.city_name || "City"}
-                  </p>
-                  {displayPrice !== null ? (
-                    <p className="mt-1 text-xs font-semibold text-slate-700">{formatCurrency(displayPrice)}</p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="self-start rounded-md border border-slate-300 px-2 py-1 text-xs"
-                  onClick={() =>
-                    toggleFavorite({
-                      listingType: item.listing_type,
-                      listingId: item.listing_id
-                    })
-                  }
-                >
-                  Remove
-                </button>
-              </article>
-            );
-          })}
+        <div className="mt-4">
+          {desktopWorkspaceTab === "events" ? (
+            <OrganizerDashboardPage embedded embeddedSectionMode="my-events-only" />
+          ) : (
+            <UserSubmissionsPanel variant="standalone" showBackToHub={false} />
+          )}
         </div>
       </section>
       </div>
@@ -1762,8 +1402,12 @@ function UserDashboardPage() {
                     <FormField label="Website / Social Link" hint="Add your business website or social page URL." example="https://instagram.com/glowcitydeals">
                       <input value={dealProfile.website_or_social_link} onChange={(e) => setDealProfile((s) => ({ ...s, website_or_social_link: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                     </FormField>
-                    <FormField label="Profile Image / Logo URL" hint="Paste a public logo or profile image URL." example="https://images.example.com/logo.png">
-                      <input value={dealProfile.profile_image_url} onChange={(e) => setDealProfile((s) => ({ ...s, profile_image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    <FormField label="Profile image / logo" hint="Upload your business logo or profile image.">
+                      <CloudinaryImageInput
+                        value={dealProfile.profile_image_url}
+                        onChange={(url) => setDealProfile((s) => ({ ...s, profile_image_url: url }))}
+                        disabled={savingProfile}
+                      />
                     </FormField>
                   </div>
                 </div>
@@ -1848,8 +1492,12 @@ function UserDashboardPage() {
                     <FormField label="YouTube URL" hint="Paste your channel or profile link." example="https://youtube.com/@yourchannel">
                       <input type="url" value={influencerProfile.youtube} onChange={(e) => setInfluencerProfile((s) => ({ ...s, youtube: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                     </FormField>
-                    <FormField label="Profile Image URL" hint="Add a high-quality profile image link." example="https://images.example.com/profile.jpg">
-                      <input type="url" value={influencerProfile.profile_image_url} onChange={(e) => setInfluencerProfile((s) => ({ ...s, profile_image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                    <FormField label="Profile image" hint="Upload a high-quality profile photo.">
+                      <CloudinaryImageInput
+                        value={influencerProfile.profile_image_url}
+                        onChange={(url) => setInfluencerProfile((s) => ({ ...s, profile_image_url: url }))}
+                        disabled={savingProfile}
+                      />
                     </FormField>
                   </div>
                 </div>
@@ -1985,6 +1633,46 @@ function UserDashboardPage() {
           suppressRouteContentReadySignal
         />
       </div>
+
+      <DealSubmissionModal
+        open={dealSubmitOpen}
+        title="Submit Deal"
+        onClose={() => setDealSubmitOpen(false)}
+        submitLoading={dealSubmitLoading}
+        submitError={dealSubmitError}
+        cities={cities}
+        form={dealSubmitForm}
+        setForm={setDealSubmitForm}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setDealSubmitError("");
+          try {
+            setDealSubmitLoading(true);
+            await createDeal({
+              ...dealSubmitForm,
+              city_id: Number(dealSubmitForm.city_id),
+              category_id: Number(dealSubmitForm.category_id),
+              promo_code: dealSubmitForm.promo_code?.trim() || undefined,
+              deal_link: dealSubmitForm.deal_link?.trim() || undefined,
+              image_url: dealSubmitForm.image_url?.trim() || undefined,
+              terms_text: dealSubmitForm.deal_info?.trim() || undefined
+            });
+            setDealSubmitOpen(false);
+            setDealSubmitForm({ ...emptyDealSubmitForm });
+            setProfileMessage("Deal submitted. It will be visible after admin approval.");
+            try {
+              const dealResult = await fetchMyDealSubmissions();
+              setMyDealSubmissions(dealResult?.data || []);
+            } catch (_err) {
+              /* ignore refresh failure */
+            }
+          } catch (err) {
+            setDealSubmitError(err?.response?.data?.message || "Could not submit deal.");
+          } finally {
+            setDealSubmitLoading(false);
+          }
+        }}
+      />
 
     </motion.div>
   );

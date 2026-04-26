@@ -30,6 +30,7 @@ import OrganizerSidebar from "../components/OrganizerSidebar";
 import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import CloudinaryImageInput from "../components/CloudinaryImageInput";
 
 const initialForm = {
   title: "",
@@ -157,12 +158,19 @@ function FormField({ label, hint, example, className = "", children }) {
 }
 
 const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
-  { embedded = false, suppressChrome = false, suppressRouteContentReadySignal = false, onEmbeddedWorkspaceInitialReady },
+  {
+    embedded = false,
+    suppressChrome = false,
+    suppressRouteContentReadySignal = false,
+    onEmbeddedWorkspaceInitialReady,
+    embeddedSectionMode = "full"
+  },
   ref
 ) {
   const { user } = useAuth();
   const { cities } = useCityFilter();
-  const [activeSection, setActiveSection] = useState("overview");
+  const myEventsOnly = embedded && embeddedSectionMode === "my-events-only";
+  const [activeSection, setActiveSection] = useState(myEventsOnly ? "my-events" : "overview");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -330,6 +338,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     setActiveFormPanel(null);
     resetForm();
   };
+
+  useEffect(() => {
+    if (myEventsOnly && activeSection !== "my-events") {
+      setActiveSection("my-events");
+    }
+  }, [myEventsOnly, activeSection]);
 
   const loadEvents = async () => {
     try {
@@ -635,7 +649,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             ) : null}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          {!myEventsOnly ? <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => setActiveSection("overview")}
@@ -683,7 +697,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Create</p>
               <p className="mt-1 text-sm font-bold">New event</p>
             </button>
-          </div>
+          </div> : null}
         </section>
 
         {error ? (
@@ -698,7 +712,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         ) : null}
 
         <AnimatePresence mode="wait">
-          {activeSection === "overview" ? (
+          {!myEventsOnly && activeSection === "overview" ? (
             <motion.section
               key="m-overview"
               initial={{ opacity: 0, y: 8 }}
@@ -776,7 +790,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {activeSection === "my-events" ? (
+          {myEventsOnly || activeSection === "my-events" ? (
             <motion.section
               key="m-my-events"
               initial={{ opacity: 0, y: 8 }}
@@ -843,7 +857,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {activeSection === "bookings" ? (
+          {!myEventsOnly && activeSection === "bookings" ? (
             <motion.section
               key="m-bookings"
               initial={{ opacity: 0, y: 8 }}
@@ -1006,9 +1020,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.24, ease: "easeOut" }}
-        className="hidden lg:grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]"
+        className={`hidden lg:grid grid-cols-1 gap-4 ${myEventsOnly ? "lg:grid-cols-1" : "lg:grid-cols-[220px_1fr]"}`}
       >
-        <OrganizerSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+        {!myEventsOnly ? <OrganizerSidebar activeSection={activeSection} onSectionChange={setActiveSection} /> : null}
 
         <section className="space-y-4">
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1051,7 +1065,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           ) : null}
 
           <AnimatePresence mode="wait">
-          {activeSection === "overview" ? (
+          {!myEventsOnly && activeSection === "overview" ? (
             <motion.section
               key="overview"
               initial={{ opacity: 0, y: 8 }}
@@ -1178,7 +1192,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {activeSection === "my-events" ? (
+          {myEventsOnly || activeSection === "my-events" ? (
             <motion.section
               key="my-events"
               initial={{ opacity: 0, y: 8 }}
@@ -1297,7 +1311,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {activeSection === "bookings" ? (
+          {!myEventsOnly && activeSection === "bookings" ? (
             <motion.section
               key="bookings"
               initial={{ opacity: 0, y: 8 }}
@@ -1906,40 +1920,36 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 />
               </FormField>
               <FormField
-                label="Cover image URL"
-                hint="Main banner image (shown first). Optional extra images below power the detail-page slideshow."
-                example="https://images.example.com/event.jpg"
+                label="Cover image"
+                hint="Upload the main banner (shown first). Optional gallery images below power the detail-page slideshow."
                 className="sm:col-span-2"
               >
-                <input
-                  type="url"
+                <CloudinaryImageInput
                   value={form.image_url}
-                  onChange={(e) => setForm((prev) => ({ ...prev, image_url: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  onChange={(url) => setForm((prev) => ({ ...prev, image_url: url }))}
+                  disabled={saving}
                 />
               </FormField>
               <div className="space-y-2 sm:col-span-2">
                 <FormField
                   label="Additional banner images"
-                  hint="Up to 12 extra photo URLs for the event page carousel (same cover is not duplicated on save)."
-                  example=""
+                  hint="Up to 12 extra photos for the event page carousel (same cover is not duplicated on save)."
                   className="!mb-0"
                 >
                   <div className="space-y-2">
                     {(form.gallery_image_urls || []).map((row, idx) => (
                       <div key={`gal-${idx}`} className="flex gap-2">
-                        <input
-                          type="url"
+                        <CloudinaryImageInput
+                          compact
                           value={row}
-                          onChange={(e) =>
+                          onChange={(url) =>
                             setForm((prev) => {
                               const next = [...(prev.gallery_image_urls || [])];
-                              next[idx] = e.target.value;
+                              next[idx] = url;
                               return { ...prev, gallery_image_urls: next };
                             })
                           }
-                          placeholder="https://…"
-                          className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                          disabled={saving}
                         />
                         <button
                           type="button"
@@ -1966,7 +1976,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       }
                       className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      + Add image URL
+                      + Add gallery image
                     </button>
                   </div>
                 </FormField>

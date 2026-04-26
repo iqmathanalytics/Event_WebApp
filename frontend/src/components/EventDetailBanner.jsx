@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useReducedMotion } from "framer-motion";
-import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import { FiChevronLeft, FiChevronRight, FiImage } from "react-icons/fi";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, EffectFade, Keyboard, Pagination } from "swiper/modules";
 import { collectEventGalleryUrls } from "../utils/eventGallery";
@@ -19,6 +19,7 @@ export default function EventDetailBanner({ event, title, className = "", guestL
   const swiperRef = useRef(null);
   const urls = useMemo(() => collectEventGalleryUrls(event), [event]);
   const multi = urls.length > 1;
+  const hasImage = urls.length > 0;
 
   // Mobile / tablet: ~⅓ viewport (deal-style proportion); desktop: full immersive hero.
   const heroH =
@@ -46,7 +47,17 @@ export default function EventDetailBanner({ event, title, className = "", guestL
   return (
     <section className={baseSection} aria-label={multi ? "Event photos" : "Event cover photo"}>
       <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/10 lg:rounded-3xl" aria-hidden />
-      {multi ? (
+      {!hasImage ? (
+        <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(244,63,94,0.2),transparent_40%),radial-gradient(circle_at_70%_80%,rgba(99,102,241,0.22),transparent_42%)]" />
+          <div className="relative z-10 flex flex-col items-center gap-2 text-white/85">
+            <div className="grid h-14 w-14 place-content-center rounded-2xl bg-white/10 ring-1 ring-white/20 backdrop-blur-sm">
+              <FiImage className="h-7 w-7" />
+            </div>
+            <p className="text-sm font-semibold">No event banner image</p>
+          </div>
+        </div>
+      ) : multi ? (
         <>
           <Swiper
             className={swiperClass}

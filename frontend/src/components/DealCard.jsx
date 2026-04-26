@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatCurrency } from "../utils/format";
 import { motion } from "framer-motion";
-import { FiHeart } from "react-icons/fi";
+import { FiHeart, FiImage } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { trackDealClick } from "../services/listingService";
@@ -59,9 +59,11 @@ function DealCard({ item, isFavorite = false, onToggleFavorite, isPremium = fals
   const [premiumGateOpen, setPremiumGateOpen] = useState(false);
   const locked = Boolean(isPremium) && !isAuthenticated;
   const showBadge = Boolean(showPremiumBadge) && Boolean(isPremium);
-  const offerChip = resolveOfferChip(item);
   const visibleTags = tags.slice(0, 2);
   const overflowTags = tags.slice(2);
+  const hasPrice = Number(item.price) > 0 || Number(item.originalPrice) > 0;
+  const hasPriceRange = Number(item.price) > 0 && Number(item.originalPrice) > 0 && Number(item.originalPrice) !== Number(item.price);
+  const dealInfoText = String(item.dealInfo || "").trim();
 
   return (
     <motion.article
@@ -91,26 +93,49 @@ function DealCard({ item, isFavorite = false, onToggleFavorite, isPremium = fals
       >
         <FiHeart className={isFavorite ? "fill-current" : ""} />
       </button>
-      <img
-        src={item.image || "https://images.unsplash.com/photo-1556740749-887f6717d7e4?w=1200"}
-        alt={item.title}
-        loading="lazy"
-        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-        className="aspect-[4/3] w-full object-cover"
-      />
+      <div className="relative h-48 w-full overflow-hidden bg-slate-100">
+        {item.image ? (
+          <>
+            <img
+              src={item.image}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 via-transparent to-slate-900/10" />
+            <img
+              src={item.image}
+              alt={item.title}
+              loading="lazy"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
+              className="relative h-full w-full object-contain"
+            />
+          </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500">
+            <div className="flex flex-col items-center gap-1">
+              <div className="grid h-12 w-12 place-content-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200">
+                <FiImage className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold">No deal image</p>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-            {offerChip}
-          </span>
-          <span className="truncate text-xs text-slate-500">{item.city}</span>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="line-clamp-1 text-sm font-semibold text-slate-900 sm:text-[15px]">{item.title}</h3>
+          <span className="shrink-0 truncate text-xs text-slate-500">{item.city}</span>
         </div>
-        <h3 className="line-clamp-1 text-sm font-semibold text-slate-900 sm:text-[15px]">{item.title}</h3>
-        <p className="text-xs text-slate-500 sm:text-sm">{item.city}</p>
-        <p className="text-xs text-slate-500 sm:text-sm">
-          <span className="line-through">{formatCurrency(item.originalPrice)}</span>{" "}
-          <span className="font-semibold text-slate-800">{formatCurrency(item.price)}</span>
-        </p>
+        {hasPrice ? (
+          <p className="text-xs text-slate-500 sm:text-sm">
+            {hasPriceRange ? <span className="line-through">{formatCurrency(item.originalPrice)}</span> : null}{" "}
+            <span className="font-semibold text-slate-800">{formatCurrency(item.price || item.originalPrice)}</span>
+          </p>
+        ) : (
+          <p className="line-clamp-2 text-xs text-slate-500 sm:text-sm">{dealInfoText || "Contact provider for pricing"}</p>
+        )}
 
         <div className="mt-auto pt-1">
           {visibleTags?.length ? (
@@ -142,7 +167,9 @@ function DealCard({ item, isFavorite = false, onToggleFavorite, isPremium = fals
         </div>
 
         <div className="flex items-center justify-between pt-1">
-          <span className="text-xs font-semibold text-slate-900 sm:text-sm">{formatCurrency(item.price)}</span>
+          <span className="text-xs font-semibold text-slate-900 sm:text-sm">
+            {hasPrice ? formatCurrency(item.price || item.originalPrice) : "Offer details"}
+          </span>
           {locked ? (
             <button
               type="button"

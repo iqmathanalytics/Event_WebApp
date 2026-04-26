@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FiInfo } from "react-icons/fi";
-import { categories, cities } from "../utils/filterOptions";
+import { categories } from "../utils/filterOptions";
+import useCityFilter from "../hooks/useCityFilter";
+import CloudinaryImageInput from "./CloudinaryImageInput";
 
 export const interestOptions = [
   "Events",
@@ -53,13 +55,14 @@ function ExpandPanel({ open, children }) {
  * influencer / deal optional sections with checkbox + inline expandable details.
  */
 export default function RegistrationOnboardingForm({ form, setForm, influencerProfile, setInfluencerProfile, dealProfile, setDealProfile, emailMode = "editable" }) {
+  const { cities } = useCityFilter();
   const eventCategories = useMemo(() => categories, []);
   const dealerLocationOptions = useMemo(
     () => [
       { value: "virtual", label: "Virtual / Online", cityId: null },
       ...cities.map((city) => ({ value: city.value, label: city.label, cityId: Number(city.value) }))
     ],
-    []
+    [cities]
   );
 
   const toggleInterest = (value) => {
@@ -236,13 +239,10 @@ export default function RegistrationOnboardingForm({ form, setForm, influencerPr
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
-              <FormField label="Profile Image URL" hint="Public image link." example="https://…">
-                <input
-                  type="url"
-                  placeholder="Profile image URL"
+              <FormField label="Profile image" hint="Upload a public-facing profile photo.">
+                <CloudinaryImageInput
                   value={influencerProfile.profile_image_url}
-                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, profile_image_url: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  onChange={(url) => setInfluencerProfile((s) => ({ ...s, profile_image_url: url }))}
                 />
               </FormField>
             </div>
@@ -360,12 +360,10 @@ export default function RegistrationOnboardingForm({ form, setForm, influencerPr
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
-              <FormField label="Logo / image URL" hint="Optional public image." className="sm:col-span-2">
-                <input
-                  placeholder="Profile image / logo URL"
+              <FormField label="Logo / profile image" hint="Optional image for your business profile." className="sm:col-span-2">
+                <CloudinaryImageInput
                   value={dealProfile.profile_image_url}
-                  onChange={(e) => setDealProfile((s) => ({ ...s, profile_image_url: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  onChange={(url) => setDealProfile((s) => ({ ...s, profile_image_url: url }))}
                 />
               </FormField>
             </div>

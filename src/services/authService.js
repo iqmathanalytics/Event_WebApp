@@ -16,6 +16,8 @@ const {
   alignNewsletterRowsToCanonicalEmail,
   linkNewsletterSubscriberToUser
 } = require("../models/newsletterModel");
+const { sendSendGridEmail } = require("../utils/emailIntegrations");
+const { buildWelcomeEmail } = require("../utils/transactionalEmailTemplates");
 
 function splitDisplayName(full) {
   const t = String(full || "User").trim() || "User";
@@ -154,6 +156,14 @@ async function register(payload) {
       message: `Dealer profile #${dealerId} is awaiting moderation.`
     });
   }
+
+  const welcome = buildWelcomeEmail({ firstName: payload.first_name });
+  await sendSendGridEmail({
+    to: email,
+    subject: welcome.subject,
+    text: welcome.text,
+    html: welcome.html
+  }).catch(() => {});
 
   return {
     userId,

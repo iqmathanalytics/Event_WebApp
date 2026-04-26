@@ -23,6 +23,7 @@ import {
   trackInfluencerView,
   uploadInfluencerMedia
 } from "../services/listingService";
+import { uploadImageFile } from "../services/uploadService";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function parseMaybeJson(value) {
@@ -206,7 +207,8 @@ export default function InfluencerDetailsPage() {
 
   const [mySubmissionId, setMySubmissionId] = useState(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
-  const [galleryUrls, setGalleryUrls] = useState([""]);
+  const [galleryUrls, setGalleryUrls] = useState([]);
+  const [galleryFileBusy, setGalleryFileBusy] = useState(false);
   const [gallerySaving, setGallerySaving] = useState(false);
   const [galleryError, setGalleryError] = useState("");
 
@@ -216,6 +218,8 @@ export default function InfluencerDetailsPage() {
     if (!influencer) return { instagram: "", youtube: "" };
     return parseMaybeJson(influencer.social_links) || { instagram: "", youtube: "" };
   }, [influencer]);
+
+  const hasYoutube = Boolean(String(social?.youtube || "").trim());
 
   const isOwner = useMemo(() => {
     return mySubmissionId != null && mySubmissionId === influencerId;
@@ -284,14 +288,14 @@ export default function InfluencerDetailsPage() {
     setGalleryError("");
     const cleaned = galleryUrls.map((u) => String(u || "").trim()).filter(Boolean);
     if (!cleaned.length) {
-      setGalleryError("Please add at least one image URL.");
+      setGalleryError("Please add at least one image.");
       return;
     }
     try {
       setGallerySaving(true);
       await uploadInfluencerMedia(influencerId, cleaned);
       setGalleryOpen(false);
-      setGalleryUrls([""]);
+      setGalleryUrls([]);
       const refreshed = await fetchInfluencerMedia(influencerId);
       setMedia(refreshed?.data || []);
     } catch (err) {
@@ -301,9 +305,7 @@ export default function InfluencerDetailsPage() {
     }
   };
 
-  const profileSrc =
-    influencer?.profile_image_url ||
-    "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=640&q=80";
+  const profileSrc = influencer?.profile_image_url || "";
 
   if (loading && !influencer) {
     return <PageSkeleton />;
@@ -361,11 +363,17 @@ export default function InfluencerDetailsPage() {
               className="relative mx-auto shrink-0 lg:mx-0"
             >
               <div className="absolute -inset-1 rounded-[1.35rem] bg-gradient-to-br from-brand-400/60 via-fuchsia-500/40 to-violet-600/50 blur-sm lg:rounded-[2rem]" />
-              <img
-                src={profileSrc}
-                alt=""
-                className="relative h-28 w-28 rounded-[1.35rem] object-cover shadow-2xl ring-[3px] ring-white/10 sm:h-32 sm:w-32 md:h-36 md:w-36 lg:h-44 lg:w-44 lg:rounded-[1.75rem] lg:ring-4"
-              />
+              {profileSrc ? (
+                <img
+                  src={profileSrc}
+                  alt=""
+                  className="relative h-28 w-28 rounded-[1.35rem] object-contain bg-white/80 p-1 shadow-2xl ring-[3px] ring-white/10 sm:h-32 sm:w-32 md:h-36 md:w-36 lg:h-44 lg:w-44 lg:rounded-[1.75rem] lg:ring-4"
+                />
+              ) : (
+                <div className="relative grid h-28 w-28 place-content-center rounded-[1.35rem] bg-white/90 text-slate-500 shadow-2xl ring-[3px] ring-white/10 sm:h-32 sm:w-32 md:h-36 md:w-36 lg:h-44 lg:w-44 lg:rounded-[1.75rem] lg:ring-4">
+                  <FiImage className="h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10" />
+                </div>
+              )}
               {isOwner ? (
                 <span className="absolute -bottom-1 left-1/2 max-w-[calc(100%+0.5rem)] -translate-x-1/2 whitespace-nowrap rounded-full border border-emerald-400/50 bg-emerald-600/95 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white shadow-md backdrop-blur-sm">
                   Your profile
@@ -413,7 +421,9 @@ export default function InfluencerDetailsPage() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.14, duration: 0.35 }}
-              className="grid w-full max-w-md grid-cols-2 gap-2 sm:max-w-none sm:gap-3 sm:grid-cols-2 lg:w-auto lg:shrink-0 lg:grid-cols-2 lg:gap-3"
+              className={`grid w-full max-w-md gap-2 sm:max-w-none sm:gap-3 lg:w-auto lg:shrink-0 lg:gap-3 ${
+                hasYoutube ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-2" : "grid-cols-1 sm:max-w-xs lg:max-w-none"
+              }`}
             >
               <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
@@ -425,16 +435,18 @@ export default function InfluencerDetailsPage() {
                 </p>
                 <p className="text-[10px] font-medium text-white/50 lg:text-xs">followers</p>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
-                  <Youtube className="h-3.5 w-3.5 shrink-0 text-red-400 lg:h-4 lg:w-4" />
-                  YouTube
+              {hasYoutube ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
+                    <Youtube className="h-3.5 w-3.5 shrink-0 text-red-400 lg:h-4 lg:w-4" />
+                    YouTube
+                  </div>
+                  <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
+                    {toDisplayNumber(influencer.youtube_subscribers_count)}
+                  </p>
+                  <p className="text-[10px] font-medium text-white/50 lg:text-xs">subscribers</p>
                 </div>
-                <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
-                  {toDisplayNumber(influencer.youtube_subscribers_count)}
-                </p>
-                <p className="text-[10px] font-medium text-white/50 lg:text-xs">subscribers</p>
-              </div>
+              ) : null}
             </motion.div>
           </div>
         </div>
@@ -494,7 +506,7 @@ export default function InfluencerDetailsPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:mt-6 sm:grid-cols-2 sm:gap-4">
+        <div className={`mt-4 grid gap-3 sm:mt-6 sm:gap-4 ${hasYoutube ? "sm:grid-cols-2" : ""}`}>
           <a
             href={social?.instagram || undefined}
             target="_blank"
@@ -522,32 +534,23 @@ export default function InfluencerDetailsPage() {
             </p>
           </a>
 
-          <a
-            href={social?.youtube || undefined}
-            target="_blank"
-            rel="noreferrer"
-            className={`group relative overflow-hidden rounded-xl border p-4 transition lg:rounded-2xl lg:p-5 ${
-              social?.youtube
-                ? "border-red-200/80 bg-gradient-to-br from-red-50 via-white to-orange-50 hover:border-red-300 hover:shadow-md"
-                : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-70"
-            }`}
-            onClick={(e) => {
-              if (!social?.youtube) e.preventDefault();
-            }}
-          >
-            <div className="flex items-start justify-between gap-2 lg:gap-3">
-              <div className="grid h-10 w-10 place-content-center rounded-xl bg-gradient-to-br from-red-600 to-red-500 text-white shadow-lg shadow-red-600/30 lg:h-12 lg:w-12 lg:rounded-2xl">
-                <Youtube className="h-5 w-5 lg:h-6 lg:w-6" />
-              </div>
-              {social?.youtube ? (
+          {hasYoutube ? (
+            <a
+              href={social.youtube}
+              target="_blank"
+              rel="noreferrer"
+              className="group relative overflow-hidden rounded-xl border border-red-200/80 bg-gradient-to-br from-red-50 via-white to-orange-50 p-4 transition hover:border-red-300 hover:shadow-md lg:rounded-2xl lg:p-5"
+            >
+              <div className="flex items-start justify-between gap-2 lg:gap-3">
+                <div className="grid h-10 w-10 place-content-center rounded-xl bg-gradient-to-br from-red-600 to-red-500 text-white shadow-lg shadow-red-600/30 lg:h-12 lg:w-12 lg:rounded-2xl">
+                  <Youtube className="h-5 w-5 lg:h-6 lg:w-6" />
+                </div>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0 text-red-600 opacity-0 transition group-hover:opacity-100 lg:h-4 lg:w-4" />
-              ) : null}
-            </div>
-            <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-red-900/70 lg:mt-4 lg:text-xs">YouTube</p>
-            <p className="mt-0.5 text-xs font-semibold text-slate-900 lg:mt-1 lg:text-sm">
-              {social?.youtube ? "Open channel" : "Not linked"}
-            </p>
-          </a>
+              </div>
+              <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-red-900/70 lg:mt-4 lg:text-xs">YouTube</p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-900 lg:mt-1 lg:text-sm">Open channel</p>
+            </a>
+          ) : null}
         </div>
       </motion.section>
 
@@ -570,7 +573,11 @@ export default function InfluencerDetailsPage() {
             {isOwner ? (
               <button
                 type="button"
-                onClick={() => setGalleryOpen(true)}
+                onClick={() => {
+                  setGalleryUrls([]);
+                  setGalleryError("");
+                  setGalleryOpen(true);
+                }}
                 className="inline-flex items-center justify-center gap-1.5 self-start rounded-full bg-gradient-to-r from-brand-600 to-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-brand-500/25 transition hover:brightness-105 lg:gap-2 lg:px-5 lg:py-2.5 lg:text-sm"
               >
                 <ImagePlus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
@@ -615,7 +622,7 @@ export default function InfluencerDetailsPage() {
               </div>
               <p className="text-xs font-semibold text-slate-700 lg:text-sm">No gallery images yet</p>
               <p className="mt-1 max-w-sm text-xs text-slate-500 lg:text-sm">
-                {isOwner ? "Add image URLs to showcase your work." : "Check back soon for new shots."}
+                {isOwner ? "Upload images to showcase your work." : "Check back soon for new shots."}
               </p>
             </div>
           )}
@@ -652,7 +659,7 @@ export default function InfluencerDetailsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Add to gallery</h3>
-                    <p className="mt-1 text-sm text-slate-500">Paste public image URLs — you can add several at once.</p>
+                    <p className="mt-1 text-sm text-slate-500">Choose one or more images to upload (stored securely in the cloud).</p>
                   </div>
                   <button
                     type="button"
@@ -666,45 +673,73 @@ export default function InfluencerDetailsPage() {
               </div>
 
               <form onSubmit={onUpload} className="px-5 py-5 sm:px-6 sm:py-6">
-                <div className="space-y-3">
-                  {galleryUrls.map((u, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="url"
-                        required={idx === 0}
-                        value={u}
-                        onChange={(e) => {
-                          const next = [...galleryUrls];
-                          next[idx] = e.target.value;
-                          setGalleryUrls(next);
-                        }}
-                        placeholder="https://example.com/image.jpg"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm transition focus:border-brand-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                      />
-                      {galleryUrls.length > 1 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                  <input
+                    id="influencer-gallery-files"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="sr-only"
+                    disabled={galleryFileBusy || gallerySaving}
+                    onChange={async (e) => {
+                      const files = e.target.files ? Array.from(e.target.files) : [];
+                      e.target.value = "";
+                      if (!files.length) {
+                        return;
+                      }
+                      setGalleryError("");
+                      setGalleryFileBusy(true);
+                      try {
+                        const uploaded = [];
+                        for (const file of files) {
+                          if (uploaded.length >= 25) {
+                            break;
+                          }
+                          uploaded.push(await uploadImageFile(file));
+                        }
+                        setGalleryUrls((prev) => {
+                          const room = Math.max(0, 25 - prev.length);
+                          if (!room) {
+                            return prev;
+                          }
+                          return [...prev, ...uploaded.slice(0, room)];
+                        });
+                      } catch (err) {
+                        setGalleryError(err?.response?.data?.message || "Could not upload one or more images.");
+                      } finally {
+                        setGalleryFileBusy(false);
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="influencer-gallery-files"
+                    className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 ${
+                      galleryFileBusy || gallerySaving ? "pointer-events-none opacity-50" : ""
+                    }`}
+                  >
+                    {galleryFileBusy ? "Uploading…" : "Choose images"}
+                  </label>
+                  <p className="mt-2 text-xs text-slate-500">Up to 25 images per batch. You can select multiple files at once.</p>
+                </div>
+
+                {galleryUrls.length ? (
+                  <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {galleryUrls.map((u, idx) => (
+                      <li key={`${u}-${idx}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                        <img src={u} alt="" className="aspect-square w-full object-cover" />
                         <button
                           type="button"
                           onClick={() => setGalleryUrls((prev) => prev.filter((_, j) => j !== idx))}
-                          className="shrink-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                          className="absolute right-1 top-1 rounded-lg border border-white/80 bg-white/95 px-2 py-1 text-[10px] font-bold uppercase text-slate-700 shadow-sm"
                         >
                           Remove
                         </button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setGalleryUrls((prev) => [...prev, ""])}
-                    disabled={galleryUrls.length >= 10}
-                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
-                  >
-                    + Add another URL
-                  </button>
-                  <span className="text-xs text-slate-400">Up to 25 images per upload.</span>
-                </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-4 text-center text-sm text-slate-500">No images selected yet.</p>
+                )}
 
                 {galleryError ? (
                   <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
@@ -722,10 +757,10 @@ export default function InfluencerDetailsPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={gallerySaving}
+                    disabled={gallerySaving || galleryFileBusy}
                     className="rounded-full bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60"
                   >
-                    {gallerySaving ? "Uploading…" : "Upload gallery"}
+                    {gallerySaving ? "Saving…" : "Add to gallery"}
                   </button>
                 </div>
               </form>

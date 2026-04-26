@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { FiHeart } from "react-icons/fi";
+import { FiHeart, FiUser } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 
 function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDetails }) {
@@ -37,13 +37,36 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
       >
         <FiHeart className={isFavorite ? "fill-current" : ""} />
       </button>
-      <img
-        src={item.image || "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=1200"}
-        alt={item.name}
-        loading="lazy"
-        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-        className="aspect-[4/3] w-full object-cover"
-      />
+      <div className="relative h-48 w-full overflow-hidden bg-slate-100">
+        {item.image ? (
+          <>
+            <img
+              src={item.image}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 via-transparent to-slate-900/10" />
+            <img
+              src={item.image}
+              alt={item.name}
+              loading="lazy"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
+              className="relative h-full w-full object-contain"
+            />
+          </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500">
+            <div className="flex flex-col items-center gap-1">
+              <div className="grid h-12 w-12 place-content-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200">
+                <FiUser className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold">No profile image</p>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
@@ -82,9 +105,11 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
           <p className="text-xs text-slate-500 sm:text-sm">
             {toDisplayNumber(item.followers)} Instagram followers
           </p>
-          <p className="text-xs text-slate-500 sm:text-sm">
-            {toDisplayNumber(item.youtubeSubscribers)} YouTube subscribers
-          </p>
+          {item.youtubeUrl ? (
+            <p className="text-xs text-slate-500 sm:text-sm">
+              {toDisplayNumber(item.youtubeSubscribers)} YouTube subscribers
+            </p>
+          ) : null}
           <div className="pt-2">
             <button
               type="button"

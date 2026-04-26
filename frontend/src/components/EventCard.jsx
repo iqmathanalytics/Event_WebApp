@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FiHeart } from "react-icons/fi";
+import { FiHeart, FiImage } from "react-icons/fi";
 import { formatCurrency } from "../utils/format";
 import { trackEventClick } from "../services/eventService";
 import useAuth from "../hooks/useAuth";
@@ -24,6 +24,10 @@ function EventCard({
   const dateTimeText = item.time ? `${item.date} • ${item.time}` : item.date;
   const visibleTags = tags.slice(0, 2);
   const overflowTags = tags.slice(2);
+  const fallbackGalleryImage = Array.isArray(item.galleryImages)
+    ? item.galleryImages.map((url) => String(url || "").trim()).find(Boolean) || ""
+    : "";
+  const eventImage = String(item.image || "").trim() || fallbackGalleryImage;
 
   const renderTag = (tag) => {
     if (tag === "Hot Selling") {
@@ -66,13 +70,36 @@ function EventCard({
       >
         <FiHeart className={isFavorite ? "fill-current" : ""} />
       </button>
-      <img
-        src={item.image || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200"}
-        alt={item.title}
-        loading="lazy"
-        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-        className="aspect-[4/3] w-full object-cover"
-      />
+      <div className="relative h-48 w-full overflow-hidden bg-slate-100">
+        {eventImage ? (
+          <>
+            <img
+              src={eventImage}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 via-transparent to-slate-900/10" />
+            <img
+              src={eventImage}
+              alt={item.title}
+              loading="lazy"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
+              className="relative h-full w-full object-contain"
+            />
+          </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500">
+            <div className="flex flex-col items-center gap-1">
+              <div className="grid h-12 w-12 place-content-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200">
+                <FiImage className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold">No event image</p>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 truncate">

@@ -295,136 +295,71 @@ function DealsPage() {
         <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Deals</h1>
         <p className="text-sm text-slate-600">Browse limited-time local offers from trusted partners across your city.</p>
       </div>
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-indigo-50/15 to-emerald-50/25 p-4 shadow-soft ring-1 ring-indigo-500/[0.06] sm:p-5">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-indigo-50/15 to-emerald-50/25 p-3 shadow-soft ring-1 ring-indigo-500/[0.06] sm:p-3.5">
         <div className="pointer-events-none absolute -right-14 -top-14 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-400/25 to-emerald-400/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-teal-400/15 blur-3xl" />
 
         {!isAuthenticated ? (
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-            <div className="min-w-0 flex-1">
-              <motion.p
-                className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-800/90"
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.35 }}
+          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="min-w-0 truncate text-sm font-medium text-slate-700">
+              <span className="mr-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-indigo-800">
+                <Sparkles className="h-3.5 w-3.5" /> Partners &amp; promos
+              </span>
+              List offers locals actually click.
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                to="/register"
+                className="inline-flex rounded-lg bg-gradient-to-r from-indigo-600 to-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-indigo-500 hover:to-emerald-500"
               >
-                <motion.span
-                  className="inline-flex text-indigo-600"
-                  animate={{ rotate: [0, -10, 8, 0] }}
-                  transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-                  aria-hidden
-                >
-                  <Sparkles className="h-4 w-4" />
-                </motion.span>
-                Partners &amp; promos
-              </motion.p>
-              <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
-                List offers locals actually click
-              </h2>
-              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-slate-600">
-                Create a free account, add your business profile once, then publish deals from this page — we keep quality high.
-              </p>
-              <ul className="mt-3 flex flex-col gap-1.5 text-xs font-medium text-slate-600 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
-                <li className="inline-flex items-center gap-1.5">
-                  <motion.span
-                    className="text-indigo-600"
-                    animate={{ y: [0, -2, 0] }}
-                    transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                    aria-hidden
-                  >
-                    <MousePointerClick className="h-4 w-4" />
-                  </motion.span>
-                  Sign up — then tweak promos anytime
-                </li>
-                <li className="inline-flex items-center gap-1.5">
-                  <BadgePercent className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  Discounts, flash sales, partner perks
-                </li>
-                <li className="inline-flex items-center gap-1.5">
-                  <Store className="h-4 w-4 shrink-0 text-violet-600" aria-hidden />
-                  One storefront profile, city-wide reach
-                </li>
-              </ul>
-            </div>
-            <div className="relative flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:flex-col xl:flex-row">
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                <Link
-                  to="/register"
-                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-500 hover:to-emerald-500 sm:min-h-0 sm:w-auto"
-                >
-                  Partner with Yay! — join free
-                </Link>
-              </motion.div>
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Link
-                  to="/login"
-                  className="flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-slate-200 bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-indigo-300 hover:bg-white sm:min-h-0 sm:w-auto"
-                >
-                  Have an account? Sign in to list
-                </Link>
-              </motion.div>
+                Join free
+              </Link>
+              <Link
+                to="/login"
+                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:border-indigo-300"
+              >
+                Sign in
+              </Link>
             </div>
           </div>
         ) : (
-          <>
-            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Post a deal or offer</p>
-                <p className="text-sm text-slate-600">Your deal will be reviewed by admin before it goes live.</p>
-              </div>
+          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="min-w-0 truncate text-sm font-medium text-slate-700">
+              <span className="mr-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-indigo-800">
+                <Sparkles className="h-3.5 w-3.5" /> Deal tools
+              </span>
+              Post an offer. Every deal is reviewed before going live.
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
               {canPostDeals && dealerStatus === "approved" ? (
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSubmitError("");
-                      setSubmitMessage("");
-                      setSubmitOpen(true);
-                    }}
-                    className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
-                  >
-                    Submit Deal
-                  </button>
-                </motion.div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmitError("");
+                    setSubmitMessage("");
+                    setSubmitOpen(true);
+                  }}
+                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Submit deal
+                </button>
               ) : !canPostDeals ? (
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Link
-                    to="/dashboard/user"
-                    className="inline-flex rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    Open dashboard
-                  </Link>
-                </motion.div>
+                <Link
+                  to="/dashboard/user"
+                  className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+                >
+                  Open dashboard
+                </Link>
               ) : (
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Link
-                    to="/dashboard/user"
-                    className="inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
-                  >
-                    Complete Dealer Profile
-                  </Link>
-                </motion.div>
+                <Link
+                  to="/dashboard/user"
+                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Complete profile
+                </Link>
               )}
             </div>
-            {isAuthenticated && !canPostDeals ? (
-              <div className="relative mt-3 flex gap-3 rounded-xl border border-slate-200/90 bg-slate-50/95 px-3 py-3 sm:px-4">
-                <span className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-lg bg-white text-slate-500 shadow-sm ring-1 ring-slate-200">
-                  <FiBriefcase className="h-5 w-5" aria-hidden />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Deal posting isn&apos;t enabled for this login yet</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                    Need access? Contact us — we turn on partner tools for verified businesses.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-            {isAuthenticated && canPostDeals && dealerStatus === "approved" ? <DealerApprovedRibbon /> : null}
-            {isAuthenticated && canPostDeals && dealerStatus !== "approved" ? (
-              <DealerProfileProgressNote status={dealerStatus} />
-            ) : null}
-            {submitMessage ? <p className="mt-2 text-sm font-medium text-emerald-700">{submitMessage}</p> : null}
-          </>
+          </div>
         )}
       </div>
       <EventFilterBar
@@ -471,6 +406,7 @@ function DealsPage() {
                   originalPrice: item.original_price || item.discounted_price || 0,
                   price: item.discounted_price || item.original_price || 0,
                   image: item.image_url,
+                  dealInfo: item.terms_text || item.description || "",
                   offerType: item.offer_type,
                   offerMetaJson: item.offer_meta_json
                 }}
@@ -507,17 +443,10 @@ function DealsPage() {
               ...submitForm,
               city_id: Number(submitForm.city_id),
               category_id: Number(submitForm.category_id),
-              discount_percentage:
-                submitForm.offer_type === "percentage_off" && submitForm.offer_value
-                  ? Number(submitForm.offer_value)
-                  : undefined,
-              original_price: submitForm.original_price ? Number(submitForm.original_price) : undefined,
-              offer_value: submitForm.offer_value ? Number(submitForm.offer_value) : undefined,
-              buy_qty: submitForm.buy_qty ? Number(submitForm.buy_qty) : undefined,
-              get_qty: submitForm.get_qty ? Number(submitForm.get_qty) : undefined,
-              minimum_spend: submitForm.minimum_spend ? Number(submitForm.minimum_spend) : undefined,
-              max_discount_amount: submitForm.max_discount_amount ? Number(submitForm.max_discount_amount) : undefined,
-              terms_text: submitForm.terms || undefined
+              promo_code: submitForm.promo_code?.trim() || undefined,
+              deal_link: submitForm.deal_link?.trim() || undefined,
+              image_url: submitForm.image_url?.trim() || undefined,
+              terms_text: submitForm.deal_info?.trim() || undefined
             });
             setSubmitOpen(false);
             setSubmitForm({ ...emptyDealSubmitForm });

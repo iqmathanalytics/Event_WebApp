@@ -48,6 +48,22 @@ async function upsertCities(cities) {
   return affected;
 }
 
+/** One row per slug — avoids homonyms (e.g. Dallas TX vs Dallas GA). */
+async function listCitiesBySlugs(slugs) {
+  const uniq = [...new Set((slugs || []).map((s) => String(s || "").trim()).filter(Boolean))];
+  if (!uniq.length) {
+    return [];
+  }
+  const placeholders = uniq.map(() => "?").join(", ");
+  const [rows] = await pool.query(
+    `SELECT id, name, state, slug
+     FROM cities
+     WHERE is_active = 1 AND slug IN (${placeholders})`,
+    uniq
+  );
+  return rows;
+}
+
 async function listActiveCities({ q = "", limit = 5000 }) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 5000, 10000));
   const query = String(q || "").trim();
@@ -80,5 +96,6 @@ module.exports = {
   getCitySyncMeta,
   updateCitySyncMeta,
   upsertCities,
-  listActiveCities
+  listActiveCities,
+  listCitiesBySlugs
 };

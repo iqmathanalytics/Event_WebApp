@@ -51,7 +51,7 @@ function EventFilterControls({
 
   const cityLabel = useMemo(() => {
     return cities.find((item) => item.value === city)?.label || "All Cities";
-  }, [city]);
+  }, [city, cities]);
   const categoryLabel = useMemo(() => {
     return categories.find((item) => item.value === category)?.label || "All Categories";
   }, [category]);
@@ -64,7 +64,7 @@ function EventFilterControls({
       return cities;
     }
     return cities.filter((item) => item.label.toLowerCase().includes(query));
-  }, [cityQuery]);
+  }, [cityQuery, cities]);
   const filteredCategories = useMemo(() => {
     const query = categoryQuery.trim().toLowerCase();
     if (!query) {

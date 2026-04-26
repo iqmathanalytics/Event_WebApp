@@ -2,15 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import { FiInfo } from "react-icons/fi";
 import { categories } from "../utils/filterOptions";
-
-export const DEAL_OFFER_TYPES = [
-  { value: "percentage_off", label: "Percentage Off" },
-  { value: "flat_off", label: "Flat Amount Off" },
-  { value: "bogo", label: "Buy X Get Y" },
-  { value: "bundle_price", label: "Bundle Price" },
-  { value: "free_item", label: "Free Item with Purchase" },
-  { value: "custom", label: "Custom Offer" }
-];
+import CloudinaryImageInput from "./CloudinaryImageInput";
 
 export const emptyDealSubmitForm = {
   title: "",
@@ -18,21 +10,12 @@ export const emptyDealSubmitForm = {
   city_id: "",
   category_id: "",
   provider_name: "",
-  original_price: "",
   expiry_date: "",
   promo_code: "",
   deal_link: "",
   image_url: "",
   is_premium: false,
-  offer_type: "percentage_off",
-  offer_value: "",
-  buy_qty: "",
-  get_qty: "",
-  minimum_spend: "",
-  max_discount_amount: "",
-  free_item_name: "",
-  custom_offer_text: "",
-  terms: ""
+  deal_info: ""
 };
 
 function FormField({ label, hint, example, className = "", children }) {
@@ -107,7 +90,7 @@ export default function DealSubmissionModal({
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                 />
               </FormField>
-              <FormField label="Description" hint="Add key details like eligibility, timing, and availability." className="sm:col-span-2">
+              <FormField label="Description" hint="Add a quick summary users can scan." className="sm:col-span-2">
                 <textarea
                   rows={4}
                   value={form.description}
@@ -162,110 +145,30 @@ export default function DealSubmissionModal({
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                 />
               </FormField>
-              <FormField label="Original Price" hint="Optional reference price before discount." example="49.99">
-                <input
-                  type="number"
-                  min="0"
-                  value={form.original_price}
-                  onChange={(e) => setForm((p) => ({ ...p, original_price: e.target.value }))}
+              <FormField
+                label="Deal Info"
+                hint="Describe the offer details, conditions, and redemption notes."
+                className="sm:col-span-2"
+              >
+                <textarea
+                  rows={4}
+                  value={form.deal_info}
+                  onChange={(e) => setForm((p) => ({ ...p, deal_info: e.target.value }))}
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                 />
               </FormField>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Offer Configuration</p>
-                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <select
-                    value={form.offer_type}
-                    onChange={(e) => setForm((p) => ({ ...p, offer_type: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                  >
-                    {DEAL_OFFER_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                  {(form.offer_type === "percentage_off" || form.offer_type === "flat_off" || form.offer_type === "bundle_price") ? (
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder={form.offer_type === "percentage_off" ? "Offer Value (%)" : "Offer Value ($)"}
-                      value={form.offer_value}
-                      onChange={(e) => setForm((p) => ({ ...p, offer_value: e.target.value }))}
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                    />
-                  ) : null}
-                  {form.offer_type === "bogo" ? (
-                    <>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Buy Quantity"
-                        value={form.buy_qty}
-                        onChange={(e) => setForm((p) => ({ ...p, buy_qty: e.target.value }))}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Get Quantity"
-                        value={form.get_qty}
-                        onChange={(e) => setForm((p) => ({ ...p, get_qty: e.target.value }))}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                      />
-                    </>
-                  ) : null}
-                  {form.offer_type === "free_item" ? (
-                    <input
-                      type="text"
-                      placeholder="Free Item Name"
-                      value={form.free_item_name}
-                      onChange={(e) => setForm((p) => ({ ...p, free_item_name: e.target.value }))}
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2"
-                    />
-                  ) : null}
-                  {form.offer_type === "custom" ? (
-                    <input
-                      type="text"
-                      placeholder="Custom Offer Text (e.g. Buy 1 Get 2)"
-                      value={form.custom_offer_text}
-                      onChange={(e) => setForm((p) => ({ ...p, custom_offer_text: e.target.value }))}
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2"
-                    />
-                  ) : null}
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Minimum Spend (optional)"
-                    value={form.minimum_spend}
-                    onChange={(e) => setForm((p) => ({ ...p, minimum_spend: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Maximum Discount Cap (optional)"
-                    value={form.max_discount_amount}
-                    onChange={(e) => setForm((p) => ({ ...p, max_discount_amount: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                  <textarea
-                    rows={2}
-                    placeholder="Terms and Conditions (optional)"
-                    value={form.terms}
-                    onChange={(e) => setForm((p) => ({ ...p, terms: e.target.value }))}
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2"
-                  />
-                </div>
-              </div>
-              <FormField label="Promo Code" hint="Optional code users apply at checkout." example="SAVE20">
+              <FormField label="Promo Code (Optional)" hint="Optional code users apply at checkout." example="SAVE20">
                 <input
                   value={form.promo_code}
                   onChange={(e) => setForm((p) => ({ ...p, promo_code: e.target.value }))}
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                 />
               </FormField>
-              <FormField label="Deal Link" hint="Optional landing page where users redeem this offer." example="https://brand.com/deals/summer">
+              <FormField
+                label="Deal Link (Optional)"
+                hint="Optional landing page where users redeem this offer."
+                example="https://brand.com/deals/summer"
+              >
                 <input
                   type="url"
                   value={form.deal_link}
@@ -273,17 +176,11 @@ export default function DealSubmissionModal({
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                 />
               </FormField>
-              <FormField
-                label="Image URL"
-                hint="Use a high-quality image to improve clicks."
-                example="https://images.example.com/deal.jpg"
-                className="sm:col-span-2"
-              >
-                <input
-                  type="url"
+              <FormField label="Deal image" hint="Upload a high-quality image to improve clicks." className="sm:col-span-2">
+                <CloudinaryImageInput
                   value={form.image_url}
-                  onChange={(e) => setForm((p) => ({ ...p, image_url: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  onChange={(url) => setForm((p) => ({ ...p, image_url: url }))}
+                  disabled={submitLoading}
                 />
               </FormField>
               <label className="inline-flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">

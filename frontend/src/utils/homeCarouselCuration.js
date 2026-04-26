@@ -5,8 +5,9 @@
  */
 
 const TAG_WEIGHT = Object.freeze({
-  "Hot Selling": 100,
-  Trending: 50,
+  Trending: 500,
+  "Hot Selling": 120,
+  "Recently Added": 60,
   "One of a Kind": 25
 });
 

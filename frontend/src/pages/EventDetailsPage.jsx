@@ -48,6 +48,25 @@ function getEmbedMapUrl(googleMapsLink, venueName, venueAddress) {
   return `https://www.google.com/maps?q=${encodeURIComponent(fallback)}&output=embed`;
 }
 
+function formatTime12Hour(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "Time not specified";
+  }
+  const match = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) {
+    return raw;
+  }
+  const hour24 = Number(match[1]);
+  const minute = match[2];
+  if (!Number.isFinite(hour24) || hour24 < 0 || hour24 > 23) {
+    return raw;
+  }
+  const suffix = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${minute} ${suffix}`;
+}
+
 function EventDetailsPage() {
   const { id } = useParams();
   const { isAuthenticated } = useAuth();
@@ -174,13 +193,18 @@ function EventDetailsPage() {
             <div className={metaCard}>
               <p className="flex items-start gap-2">
                 <FiClock className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span>{event.event_time ? String(event.event_time).slice(0, 5) : "Time not specified"}</span>
+                <span>{formatTime12Hour(event.event_time)}</span>
               </p>
             </div>
             <div className={`col-span-2 ${metaCard} lg:col-span-1`}>
               <p className="flex items-start gap-2">
                 <FiMapPin className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span className="line-clamp-2 lg:line-clamp-none">{venueName}</span>
+                <span className="line-clamp-2 lg:line-clamp-none">
+                  <span>{venueName}</span>
+                  {event.venue_address ? (
+                    <span className="mt-0.5 block text-xs font-normal text-slate-500">{event.venue_address}</span>
+                  ) : null}
+                </span>
               </p>
             </div>
             <div className={`col-span-2 ${metaCard} lg:col-span-1`}>

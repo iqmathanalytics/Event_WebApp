@@ -3,6 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import InfluencerCard from "../components/InfluencerCard";
+import { parseInfluencerSocialLinks } from "../utils/influencerSocial";
 import DealCard from "../components/DealCard";
 import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
 import HeroSlideshow from "../components/HeroSlideshow";
@@ -381,7 +382,8 @@ function HomePage() {
                     date: formatDateUS(item.event_date),
                     time: item.event_time ? String(item.event_time).slice(0, 5) : "",
                     price: item.price,
-                    image: item.image_url
+                    image: item.image_url,
+                    galleryImages: item.gallery_image_urls
                   }}
                   isYayDealEvent={
                     item.is_yay_deal_event === 1 ||
@@ -425,6 +427,7 @@ function HomePage() {
                       city: item.city_name || "City",
                       followers: item.followers_count || 0,
                       youtubeSubscribers: item.youtube_subscribers_count || 0,
+                      youtubeUrl: parseInfluencerSocialLinks(item.social_links).youtube,
                       tags: item.tags || [],
                       image: item.profile_image_url
                     }}
@@ -463,6 +466,7 @@ function HomePage() {
                       originalPrice: item.original_price || item.discounted_price || 0,
                       price: item.discounted_price || item.original_price || 0,
                       image: item.image_url,
+                      dealInfo: item.terms_text || item.description || "",
                       offerType: item.offer_type,
                       offerMetaJson: item.offer_meta_json
                     }}

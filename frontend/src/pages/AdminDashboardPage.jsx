@@ -40,6 +40,7 @@ import { downloadBlob } from "../utils/fileDownload";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import CloudinaryImageInput from "../components/CloudinaryImageInput";
 
 const eventHighlightOptions = [
   "Free Parking",
@@ -1180,7 +1181,7 @@ function AdminDashboardPage() {
       return cities;
     }
     return cities.filter((city) => city.label.toLowerCase().includes(query));
-  }, [bookingCityQuery]);
+  }, [bookingCityQuery, cities]);
 
   return (
     <motion.div
@@ -2647,16 +2648,11 @@ function AdminDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
-                  <FormField
-                    label="Profile Image URL"
-                    hint="Paste a public profile image URL."
-                    example="https://images.example.com/profile.jpg"
-                  >
-                    <input
-                      type="url"
+                  <FormField label="Profile image" hint="Upload a profile or logo image.">
+                    <CloudinaryImageInput
                       value={editForm.profile_image_url || ""}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, profile_image_url: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      onChange={(url) => setEditForm((prev) => ({ ...prev, profile_image_url: url }))}
+                      disabled={editSaving}
                     />
                   </FormField>
                 </>
@@ -2901,30 +2897,30 @@ function AdminDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
-                  <FormField label="Cover image URL" hint="Primary banner; detail page shows this first." example="https://images.example.com/event.jpg">
-                    <input
+                  <FormField label="Cover image" hint="Primary banner; detail page shows this first.">
+                    <CloudinaryImageInput
                       value={editForm.image_url || ""}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, image_url: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      onChange={(url) => setEditForm((prev) => ({ ...prev, image_url: url }))}
+                      disabled={editSaving}
                     />
                   </FormField>
                   <div className="space-y-2 sm:col-span-2">
                     <p className="text-sm font-semibold text-slate-900">Additional banner images</p>
-                    <p className="text-xs text-slate-500">Optional carousel URLs (max 12).</p>
+                    <p className="text-xs text-slate-500">Optional carousel images (max 12).</p>
                     <div className="space-y-2">
                       {(editForm.gallery_image_urls || []).map((row, idx) => (
                         <div key={`ad-gal-${idx}`} className="flex gap-2">
-                          <input
-                            type="url"
+                          <CloudinaryImageInput
+                            compact
                             value={row}
-                            onChange={(e) =>
+                            onChange={(url) =>
                               setEditForm((prev) => {
                                 const next = [...(prev.gallery_image_urls || [])];
-                                next[idx] = e.target.value;
+                                next[idx] = url;
                                 return { ...prev, gallery_image_urls: next };
                               })
                             }
-                            className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                            disabled={editSaving}
                           />
                           <button
                             type="button"
@@ -2951,7 +2947,7 @@ function AdminDashboardPage() {
                         }
                         className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
                       >
-                        + Add image URL
+                        + Add gallery image
                       </button>
                     </div>
                   </div>
@@ -3295,30 +3291,30 @@ function AdminDashboardPage() {
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
-                <FormField label="Cover image URL" hint="Primary banner image." example="https://images.example.com/event.jpg">
-                  <input
+                <FormField label="Cover image" hint="Primary banner image.">
+                  <CloudinaryImageInput
                     value={reviewForm.image_url || ""}
-                    onChange={(e) => setReviewForm((prev) => ({ ...prev, image_url: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    onChange={(url) => setReviewForm((prev) => ({ ...prev, image_url: url }))}
+                    disabled={reviewSaving}
                   />
                 </FormField>
                 <div className="space-y-2 sm:col-span-2">
                   <p className="text-sm font-semibold text-slate-900">Additional banner images</p>
-                  <p className="text-xs text-slate-500">Optional carousel URLs (max 12).</p>
+                  <p className="text-xs text-slate-500">Optional carousel images (max 12).</p>
                   <div className="space-y-2">
                     {(reviewForm.gallery_image_urls || []).map((row, idx) => (
                       <div key={`rv-gal-${idx}`} className="flex gap-2">
-                        <input
-                          type="url"
+                        <CloudinaryImageInput
+                          compact
                           value={row}
-                          onChange={(e) =>
+                          onChange={(url) =>
                             setReviewForm((prev) => {
                               const next = [...(prev.gallery_image_urls || [])];
-                              next[idx] = e.target.value;
+                              next[idx] = url;
                               return { ...prev, gallery_image_urls: next };
                             })
                           }
-                          className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                          disabled={reviewSaving}
                         />
                         <button
                           type="button"
@@ -3345,7 +3341,7 @@ function AdminDashboardPage() {
                       }
                       className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
                     >
-                      + Add image URL
+                      + Add gallery image
                     </button>
                   </div>
                 </div>

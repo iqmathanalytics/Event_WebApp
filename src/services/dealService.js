@@ -11,19 +11,11 @@ const {
 } = require("../models/dealModel");
 const { getMonthRange } = require("../utils/dateRange");
 
-const DEAL_OFFER_TYPES = new Set([
-  "percentage_off",
-  "flat_off",
-  "bogo",
-  "bundle_price",
-  "free_item",
-  "custom"
-]);
-
 const DEAL_TAG_RULES = Object.freeze({
   hotSellingMinDiscountPercent: 30,
   trendingMinRecentEngagement: 20,
-  trendingMinTotalEngagement: 30
+  trendingMinTotalEngagement: 30,
+  recentlyAddedWindowDays: 10
 });
 
 function toNumber(value) {
@@ -67,6 +59,10 @@ function attachDynamicDealTags(deal) {
   const totalEngagement = clickCount + viewCount;
   const offerType = String(deal.offer_type || "");
   const hasSpecialOfferType = ["bogo", "bundle_price", "free_item", "custom"].includes(offerType);
+  const createdMs = new Date(deal.created_at || "").getTime();
+  const isRecentlyAdded = Number.isFinite(createdMs)
+    ? Date.now() - createdMs <= DEAL_TAG_RULES.recentlyAddedWindowDays * 86400000
+    : false;
 
   const isTrending =
     recentEngagement >= DEAL_TAG_RULES.trendingMinRecentEngagement ||
@@ -78,6 +74,9 @@ function attachDynamicDealTags(deal) {
   const tags = [];
   if (isTrending) {
     tags.push("Trending");
+  }
+  if (isRecentlyAdded) {
+    tags.push("Recently Added");
   }
   if (isHotSelling) {
     tags.push("Hot Selling");
@@ -97,31 +96,17 @@ function dealDiscoverySortKey(deal) {
   const premium = deal.is_premium === 1 || deal.is_premium === true ? 1 : 0;
   const tags = deal.tags || [];
   const trending = tags.includes("Trending") ? 1 : 0;
+  const recent = tags.includes("Recently Added") ? 1 : 0;
   const hot = tags.includes("Hot Selling") ? 1 : 0;
   const ook = tags.includes("One of a Kind") ? 1 : 0;
   return (
     premium * 1_000_000_000 +
     trending * 10_000_000 +
+    recent * 1_000_000 +
     hot * 100_000 +
     ook * 1_000 +
     toNumber(deal.popularity_score)
   );
-}
-
-function resolveOfferType(value) {
-  return DEAL_OFFER_TYPES.has(value) ? value : "percentage_off";
-}
-
-function buildOfferMeta(payload) {
-  return JSON.stringify({
-    offer_value: payload.offer_value ?? null,
-    buy_qty: payload.buy_qty ?? null,
-    get_qty: payload.get_qty ?? null,
-    minimum_spend: payload.minimum_spend ?? null,
-    max_discount_amount: payload.max_discount_amount ?? null,
-    free_item_name: payload.free_item_name || null,
-    custom_offer_text: payload.custom_offer_text || null
-  });
 }
 
 async function fetchDeals(query, user) {
@@ -169,15 +154,6 @@ async function fetchDeals(query, user) {
 }
 
 async function submitDeal(payload, userId) {
-  const originalPrice = payload.original_price !== undefined ? Number(payload.original_price) : null;
-  const discountPercent = payload.discount_percentage !== undefined ? Number(payload.discount_percentage) : null;
-  const discountedPrice =
-    payload.discounted_price !== undefined
-      ? Number(payload.discounted_price)
-      : originalPrice !== null && discountPercent !== null
-        ? Number((originalPrice * (1 - discountPercent / 100)).toFixed(2))
-        : null;
-
   try {
     const dealId = await createDeal({
       title: payload.title,
@@ -185,15 +161,15 @@ async function submitDeal(payload, userId) {
       city_id: payload.city_id,
       category_id: payload.category_id,
       provider_name: payload.provider_name || "",
-      original_price: originalPrice,
-      discounted_price: discountedPrice,
+      original_price: null,
+      discounted_price: null,
       expiry_date: payload.expiry_date,
       deal_link: payload.deal_link || "",
       promo_code: payload.promo_code || "",
       image_url: payload.image_url || "",
       is_premium: payload.is_premium === true || payload.is_premium === 1,
-      offer_type: resolveOfferType(payload.offer_type),
-      offer_meta_json: buildOfferMeta(payload),
+      offer_type: null,
+      offer_meta_json: null,
       terms_text: payload.terms_text || "",
       created_by: userId
     });
@@ -239,15 +215,6 @@ async function editOwnDealSubmission(id, payload, userId) {
     throw new ApiError(400, "Only approved deal submissions can be edited");
   }
 
-  const originalPrice = payload.original_price !== undefined ? Number(payload.original_price) : null;
-  const discountPercent = payload.discount_percentage !== undefined ? Number(payload.discount_percentage) : null;
-  const discountedPrice =
-    payload.discounted_price !== undefined
-      ? Number(payload.discounted_price)
-      : originalPrice !== null && discountPercent !== null
-        ? Number((originalPrice * (1 - discountPercent / 100)).toFixed(2))
-        : null;
-
   const updated = await updateDealByCreator({
     id,
     createdBy: userId,
@@ -257,15 +224,15 @@ async function editOwnDealSubmission(id, payload, userId) {
       city_id: payload.city_id,
       category_id: payload.category_id,
       provider_name: payload.provider_name || "",
-      original_price: originalPrice,
-      discounted_price: discountedPrice,
+      original_price: null,
+      discounted_price: null,
       expiry_date: payload.expiry_date,
       deal_link: payload.deal_link || "",
       promo_code: payload.promo_code || "",
       image_url: payload.image_url || "",
       is_premium: payload.is_premium === true || payload.is_premium === 1 ? 1 : 0,
-      offer_type: resolveOfferType(payload.offer_type),
-      offer_meta_json: buildOfferMeta(payload),
+      offer_type: null,
+      offer_meta_json: null,
       terms_text: payload.terms_text || ""
     }
   });

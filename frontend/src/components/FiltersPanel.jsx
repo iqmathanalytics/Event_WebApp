@@ -32,7 +32,7 @@ function FiltersPanel({
       return cities;
     }
     return cities.filter((item) => item.label.toLowerCase().includes(query));
-  }, [cityQuery]);
+  }, [cityQuery, cities]);
   const filteredCategories = useMemo(() => {
     const query = categoryQuery.trim().toLowerCase();
     if (!query) {

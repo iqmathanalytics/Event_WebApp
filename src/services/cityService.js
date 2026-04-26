@@ -2,7 +2,7 @@ const {
   getCitySyncMeta,
   updateCitySyncMeta,
   upsertCities,
-  listActiveCities
+  listCitiesBySlugs
 } = require("../models/cityModel");
 const { citySync } = require("../config/env");
 
@@ -113,15 +113,57 @@ async function syncUSCitiesIfStale({ force = false } = {}) {
   return runningSyncPromise;
 }
 
+/** Slugs align with CSC / bootstrap so upserts merge cleanly (one metro per slug). */
+const APP_METRO_SEED = [
+  { name: "Atlanta", state: "GA", slug: "atlanta-ga" },
+  { name: "Austin", state: "TX", slug: "austin-tx" },
+  { name: "Dallas", state: "TX", slug: "dallas-tx" },
+  { name: "Houston", state: "TX", slug: "houston-tx" },
+  { name: "San Antonio", state: "TX", slug: "san-antonio-tx" }
+];
+
+const APP_METRO_SLUGS_ORDERED = APP_METRO_SEED.map((r) => r.slug);
+const slugOrderIndex = (slug) => {
+  const i = APP_METRO_SLUGS_ORDERED.indexOf(String(slug || "").trim());
+  return i === -1 ? 999 : i;
+};
+
+async function ensureAppMetroCitiesSeeded() {
+  try {
+    await upsertCities(APP_METRO_SEED);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[cityService] ensureAppMetroCitiesSeeded:", err?.message || err);
+  }
+}
+
 async function fetchCities({ q, limit } = {}) {
+  await ensureAppMetroCitiesSeeded();
   await syncUSCitiesIfStale();
-  const rows = await listActiveCities({ q, limit });
-  return rows.map((item) => ({
-    value: String(item.id),
-    label: item.state ? `${item.name}, ${item.state}` : item.name,
-    name: item.name,
-    state: item.state
-  }));
+
+  const query = String(q || "").trim();
+  let rows = await listCitiesBySlugs(APP_METRO_SLUGS_ORDERED);
+
+  if (query) {
+    const qLower = query.toLowerCase();
+    rows = rows.filter((item) => {
+      const name = String(item.name || "").toLowerCase();
+      const state = String(item.state || "").toLowerCase();
+      return name.includes(qLower) || state.includes(qLower) || `${item.name}, ${item.state}`.toLowerCase().includes(qLower);
+    });
+  }
+
+  const mapped = rows
+    .map((item) => ({
+      value: String(item.id),
+      label: item.name,
+      name: item.name,
+      state: item.state,
+      slug: item.slug
+    }))
+    .filter((item) => slugOrderIndex(item.slug) < 999)
+    .sort((a, b) => slugOrderIndex(a.slug) - slugOrderIndex(b.slug));
+  return mapped;
 }
 
 module.exports = {

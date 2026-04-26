@@ -1,27 +1,32 @@
 const byLabelAsc = (a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" });
 
-export const cities = [
-  { value: "1", label: "New York" },
-  { value: "2", label: "Los Angeles" },
-  { value: "3", label: "Miami" },
-  { value: "4", label: "Chicago" },
-  { value: "5", label: "Austin" },
-  { value: "6", label: "San Francisco" },
-  { value: "7", label: "San Diego" },
-  { value: "8", label: "Seattle" },
-  { value: "9", label: "Boston" },
-  { value: "10", label: "Dallas" },
-  { value: "11", label: "Houston" },
-  { value: "12", label: "Las Vegas" },
-  { value: "13", label: "Denver" },
-  { value: "14", label: "Atlanta" },
-  { value: "15", label: "Orlando" },
-  { value: "16", label: "Washington DC" },
-  { value: "17", label: "Phoenix" },
-  { value: "18", label: "Nashville" },
-  { value: "19", label: "San Jose" },
-  { value: "20", label: "Portland" }
-].sort(byLabelAsc);
+/** Display names for the five metros (same order as API). */
+export const ALLOWED_CITY_NAMES_IN_ORDER = ["Atlanta", "Austin", "Dallas", "Houston", "San Antonio"];
+
+/** Must match `APP_METRO_SEED` slugs in `src/services/cityService.js` (one row per slug). */
+export const APP_METRO_SLUGS_IN_ORDER = ["atlanta-ga", "austin-tx", "dallas-tx", "houston-tx", "san-antonio-tx"];
+
+/**
+ * City dropdowns use `useCityFilter()` (loaded from `/meta/cities` with real DB ids).
+ * Rows are filtered by `slug` so homonyms (e.g. Dallas GA) never appear.
+ */
+export function orderAllowedCities(rows) {
+  const allowedSlugs = new Set(APP_METRO_SLUGS_IN_ORDER);
+  return (rows || [])
+    .filter((r) => r.slug && allowedSlugs.has(String(r.slug).trim()))
+    .sort(
+      (a, b) =>
+        APP_METRO_SLUGS_IN_ORDER.indexOf(String(a.slug).trim()) -
+        APP_METRO_SLUGS_IN_ORDER.indexOf(String(b.slug).trim())
+    )
+    .map((r) => ({
+      value: String(r.value),
+      label: r.label || r.name,
+      name: r.name || r.label,
+      state: r.state,
+      slug: r.slug
+    }));
+}
 
 export const categories = [
   { value: "1", label: "Music" },

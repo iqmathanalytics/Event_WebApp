@@ -28,7 +28,7 @@ function AdminFilters({ filters, onChange, onApply, onReset, canApply = true }) 
 
   const cityLabel = useMemo(
     () => cities.find((item) => item.value === filters.city)?.label || "All Cities",
-    [filters.city]
+    [filters.city, cities]
   );
   const categoryLabel = useMemo(
     () => categories.find((item) => item.value === filters.category)?.label || "All Categories",
@@ -40,7 +40,7 @@ function AdminFilters({ filters, onChange, onApply, onReset, canApply = true }) 
       return cities;
     }
     return cities.filter((item) => item.label.toLowerCase().includes(query));
-  }, [cityQuery]);
+  }, [cityQuery, cities]);
   const filteredCategories = useMemo(() => {
     const query = categoryQuery.trim().toLowerCase();
     if (!query) {

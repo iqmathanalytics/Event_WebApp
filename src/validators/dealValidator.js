@@ -1,13 +1,27 @@
 const { z } = require("zod");
 
-const offerTypeEnum = z.enum([
-  "percentage_off",
-  "flat_off",
-  "bogo",
-  "bundle_price",
-  "free_item",
-  "custom"
-]);
+const optionalTrimmedString = (max) =>
+  z.preprocess(
+    (value) => {
+      if (typeof value !== "string") {
+        return value;
+      }
+      const trimmed = value.trim();
+      return trimmed === "" ? undefined : trimmed;
+    },
+    z.string().max(max).optional()
+  );
+
+const optionalUrlString = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+    const trimmed = value.trim();
+    return trimmed === "" ? undefined : trimmed;
+  },
+  z.string().url().optional()
+);
 
 const fetchDealsSchema = z.object({
   body: z.object({}).passthrough(),
@@ -34,23 +48,12 @@ const submitDealSchema = z.object({
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
     provider_name: z.string().trim().min(2).max(180),
-    discount_percentage: z.coerce.number().min(0).max(100).optional(),
-    original_price: z.coerce.number().min(0).optional(),
-    discounted_price: z.coerce.number().min(0).optional(),
     expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    promo_code: z.string().trim().max(80).optional(),
-    deal_link: z.string().trim().url().optional(),
-    image_url: z.string().trim().url().optional(),
+    promo_code: optionalTrimmedString(80),
+    deal_link: optionalUrlString,
+    image_url: optionalUrlString,
     is_premium: z.boolean().optional(),
-    offer_type: offerTypeEnum.optional(),
-    offer_value: z.coerce.number().min(0).optional(),
-    buy_qty: z.coerce.number().int().min(1).optional(),
-    get_qty: z.coerce.number().int().min(1).optional(),
-    minimum_spend: z.coerce.number().min(0).optional(),
-    max_discount_amount: z.coerce.number().min(0).optional(),
-    free_item_name: z.string().trim().max(160).optional(),
-    custom_offer_text: z.string().trim().max(220).optional(),
-    terms_text: z.string().trim().max(3000).optional()
+    terms_text: optionalTrimmedString(3000)
   }),
   query: z.object({}).passthrough(),
   params: z.object({}).passthrough()
@@ -85,23 +88,12 @@ const editOwnDealSchema = z.object({
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
     provider_name: z.string().trim().min(2).max(180),
-    discount_percentage: z.coerce.number().min(0).max(100).optional(),
-    original_price: z.coerce.number().min(0).optional(),
-    discounted_price: z.coerce.number().min(0).optional(),
     expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    promo_code: z.string().trim().max(80).optional(),
-    deal_link: z.string().trim().url().optional(),
-    image_url: z.string().trim().url().optional(),
+    promo_code: optionalTrimmedString(80),
+    deal_link: optionalUrlString,
+    image_url: optionalUrlString,
     is_premium: z.boolean().optional(),
-    offer_type: offerTypeEnum.optional(),
-    offer_value: z.coerce.number().min(0).optional(),
-    buy_qty: z.coerce.number().int().min(1).optional(),
-    get_qty: z.coerce.number().int().min(1).optional(),
-    minimum_spend: z.coerce.number().min(0).optional(),
-    max_discount_amount: z.coerce.number().min(0).optional(),
-    free_item_name: z.string().trim().max(160).optional(),
-    custom_offer_text: z.string().trim().max(220).optional(),
-    terms_text: z.string().trim().max(3000).optional()
+    terms_text: optionalTrimmedString(3000)
   }),
   query: z.object({}).passthrough(),
   params: z.object({

@@ -24,8 +24,10 @@ const {
 const { listMessagesPaginated, getAllMessagesForExport } = require("../models/contactModel");
 const {
   syncMailchimpSubscriber,
-  isMailchimpConfigured
+  isMailchimpConfigured,
+  sendSendGridEmail
 } = require("../utils/emailIntegrations");
+const { buildApprovalEmail } = require("../utils/transactionalEmailTemplates");
 const {
   listAdminNotifications,
   countUnreadAdminNotifications,
@@ -173,6 +175,106 @@ function resolveTable(type) {
   return table;
 }
 
+function formatDateYmd(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  return raw.slice(0, 10);
+}
+
+function formatTimeHm(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  return raw.slice(0, 5);
+}
+
+async function getApprovalEmailContext({ type, id }) {
+  if (type === "events") {
+    const [rows] = await pool.query(
+      `SELECT e.title, e.event_date, e.event_time, e.venue_name, e.venue_address, c.name AS city_name,
+              u.email AS recipient_email, u.name AS recipient_name
+       FROM events e
+       LEFT JOIN cities c ON c.id = e.city_id
+       LEFT JOIN users u ON u.id = e.organizer_id
+       WHERE e.id = ?
+       LIMIT 1`,
+      [id]
+    );
+    const row = rows[0];
+    if (!row?.recipient_email) return null;
+    return {
+      recipientEmail: row.recipient_email,
+      recipientName: row.recipient_name || "",
+      listingType: "events",
+      title: row.title || "",
+      details: [
+        { label: "City", value: row.city_name || "N/A" },
+        { label: "Date", value: formatDateYmd(row.event_date) || "N/A" },
+        { label: "Time", value: formatTimeHm(row.event_time) || "N/A" },
+        { label: "Venue", value: row.venue_name || row.venue_address || "N/A" }
+      ]
+    };
+  }
+
+  if (type === "deals") {
+    const [rows] = await pool.query(
+      `SELECT d.title, d.provider_name, d.expiry_date, c.name AS city_name,
+              u.email AS recipient_email, u.name AS recipient_name
+       FROM deals d
+       LEFT JOIN cities c ON c.id = d.city_id
+       LEFT JOIN users u ON u.id = d.created_by
+       WHERE d.id = ?
+       LIMIT 1`,
+      [id]
+    );
+    const row = rows[0];
+    if (!row?.recipient_email) return null;
+    return {
+      recipientEmail: row.recipient_email,
+      recipientName: row.recipient_name || "",
+      listingType: "deals",
+      title: row.title || "",
+      details: [
+        { label: "Business", value: row.provider_name || "N/A" },
+        { label: "City", value: row.city_name || "N/A" },
+        { label: "Valid Until", value: formatDateYmd(row.expiry_date) || "N/A" }
+      ]
+    };
+  }
+
+  if (type === "influencers") {
+    const [rows] = await pool.query(
+      `SELECT i.name, c.name AS city_name, cat.name AS category_name,
+              COALESCE(NULLIF(i.contact_email, ''), u.email) AS recipient_email,
+              u.name AS recipient_name
+       FROM influencers i
+       LEFT JOIN cities c ON c.id = i.city_id
+       LEFT JOIN categories cat ON cat.id = i.category_id
+       LEFT JOIN users u ON u.id = i.created_by
+       WHERE i.id = ?
+       LIMIT 1`,
+      [id]
+    );
+    const row = rows[0];
+    if (!row?.recipient_email) return null;
+    return {
+      recipientEmail: row.recipient_email,
+      recipientName: row.recipient_name || "",
+      listingType: "influencers",
+      title: row.name || "",
+      details: [
+        { label: "City", value: row.city_name || "N/A" },
+        { label: "Category", value: row.category_name || "N/A" }
+      ]
+    };
+  }
+
+  return null;
+}
+
 async function listListings({ type, status, city, category, date, month }) {
   const table = resolveTable(type);
   const { dateStart, dateEnd } = getDateRange(date || null);
@@ -235,7 +337,26 @@ async function updateListingStatus({ type, id, status, note, adminId }) {
        WHERE id = ?`,
       [status, adminId, note || null, id]
     );
-    return result.affectedRows > 0;
+    const updated = result.affectedRows > 0;
+    if (updated && status === "approved") {
+      const emailContext = await getApprovalEmailContext({ type, id });
+      if (emailContext?.recipientEmail) {
+        const emailPayload = buildApprovalEmail({
+          listingType: emailContext.listingType,
+          recipientName: emailContext.recipientName,
+          title: emailContext.title,
+          details: emailContext.details,
+          reviewNote: note || ""
+        });
+        await sendSendGridEmail({
+          to: emailContext.recipientEmail,
+          subject: emailPayload.subject,
+          text: emailPayload.text,
+          html: emailPayload.html
+        }).catch(() => {});
+      }
+    }
+    return updated;
   }
 
   const [result] = await pool.query(
@@ -254,7 +375,26 @@ async function updateListingStatus({ type, id, status, note, adminId }) {
       [status, id]
     );
   });
-  return result.affectedRows > 0;
+  const updated = result.affectedRows > 0;
+  if (updated && status === "approved") {
+    const emailContext = await getApprovalEmailContext({ type, id });
+    if (emailContext?.recipientEmail) {
+      const emailPayload = buildApprovalEmail({
+        listingType: emailContext.listingType,
+        recipientName: emailContext.recipientName,
+        title: emailContext.title,
+        details: emailContext.details,
+        reviewNote: note || ""
+      });
+      await sendSendGridEmail({
+        to: emailContext.recipientEmail,
+        subject: emailPayload.subject,
+        text: emailPayload.text,
+        html: emailPayload.html
+      }).catch(() => {});
+    }
+  }
+  return updated;
 }
 
 function resolveEditableColumns(type) {

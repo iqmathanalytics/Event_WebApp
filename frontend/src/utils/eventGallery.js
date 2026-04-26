@@ -1,12 +1,9 @@
-const FALLBACK_IMG =
-  "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1400&q=80";
-
 /**
  * Ordered unique image URLs for event hero: primary `image_url` first, then `gallery_image_urls`.
  */
 export function collectEventGalleryUrls(event) {
   if (!event) {
-    return [FALLBACK_IMG];
+    return [];
   }
   const seen = new Set();
   const out = [];
@@ -21,5 +18,5 @@ export function collectEventGalleryUrls(event) {
   push(event.image_url);
   const extra = Array.isArray(event.gallery_image_urls) ? event.gallery_image_urls : [];
   extra.forEach(push);
-  return out.length ? out : [FALLBACK_IMG];
+  return out;
 }

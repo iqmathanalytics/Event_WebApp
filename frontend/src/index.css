@@ -418,6 +418,36 @@ textarea {
   will-change: transform;
 }
 
+/* Same animated wordmark as hero, sized for the sticky header */
+.navbar-brand-wordmark {
+  font-size: 1.45rem;
+  transform: scaleX(0.85);
+  transform-origin: left center;
+}
+
+@media (min-width: 640px) {
+  .navbar-brand-wordmark {
+    font-size: 1.7rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .navbar-brand-wordmark {
+    font-size: 1.9rem;
+  }
+}
+
+/* Splash → header flight overlay: wordmark scales with the animated rect */
+.navbar-flight-wordmark-host {
+  container-type: size;
+}
+
+.navbar-flight-wordmark-host .yay-hero-logo {
+  font-size: clamp(0.65rem, 38cqmin, 4rem);
+  transform: scaleX(0.85);
+  transform-origin: center center;
+}
+
 .hero-brand-logo-mobile-only {
   width: 46vw !important;
   max-width: 17rem !important;

@@ -16,30 +16,7 @@ import { formatDateUS } from "../utils/format";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import FilterPopupField from "./FilterPopupField";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
-
-function parseDealOfferMeta(description) {
-  const text = String(description || "");
-  const marker = "[OFFER_META]";
-  const markerIndex = text.indexOf(marker);
-  if (markerIndex === -1) {
-    return {};
-  }
-  const metaRaw = text.slice(markerIndex + marker.length).trim().split("\n")[0];
-  try {
-    return JSON.parse(metaRaw);
-  } catch (_err) {
-    return {};
-  }
-}
-
-function stripDealOfferMeta(description) {
-  const text = String(description || "");
-  const markerIndex = text.indexOf("[OFFER_META]");
-  if (markerIndex === -1) {
-    return text;
-  }
-  return text.slice(0, markerIndex).trim();
-}
+import CloudinaryImageInput from "./CloudinaryImageInput";
 
 function formatReadableDate(value) {
   if (!value) {
@@ -129,7 +106,7 @@ function FormField({ label, hint, example, className = "", children }) {
 /**
  * @param {"standalone" | "embedded"} variant — embedded: no page chrome; used inside User dashboard hub.
  */
-export default function UserSubmissionsPanel({ variant = "standalone" }) {
+export default function UserSubmissionsPanel({ variant = "standalone", showBackToHub = true }) {
   const embedded = variant === "embedded";
   const { cities } = useCityFilter();
   const navigate = useNavigate();
@@ -243,13 +220,15 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
             Promotions and creator profiles you&apos;ve shared—track status and polish details anytime.
           </p>
         </div>
-        <Link
-          to="/dashboard/user"
-          className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 lg:rounded-2xl lg:px-5 lg:py-2.5 lg:shadow-md lg:shadow-slate-900/5"
-        >
-          <ArrowLeft className="hidden h-4 w-4 lg:inline" aria-hidden />
-          Back to My Hub
-        </Link>
+        {showBackToHub ? (
+          <Link
+            to="/dashboard/user"
+            className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 lg:rounded-2xl lg:px-5 lg:py-2.5 lg:shadow-md lg:shadow-slate-900/5"
+          >
+            <ArrowLeft className="hidden h-4 w-4 lg:inline" aria-hidden />
+            Back to My Hub
+          </Link>
+        ) : null}
       </div>
 
       {!loadingSubmissions && !submissionsError && (myInfluencerSubmissions.length > 0 || myDealSubmissions.length > 0) ? (
@@ -370,7 +349,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
             {myInfluencerSubmissions.map((item) => (
               <div
                 key={`influencer-submission-${item.id}`}
-                className={`flex w-full flex-col gap-3 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between ${
+                className={`relative flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3.5 shadow-sm sm:flex-row sm:items-start sm:justify-between ${
                   embedded
                     ? ""
                     : "lg:group lg:border-slate-200/90 lg:bg-white/80 lg:p-4 lg:shadow-sm lg:transition-all lg:hover:border-fuchsia-200/80 lg:hover:shadow-md"
@@ -382,12 +361,12 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                   if (e.key === "Enter" || e.key === " ") navigate(`/influencers/${item.id}`);
                 }}
               >
-                <div className="flex w-full min-w-0 items-start gap-3 lg:items-center lg:gap-4">
+                <div className="flex w-full min-w-0 items-start gap-3.5 lg:items-center lg:gap-4">
                   {item.profile_image_url ? (
                     <img
                       src={item.profile_image_url}
                       alt={item.name}
-                      className={`h-12 w-12 flex-shrink-0 rounded-xl object-cover ${
+                      className={`h-14 w-14 flex-shrink-0 rounded-2xl object-cover ring-1 ring-slate-200 ${
                         embedded ? "" : "lg:h-[72px] lg:w-[72px] lg:rounded-2xl lg:ring-2 lg:ring-slate-100"
                       }`}
                       loading="lazy"
@@ -395,7 +374,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                     />
                   ) : (
                     <div
-                      className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-500 ${
+                      className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-500 ring-1 ring-slate-200 ${
                         embedded ? "" : "lg:h-[72px] lg:w-[72px] lg:rounded-2xl lg:ring-2 lg:ring-slate-100"
                       }`}
                     >
@@ -404,7 +383,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                   )}
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`break-words text-sm font-semibold text-slate-900 ${
+                      className={`line-clamp-1 break-words text-sm font-semibold text-slate-900 ${
                         embedded ? "" : "lg:text-lg lg:font-bold lg:tracking-tight lg:text-slate-900"
                       }`}
                     >
@@ -452,7 +431,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                   </div>
                 </div>
 
-                <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto lg:gap-3">
+                <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end lg:gap-3">
                   <StatusBadge status={item.status} desktopPop={!embedded} />
                   {["approved", "rejected"].includes(String(item.status || "").toLowerCase()) ? (
                     <button
@@ -477,9 +456,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                       Edit
                     </button>
                   ) : (
-                    <p className="max-w-[11rem] text-right text-xs font-medium text-amber-700 lg:max-w-none">
-                      Editing is available after review.
-                    </p>
+                    <p className="text-xs font-semibold text-amber-700">Pending review</p>
                   )}
                 </div>
               </div>
@@ -508,27 +485,35 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
             Track listings and update after approval.
           </p>
           <div className="mt-3 space-y-2 lg:mt-5 lg:space-y-3">
-            {myDealSubmissions.map((item) => (
+            {myDealSubmissions.map((item) => {
+              const dealStatus = String(item.status || "").toLowerCase();
+              const canOpenDeal = dealStatus !== "pending";
+              return (
               <div
                 key={`deal-submission-${item.id}`}
-                className={`flex w-full flex-col gap-3 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between ${
+                className={`relative flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3.5 shadow-sm sm:flex-row sm:items-start sm:justify-between ${
                   embedded
                     ? ""
                     : "lg:group lg:border-slate-200/90 lg:bg-white/80 lg:p-4 lg:shadow-sm lg:transition-all lg:hover:border-brand-200/70 lg:hover:shadow-md"
                 }`}
                 role="button"
                 tabIndex={0}
-                onClick={() => navigate(`/deals/${item.id}`)}
+                aria-disabled={!canOpenDeal}
+                onClick={() => {
+                  if (!canOpenDeal) return;
+                  navigate(`/deals/${item.id}`);
+                }}
                 onKeyDown={(e) => {
+                  if (!canOpenDeal) return;
                   if (e.key === "Enter" || e.key === " ") navigate(`/deals/${item.id}`);
                 }}
               >
-                  <div className="flex min-w-0 flex-1 items-start gap-3 lg:items-center lg:gap-4">
+                  <div className="flex min-w-0 flex-1 items-start gap-3.5 lg:items-center lg:gap-4">
                   {item.image_url ? (
                     <img
                       src={item.image_url}
                       alt={item.title}
-                      className={`h-12 w-12 flex-shrink-0 rounded-xl object-cover ${
+                      className={`h-14 w-14 flex-shrink-0 rounded-2xl object-cover ring-1 ring-slate-200 ${
                         embedded ? "" : "lg:h-[72px] lg:w-[72px] lg:rounded-2xl lg:ring-2 lg:ring-slate-100"
                       }`}
                       loading="lazy"
@@ -536,7 +521,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                     />
                   ) : (
                     <div
-                      className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-500 ${
+                      className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-500 ring-1 ring-slate-200 ${
                         embedded ? "" : "lg:h-[72px] lg:w-[72px] lg:rounded-2xl lg:ring-2 lg:ring-slate-100"
                       }`}
                     >
@@ -545,7 +530,7 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                   )}
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`break-words text-sm font-semibold leading-snug text-slate-900 ${
+                      className={`line-clamp-2 break-words text-sm font-semibold leading-snug text-slate-900 ${
                         embedded ? "" : "lg:text-lg lg:font-bold lg:tracking-tight"
                       }`}
                     >
@@ -626,46 +611,28 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                     ) : null}
                   </div>
                 </div>
-                <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto lg:gap-3">
+                <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end lg:gap-3">
                   <StatusBadge status={item.status} desktopPop={!embedded} />
-                  {["approved", "rejected"].includes(String(item.status || "").toLowerCase()) ? (
+                  {["approved", "rejected"].includes(dealStatus) ? (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSubmissionActionError("");
                         setEditDealItem(item);
-                        const offerMeta = item.offer_meta_json
-                          ? (() => {
-                              try {
-                                return JSON.parse(item.offer_meta_json);
-                              } catch (_err) {
-                                return parseDealOfferMeta(item.description);
-                              }
-                            })()
-                          : parseDealOfferMeta(item.description);
                         setEditDealExpiryPickerOpen(false);
                         setEditDealForm({
                           title: item.title || "",
-                          description: stripDealOfferMeta(item.description || ""),
+                          description: item.description || "",
                           city_id: item.city_id ? String(item.city_id) : "",
                           category_id: item.category_id ? String(item.category_id) : "",
                           provider_name: item.provider_name || "",
-                          original_price: item.original_price ?? "",
                           expiry_date: item.expiry_date ? String(item.expiry_date).slice(0, 10) : "",
                           promo_code: item.promo_code || "",
                           deal_link: item.deal_link || "",
                           image_url: item.image_url || "",
                           is_premium: item.is_premium === 1 || item.is_premium === true,
-                          offer_type: item.offer_type || offerMeta.offer_type || "percentage_off",
-                          offer_value: offerMeta.offer_value || "",
-                          buy_qty: offerMeta.buy_qty || "",
-                          get_qty: offerMeta.get_qty || "",
-                          minimum_spend: offerMeta.minimum_spend || "",
-                          max_discount_amount: offerMeta.max_discount_amount || "",
-                          free_item_name: offerMeta.free_item_name || "",
-                          custom_offer_text: offerMeta.custom_offer_text || "",
-                          terms: item.terms_text || offerMeta.terms || ""
+                          deal_info: item.terms_text || ""
                         });
                       }}
                       className={`rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 ${
@@ -675,13 +642,14 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                       Edit
                     </button>
                   ) : (
-                    <p className="max-w-[11rem] text-right text-xs font-medium text-amber-700 lg:max-w-none">
-                      Editing is available after review.
+                    <p className="text-right text-xs font-semibold text-amber-700">
+                      Pending review
                     </p>
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </section>
       ) : null}
@@ -768,8 +736,12 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
             <FormField label="Contact Email" hint="Email for brand and campaign communication." example="creator@example.com">
               <input required type="email" value={editInfluencerForm.contact_email || ""} onChange={(e) => setEditInfluencerForm((p) => ({ ...p, contact_email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Profile Image URL" hint="Optional profile image link." example="https://images.example.com/profile.jpg">
-              <input type="url" value={editInfluencerForm.profile_image_url || ""} onChange={(e) => setEditInfluencerForm((p) => ({ ...p, profile_image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            <FormField label="Profile image" hint="Optional profile photo (uploaded to cloud storage).">
+              <CloudinaryImageInput
+                value={editInfluencerForm.profile_image_url || ""}
+                onChange={(url) => setEditInfluencerForm((p) => ({ ...p, profile_image_url: url }))}
+                disabled={submissionActionLoading}
+              />
             </FormField>
           </div>
         </ModalShell>
@@ -790,19 +762,12 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
               setSubmissionActionLoading(true);
               await updateDealSubmission(editDealItem.id, {
                 ...editDealForm,
-                terms_text: editDealForm.terms || undefined,
+                terms_text: editDealForm.deal_info?.trim() || undefined,
+                promo_code: editDealForm.promo_code?.trim() || undefined,
+                deal_link: editDealForm.deal_link?.trim() || undefined,
+                image_url: editDealForm.image_url?.trim() || undefined,
                 city_id: Number(editDealForm.city_id),
-                category_id: Number(editDealForm.category_id),
-                discount_percentage:
-                  editDealForm.offer_type === "percentage_off" && editDealForm.offer_value
-                    ? Number(editDealForm.offer_value)
-                    : undefined,
-                original_price: editDealForm.original_price ? Number(editDealForm.original_price) : undefined,
-                offer_value: editDealForm.offer_value ? Number(editDealForm.offer_value) : undefined,
-                buy_qty: editDealForm.buy_qty ? Number(editDealForm.buy_qty) : undefined,
-                get_qty: editDealForm.get_qty ? Number(editDealForm.get_qty) : undefined,
-                minimum_spend: editDealForm.minimum_spend ? Number(editDealForm.minimum_spend) : undefined,
-                max_discount_amount: editDealForm.max_discount_amount ? Number(editDealForm.max_discount_amount) : undefined
+                category_id: Number(editDealForm.category_id)
               });
               setEditDealItem(null);
               await loadSubmissions();
@@ -892,52 +857,21 @@ export default function UserSubmissionsPanel({ variant = "standalone" }) {
                 }
               />
             </FormField>
-            <FormField label="Original Price" hint="Optional base price before offer." example="49.99">
-              <input type="number" min="0" value={editDealForm.original_price || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, original_price: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            <FormField label="Deal Info" hint="Describe offer details, conditions, and important notes." className="sm:col-span-2">
+              <textarea rows={4} value={editDealForm.deal_info || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, deal_info: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Offer Configuration</p>
-              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <select
-                  value={editDealForm.offer_type || "percentage_off"}
-                  onChange={(e) => setEditDealForm((p) => ({ ...p, offer_type: e.target.value }))}
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="percentage_off">Percentage Off</option>
-                  <option value="flat_off">Flat Amount Off</option>
-                  <option value="bogo">Buy X Get Y</option>
-                  <option value="bundle_price">Bundle Price</option>
-                  <option value="free_item">Free Item with Purchase</option>
-                  <option value="custom">Custom Offer</option>
-                </select>
-                {(editDealForm.offer_type === "percentage_off" || editDealForm.offer_type === "flat_off" || editDealForm.offer_type === "bundle_price") ? (
-                  <input type="number" min="0" placeholder={editDealForm.offer_type === "percentage_off" ? "Offer Value (%)" : "Offer Value ($)"} value={editDealForm.offer_value || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, offer_value: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                ) : null}
-                {editDealForm.offer_type === "bogo" ? (
-                  <>
-                    <input type="number" min="1" placeholder="Buy Quantity" value={editDealForm.buy_qty || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, buy_qty: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                    <input type="number" min="1" placeholder="Get Quantity" value={editDealForm.get_qty || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, get_qty: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                  </>
-                ) : null}
-                {editDealForm.offer_type === "free_item" ? (
-                  <input type="text" placeholder="Free Item Name" value={editDealForm.free_item_name || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, free_item_name: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2" />
-                ) : null}
-                {editDealForm.offer_type === "custom" ? (
-                  <input type="text" placeholder="Custom Offer Text (e.g. Buy 1 Get 2)" value={editDealForm.custom_offer_text || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, custom_offer_text: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2" />
-                ) : null}
-                <input type="number" min="0" placeholder="Minimum Spend (optional)" value={editDealForm.minimum_spend || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, minimum_spend: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                <input type="number" min="0" placeholder="Maximum Discount Cap (optional)" value={editDealForm.max_discount_amount || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, max_discount_amount: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                <textarea rows={2} placeholder="Terms and Conditions (optional)" value={editDealForm.terms || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, terms: e.target.value }))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2" />
-              </div>
-            </div>
-            <FormField label="Promo Code" hint="Optional code users enter at checkout." example="SAVE20">
+            <FormField label="Promo Code (Optional)" hint="Optional code users enter at checkout." example="SAVE20">
               <input value={editDealForm.promo_code || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, promo_code: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Deal Link" hint="Optional redemption or landing page URL." example="https://brand.com/deals/summer">
+            <FormField label="Deal Link (Optional)" hint="Optional redemption or landing page URL." example="https://brand.com/deals/summer">
               <input type="url" value={editDealForm.deal_link || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, deal_link: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Image URL" hint="Optional visual for better click-through." example="https://images.example.com/deal.jpg" className="sm:col-span-2">
-              <input type="url" value={editDealForm.image_url || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, image_url: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            <FormField label="Deal image" hint="Optional visual for better click-through." className="sm:col-span-2">
+              <CloudinaryImageInput
+                value={editDealForm.image_url || ""}
+                onChange={(url) => setEditDealForm((p) => ({ ...p, image_url: url }))}
+                disabled={submissionActionLoading}
+              />
             </FormField>
           </div>
         </ModalShell>
