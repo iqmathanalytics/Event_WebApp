@@ -16,6 +16,7 @@ const {
   addInfluencerGalleryImages
 } = require("../models/influencerModel");
 const { getDateRange, getMonthRange } = require("../utils/dateRange");
+const SOCIAL_SCRAPER_UA = "Mozilla/5.0";
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -32,10 +33,218 @@ function parseMaybeJson(value) {
   }
 }
 
+function extractInstagramHandle(instagramUrl) {
+  const raw = String(instagramUrl || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const u = new URL(withProto);
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "instagram.com") {
+      return "";
+    }
+    const firstPath = u.pathname.replace(/^\/+/, "").split("/")[0];
+    return String(firstPath || "").replace(/^@/, "").trim();
+  } catch (_err) {
+    return "";
+  }
+}
+
+function normalizeFacebookPageUrl(facebookUrl) {
+  const raw = String(facebookUrl || "").trim();
+  if (!raw) return "";
+  const hasProto = /^https?:\/\//i.test(raw);
+  const asUrl = hasProto ? raw : `https://${raw}`;
+  try {
+    const u = new URL(asUrl);
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (host !== "facebook.com" && host !== "m.facebook.com") return "";
+    const firstPath = u.pathname.replace(/^\/+/, "").split("/")[0];
+    if (!firstPath) return "";
+    if (firstPath.toLowerCase() === "profile.php") {
+      const profileId = u.searchParams.get("id");
+      if (!profileId) return "";
+      return `https://www.facebook.com/profile.php?id=${encodeURIComponent(profileId)}`;
+    }
+    return `https://www.facebook.com/${firstPath}/`;
+  } catch (_err) {
+    return "";
+  }
+}
+
+function decodeHtmlEntities(text) {
+  return String(text || "")
+    .replace(/&#(\d+);/g, (_m, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+async function getFacebookFollowerCountFromUrl(facebookUrl) {
+  const normalized = normalizeFacebookPageUrl(facebookUrl);
+  if (!normalized) return null;
+  try {
+    const response = await fetch(normalized, {
+      headers: {
+        accept: "text/html",
+        "user-agent": SOCIAL_SCRAPER_UA
+      }
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const html = await response.text();
+    const ogDescMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
+    const ogDesc = decodeHtmlEntities(ogDescMatch?.[1] || "");
+    if (!ogDesc) return null;
+    const firstNumber = ogDesc.match(/([\d][\d,.\s]*)/)?.[1];
+    if (!firstNumber) return null;
+    const normalizedDigits = firstNumber.replace(/[^\d]/g, "");
+    if (!normalizedDigits) return null;
+    return toNumber(normalizedDigits);
+  } catch (_err) {
+    return null;
+  }
+}
+
+async function resolveInfluencerSocialMetrics(
+  { instagram = "", facebook = "", youtube = "" },
+  {
+    fallbackInstagramFollowers = 0,
+    fallbackFacebookFollowers = 0,
+    fallbackYoutubeSubscribers = 0
+  } = {}
+) {
+  let instagramFollowers = toNumber(fallbackInstagramFollowers);
+  let facebookFollowers = toNumber(fallbackFacebookFollowers);
+  let youtubeSubscribers = toNumber(fallbackYoutubeSubscribers);
+
+  try {
+    const maybe = await getInstagramFollowerCountFromUrl(instagram);
+    if (maybe != null) instagramFollowers = toNumber(maybe);
+  } catch (_err) {
+    // Keep fallback.
+  }
+
+  try {
+    const maybe = await getFacebookFollowerCountFromUrl(facebook);
+    if (maybe != null) facebookFollowers = toNumber(maybe);
+  } catch (_err) {
+    // Keep fallback.
+  }
+
+  try {
+    const maybe = await getYoutubeSubscriberCountFromUrl(youtube);
+    if (maybe != null) youtubeSubscribers = toNumber(maybe);
+  } catch (_err) {
+    // Keep fallback.
+  }
+
+  return {
+    followers_count: instagramFollowers,
+    facebook_followers_count: facebookFollowers,
+    youtube_subscribers_count: youtubeSubscribers
+  };
+}
+
+async function getInstagramFollowerCountFromUrl(instagramUrl) {
+  const username = extractInstagramHandle(instagramUrl);
+  if (!username) {
+    return null;
+  }
+
+  // Primary source: Instagram web profile info endpoint.
+  try {
+    const apiUrl = `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`;
+    const response = await fetch(apiUrl, {
+      headers: {
+        "x-ig-app-id": "936619743392459",
+        accept: "application/json",
+        "user-agent": SOCIAL_SCRAPER_UA
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const count = data?.data?.user?.edge_followed_by?.count;
+      if (count != null && Number.isFinite(Number(count))) {
+        return toNumber(count);
+      }
+    }
+  } catch (_err) {
+    // Fall through to HTML parsing fallback.
+  }
+
+  // Secondary source: Instagram profile embed payload (contextJSON).
+  try {
+    const embedUrl = `https://www.instagram.com/${encodeURIComponent(username)}/embed`;
+    const response = await fetch(embedUrl, {
+      headers: {
+        accept: "text/html",
+        "user-agent": SOCIAL_SCRAPER_UA
+      }
+    });
+    if (response.ok) {
+      const html = await response.text();
+      const match =
+        html.match(/followers_count[^0-9]*(\d+)/i) ||
+        html.match(/edge_followed_by[^0-9]*(\d+)/i) ||
+        html.match(/\\?"edge_followed_by\\?"\s*:\s*\{\s*\\?"count\\?"\s*:\s*(\d+)/i);
+      if (match?.[1]) {
+        return toNumber(match[1]);
+      }
+    }
+  } catch (_err) {
+    // Fall through to profile HTML parsing fallback.
+  }
+
+  // Fallback source: parse public profile HTML metadata.
+  try {
+    const profileUrl = `https://www.instagram.com/${encodeURIComponent(username)}/`;
+    const response = await fetch(profileUrl, {
+      headers: {
+        accept: "text/html",
+        "user-agent": SOCIAL_SCRAPER_UA
+      }
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const html = await response.text();
+
+    const directMatch = html.match(/"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)\s*\}/i);
+    if (directMatch?.[1]) {
+      return toNumber(directMatch[1]);
+    }
+
+    const ogDescMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
+    const ogDesc = ogDescMatch?.[1] || "";
+    const numberToken = ogDesc.match(/([\d.,]+)\s+Followers/i)?.[1];
+    if (numberToken) {
+      const normalized = numberToken.replace(/[.,](?=\d{3}\b)/g, "").replace(/[^\d]/g, "");
+      if (normalized) {
+        return toNumber(normalized);
+      }
+    }
+  } catch (_err) {
+    // Fall through to null if extraction fails.
+  }
+
+  return null;
+}
+
 function attachDynamicInfluencerTags(influencer) {
   const tags = [];
 
-  const audienceTotal = toNumber(influencer.audience_total || influencer.followers_count + influencer.youtube_subscribers_count);
+  const audienceTotal = toNumber(
+    influencer.audience_total ||
+      influencer.followers_count + influencer.facebook_followers_count + influencer.youtube_subscribers_count
+  );
   const totalEngagement = toNumber(influencer.total_engagement || 0);
   const recentEngagement = toNumber(influencer.recent_engagement_score || 0);
 
@@ -93,9 +302,6 @@ async function fetchInfluencers(query) {
 
 async function getYoutubeSubscriberCountFromUrl(youtubeUrl) {
   const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
 
   if (!youtubeUrl) {
     return null;
@@ -143,17 +349,44 @@ async function getYoutubeSubscriberCountFromUrl(youtubeUrl) {
   };
 
   const channelId = await resolveChannelId();
-  if (!channelId) {
-    return null;
+  if (apiKey && channelId) {
+    const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(
+      channelId
+    )}&key=${apiKey}`;
+    const r = await fetch(channelsUrl);
+    const data = await r.json();
+    const subscriberCount = data?.items?.[0]?.statistics?.subscriberCount;
+    if (subscriberCount != null) {
+      return Number(subscriberCount);
+    }
   }
 
-  const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(
-    channelId
-  )}&key=${apiKey}`;
-  const r = await fetch(channelsUrl);
-  const data = await r.json();
-  const subscriberCount = data?.items?.[0]?.statistics?.subscriberCount;
-  return subscriberCount != null ? Number(subscriberCount) : null;
+  // Fallback without API key: parse subscriber text from public channel page.
+  try {
+    const withProto = /^https?:\/\//i.test(String(youtubeUrl)) ? String(youtubeUrl) : `https://${youtubeUrl}`;
+    const channelRes = await fetch(withProto, {
+      headers: {
+        accept: "text/html",
+        "user-agent": SOCIAL_SCRAPER_UA
+      }
+    });
+    if (!channelRes.ok) return null;
+    const html = await channelRes.text();
+    const m =
+      html.match(/"subscriberCountText"\s*:\s*\{\s*"simpleText"\s*:\s*"([^"]+)"/i) ||
+      html.match(/([\d.,]+)\s*([KMB])?\s*subscribers/i);
+    if (!m?.[1]) return null;
+    const raw = String(m[1]).replace(/,/g, "").trim();
+    const suffix = m[2] ? String(m[2]).toUpperCase() : "";
+    const base = Number(raw);
+    if (!Number.isFinite(base)) return null;
+    if (suffix === "K") return Math.round(base * 1000);
+    if (suffix === "M") return Math.round(base * 1000 * 1000);
+    if (suffix === "B") return Math.round(base * 1000 * 1000 * 1000);
+    return Math.round(base);
+  } catch (_err) {
+    return null;
+  }
 }
 
 async function submitInfluencer(payload, userId) {
@@ -167,19 +400,15 @@ async function submitInfluencer(payload, userId) {
 
   const social_links = {
     instagram: payload.instagram || "",
+    facebook: payload.facebook || "",
     youtube: payload.youtube || ""
   };
 
-  const followers_count = toNumber(payload.instagram_followers_count);
-  const youtube_subscribers_count = payload.youtube_subscribers_count != null ? toNumber(payload.youtube_subscribers_count) : 0;
-
-  let computedYoutubeSubs = youtube_subscribers_count;
-  try {
-    const maybe = await getYoutubeSubscriberCountFromUrl(payload.youtube);
-    if (maybe != null) computedYoutubeSubs = toNumber(maybe);
-  } catch (_err) {
-    // If YouTube fetch fails, keep computedYoutubeSubs (defaults to 0).
-  }
+  const socialMetrics = await resolveInfluencerSocialMetrics({
+    instagram: payload.instagram,
+    facebook: payload.facebook,
+    youtube: payload.youtube
+  });
 
   try {
     const influencerId = await createInfluencer({
@@ -188,8 +417,9 @@ async function submitInfluencer(payload, userId) {
       city_id: payload.city_id,
       category_id: payload.category_id,
       social_links,
-      followers_count,
-      youtube_subscribers_count: computedYoutubeSubs,
+      followers_count: socialMetrics.followers_count,
+      facebook_followers_count: socialMetrics.facebook_followers_count,
+      youtube_subscribers_count: socialMetrics.youtube_subscribers_count,
       contact_email: payload.contact_email || "",
       profile_image_url: payload.profile_image_url || "",
       created_by: userId
@@ -230,22 +460,23 @@ async function editOwnInfluencerSubmission(id, payload, userId) {
 
   const social_links = {
     instagram: payload.instagram || "",
+    facebook: payload.facebook || "",
     youtube: payload.youtube || ""
   };
 
-  const followers_count = payload.instagram_followers_count != null ? toNumber(payload.instagram_followers_count) : toNumber(existing.followers_count);
-
-  let youtube_subscribers_count = toNumber(existing.youtube_subscribers_count);
   const existingSocial = parseMaybeJson(existing.social_links) || {};
-  const youtubeChanged = String(existingSocial.youtube || "") !== String(payload.youtube || "");
-  if (youtubeChanged) {
-    try {
-      const maybe = await getYoutubeSubscriberCountFromUrl(payload.youtube);
-      if (maybe != null) youtube_subscribers_count = toNumber(maybe);
-    } catch (_err) {
-      // keep existing count
+  const socialMetrics = await resolveInfluencerSocialMetrics(
+    {
+      instagram: payload.instagram,
+      facebook: payload.facebook,
+      youtube: payload.youtube
+    },
+    {
+      fallbackInstagramFollowers: 0,
+      fallbackFacebookFollowers: 0,
+      fallbackYoutubeSubscribers: 0
     }
-  }
+  );
 
   const updated = await updateInfluencerByCreator({
     id,
@@ -256,8 +487,9 @@ async function editOwnInfluencerSubmission(id, payload, userId) {
       city_id: payload.city_id,
       category_id: payload.category_id,
       social_links,
-      followers_count,
-      youtube_subscribers_count,
+      followers_count: socialMetrics.followers_count,
+      facebook_followers_count: socialMetrics.facebook_followers_count,
+      youtube_subscribers_count: socialMetrics.youtube_subscribers_count,
       contact_email: payload.contact_email,
       profile_image_url: payload.profile_image_url
     }
@@ -327,12 +559,10 @@ function startYoutubeSubscriberRefreshJob() {
   global.__influencerYoutubeRefreshJobStarted = true;
 
   const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) {
-    return;
-  }
-
   const intervalMs = Number(process.env.YOUTUBE_REFRESH_INTERVAL_MS || 6 * 60 * 60 * 1000); // 6 hours
-  const maxPerRun = Number(process.env.YOUTUBE_REFRESH_MAX_PER_RUN || 5);
+  const maxPerRun = Number(process.env.YOUTUBE_REFRESH_MAX_PER_RUN || 25);
+  const instagramMaxPerRun = Number(process.env.INSTAGRAM_REFRESH_MAX_PER_RUN || 100);
+  const facebookMaxPerRun = Number(process.env.FACEBOOK_REFRESH_MAX_PER_RUN || 100);
 
   const run = async () => {
     try {
@@ -340,23 +570,72 @@ function startYoutubeSubscriberRefreshJob() {
         `SELECT id, social_links
          FROM influencers
          WHERE status = 'approved'
-           AND JSON_EXTRACT(social_links, '$.youtube') IS NOT NULL
-           AND JSON_UNQUOTE(JSON_EXTRACT(social_links, '$.youtube')) <> ''
-         ORDER BY (COALESCE(followers_count,0) + COALESCE(youtube_subscribers_count,0)) DESC
+           AND (
+             (
+               JSON_EXTRACT(social_links, '$.instagram') IS NOT NULL
+               AND JSON_UNQUOTE(JSON_EXTRACT(social_links, '$.instagram')) <> ''
+             )
+             OR (
+               JSON_EXTRACT(social_links, '$.facebook') IS NOT NULL
+               AND JSON_UNQUOTE(JSON_EXTRACT(social_links, '$.facebook')) <> ''
+             )
+             OR (
+               JSON_EXTRACT(social_links, '$.youtube') IS NOT NULL
+               AND JSON_UNQUOTE(JSON_EXTRACT(social_links, '$.youtube')) <> ''
+             )
+           )
+         ORDER BY id ASC
          LIMIT ?`,
-        [maxPerRun]
+        [Math.max(maxPerRun, instagramMaxPerRun, facebookMaxPerRun)]
       );
+
+      let instagramProcessed = 0;
+      let facebookProcessed = 0;
+      let youtubeProcessed = 0;
 
       for (const row of rows) {
         const socialLinks = parseMaybeJson(row.social_links) || {};
+
+        const instagramUrl = socialLinks.instagram;
+        if (instagramUrl && instagramProcessed < instagramMaxPerRun) {
+          const followers = await getInstagramFollowerCountFromUrl(instagramUrl);
+          if (followers != null) {
+            await pool.query(`UPDATE influencers SET followers_count = ? WHERE id = ?`, [toNumber(followers), row.id]);
+          }
+          instagramProcessed += 1;
+        }
+
         const youtubeUrl = socialLinks.youtube;
-        if (!youtubeUrl) continue;
-        const subs = await getYoutubeSubscriberCountFromUrl(youtubeUrl);
-        if (subs == null) continue;
-        await pool.query(`UPDATE influencers SET youtube_subscribers_count = ? WHERE id = ?`, [
-          toNumber(subs),
-          row.id
-        ]);
+        if (apiKey && youtubeUrl && youtubeProcessed < maxPerRun) {
+          const subs = await getYoutubeSubscriberCountFromUrl(youtubeUrl);
+          if (subs != null) {
+            await pool.query(`UPDATE influencers SET youtube_subscribers_count = ? WHERE id = ?`, [
+              toNumber(subs),
+              row.id
+            ]);
+          }
+          youtubeProcessed += 1;
+        }
+
+        const facebookUrl = socialLinks.facebook;
+        if (facebookUrl && facebookProcessed < facebookMaxPerRun) {
+          const fbFollowers = await getFacebookFollowerCountFromUrl(facebookUrl);
+          if (fbFollowers != null) {
+            await pool.query(`UPDATE influencers SET facebook_followers_count = ? WHERE id = ?`, [
+              toNumber(fbFollowers),
+              row.id
+            ]);
+          }
+          facebookProcessed += 1;
+        }
+
+        if (
+          instagramProcessed >= instagramMaxPerRun &&
+          facebookProcessed >= facebookMaxPerRun &&
+          (!apiKey || youtubeProcessed >= maxPerRun)
+        ) {
+          break;
+        }
       }
     } catch (_err) {
       // Keep the job resilient.
@@ -381,5 +660,6 @@ module.exports = {
   trackInfluencerClick,
   uploadInfluencerGallery,
   fetchInfluencerGalleryById,
-  startYoutubeSubscriberRefreshJob
+  startYoutubeSubscriberRefreshJob,
+  resolveInfluencerSocialMetrics
 };

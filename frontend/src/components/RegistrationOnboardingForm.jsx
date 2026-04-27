@@ -239,6 +239,38 @@ export default function RegistrationOnboardingForm({ form, setForm, influencerPr
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
+              <FormField
+                label="Instagram Profile Link"
+                hint="Use public profile format: instagram.com/user_name."
+                example="https://instagram.com/yourhandle"
+              >
+                <input
+                  type="url"
+                  required={form.wants_influencer}
+                  placeholder="https://instagram.com/user_name"
+                  value={influencerProfile.instagram || ""}
+                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, instagram: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <FormField
+                label="Facebook Business Page Link"
+                hint="Use public page format: facebook.com/page_name."
+                example="https://facebook.com/page_name"
+              >
+                <input
+                  type="url"
+                  required={form.wants_influencer}
+                  placeholder="https://facebook.com/page_name"
+                  value={influencerProfile.facebook || ""}
+                  onChange={(e) => setInfluencerProfile((s) => ({ ...s, facebook: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                />
+              </FormField>
+              <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                Instagram/Facebook embeds only render for public accounts/pages. Private or restricted profiles may show an empty
+                embed.
+              </div>
               <FormField label="Profile image" hint="Upload a public-facing profile photo.">
                 <CloudinaryImageInput
                   value={influencerProfile.profile_image_url}

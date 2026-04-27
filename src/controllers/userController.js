@@ -15,8 +15,10 @@ const {
 const {
   createInfluencer,
   findAnyInfluencerByCreator,
+  findInfluencerById,
   updateInfluencerByCreator
 } = require("../models/influencerModel");
+const { resolveInfluencerSocialMetrics } = require("../services/influencerService");
 const {
   createDealerProfile,
   findLatestDealerProfileByCreator,
@@ -185,13 +187,11 @@ const updateMyProfile = asyncHandler(async (req, res) => {
     }
     const social_links = {
       instagram: String(influencerProfile.instagram || "").trim(),
+      facebook: String(influencerProfile.facebook || "").trim(),
       youtube: String(influencerProfile.youtube || "").trim()
     };
-    const followers_count =
-      influencerProfile.followers_count != null
-        ? Number(influencerProfile.followers_count)
-        : Number(influencerProfile.instagram_followers_count || 0);
     const existingInfluencer = await findAnyInfluencerByCreator(req.user.id);
+    const existingInfluencerDetails = existingInfluencer?.id ? await findInfluencerById(existingInfluencer.id) : null;
     const payload = {
       name: String(influencerProfile.name || "").trim(),
       bio: String(influencerProfile.bio || "").trim(),
@@ -203,17 +203,33 @@ const updateMyProfile = asyncHandler(async (req, res) => {
         ? String(influencerProfile.profile_image_url).trim()
         : null
     };
-    payload.followers_count = Number.isFinite(followers_count) ? followers_count : 0;
+    const socialMetrics = await resolveInfluencerSocialMetrics(
+      {
+        instagram: payload.social_links.instagram,
+        facebook: payload.social_links.facebook,
+        youtube: payload.social_links.youtube
+      },
+      {
+        fallbackInstagramFollowers: 0,
+        fallbackFacebookFollowers: 0,
+        fallbackYoutubeSubscribers: 0
+      }
+    );
+    payload.followers_count = socialMetrics.followers_count;
+    payload.facebook_followers_count = socialMetrics.facebook_followers_count;
+    payload.youtube_subscribers_count = socialMetrics.youtube_subscribers_count;
     if (existingInfluencer?.id) {
       const hasInfluencerChanges =
-        String(existingInfluencer.name || "").trim() !== payload.name ||
-        String(existingInfluencer.bio || "").trim() !== payload.bio ||
-        Number(existingInfluencer.city_id || 0) !== Number(payload.city_id || 0) ||
-        Number(existingInfluencer.category_id || 0) !== Number(payload.category_id || 0) ||
-        String(existingInfluencer.social_links || "").trim() !== JSON.stringify(payload.social_links || {}) ||
-        Number(existingInfluencer.followers_count || 0) !== Number(payload.followers_count || 0) ||
-        String(existingInfluencer.contact_email || "").trim() !== payload.contact_email ||
-        String(existingInfluencer.profile_image_url || "").trim() !== String(payload.profile_image_url || "").trim();
+        String(existingInfluencerDetails?.name || "").trim() !== payload.name ||
+        String(existingInfluencerDetails?.bio || "").trim() !== payload.bio ||
+        Number(existingInfluencerDetails?.city_id || 0) !== Number(payload.city_id || 0) ||
+        Number(existingInfluencerDetails?.category_id || 0) !== Number(payload.category_id || 0) ||
+        String(existingInfluencerDetails?.social_links || "").trim() !== JSON.stringify(payload.social_links || {}) ||
+        Number(existingInfluencerDetails?.followers_count || 0) !== Number(payload.followers_count || 0) ||
+        Number(existingInfluencerDetails?.facebook_followers_count || 0) !== Number(payload.facebook_followers_count || 0) ||
+        Number(existingInfluencerDetails?.youtube_subscribers_count || 0) !== Number(payload.youtube_subscribers_count || 0) ||
+        String(existingInfluencerDetails?.contact_email || "").trim() !== payload.contact_email ||
+        String(existingInfluencerDetails?.profile_image_url || "").trim() !== String(payload.profile_image_url || "").trim();
       if (hasInfluencerChanges) {
         await updateInfluencerByCreator({
           id: existingInfluencer.id,

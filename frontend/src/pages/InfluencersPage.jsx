@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import InfluencerCard from "../components/InfluencerCard";
-import { parseInfluencerSocialLinks } from "../utils/influencerSocial";
+import {
+  normalizeFacebookPageUrl,
+  normalizeInstagramProfileUrl,
+  normalizeYoutubeUrl,
+  parseInfluencerSocialLinks
+} from "../utils/influencerSocial";
 import EventFilterBar from "../components/EventFilterBar";
 import {
   createInfluencerProfile,
@@ -119,7 +124,7 @@ function InfluencersPage() {
     city_id: "",
     category_id: "",
     instagram: "",
-    instagram_followers_count: "",
+    facebook: "",
     youtube: "",
     contact_email: "",
     profile_image_url: ""
@@ -362,7 +367,9 @@ function InfluencersPage() {
           : null}
         {!loading && list.length === 0 ? <p className="text-sm text-slate-500">No influencers match your current filters.</p> : null}
         {!loading
-          ? list.map((item) => (
+          ? list.map((item) => {
+              const socialLinks = parseInfluencerSocialLinks(item.social_links);
+              return (
               <InfluencerCard
                 key={item.id}
                 item={{
@@ -371,8 +378,11 @@ function InfluencersPage() {
                   category: item.category_name || "Lifestyle",
                   city: item.city_name || "City",
                   followers: item.followers_count || 0,
+                  facebookFollowers: item.facebook_followers_count || 0,
                   youtubeSubscribers: item.youtube_subscribers_count || 0,
-                  youtubeUrl: parseInfluencerSocialLinks(item.social_links).youtube,
+                  instagramUrl: normalizeInstagramProfileUrl(socialLinks.instagram),
+                  facebookUrl: normalizeFacebookPageUrl(socialLinks.facebook),
+                  youtubeUrl: normalizeYoutubeUrl(socialLinks.youtube),
                   tags: item.tags || [],
                   image: item.profile_image_url
                 }}
@@ -385,7 +395,8 @@ function InfluencersPage() {
                   })
                 }
               />
-            ))
+              );
+            })
           : null}
       </div>
 
@@ -411,7 +422,7 @@ function InfluencersPage() {
                 city_id: "",
                 category_id: "",
                 instagram: "",
-                instagram_followers_count: "",
+                facebook: "",
                 youtube: "",
                 contact_email: "",
                 profile_image_url: ""
@@ -473,13 +484,11 @@ function InfluencersPage() {
             <FormField label="Instagram URL" hint="Paste your Instagram profile link." example="https://instagram.com/yourhandle">
               <input type="url" value={submitForm.instagram} onChange={(e) => setSubmitForm((p) => ({ ...p, instagram: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Instagram Followers Count" hint="Enter your Instagram follower count (numbers only)." example="12500">
+            <FormField label="Facebook Page URL" hint="Use facebook.com/page_name format." example="https://facebook.com/page_name">
               <input
-                type="number"
-                min="0"
-                required
-                value={submitForm.instagram_followers_count}
-                onChange={(e) => setSubmitForm((p) => ({ ...p, instagram_followers_count: e.target.value }))}
+                type="url"
+                value={submitForm.facebook || ""}
+                onChange={(e) => setSubmitForm((p) => ({ ...p, facebook: e.target.value }))}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </FormField>
@@ -489,6 +498,10 @@ function InfluencersPage() {
             <FormField label="Contact Email" hint="Use an email where brands can contact you." example="creator@example.com">
               <input required type="email" value={submitForm.contact_email} onChange={(e) => setSubmitForm((p) => ({ ...p, contact_email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
+            <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+              Use public link formats: instagram.com/user_name and facebook.com/page_name. Private or restricted accounts/pages may
+              render empty embeds on your profile.
+            </div>
             <FormField label="Profile image" hint="Upload a high-quality profile photo.">
               <CloudinaryImageInput
                 value={submitForm.profile_image_url}

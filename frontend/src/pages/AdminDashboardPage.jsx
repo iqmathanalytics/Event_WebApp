@@ -88,11 +88,12 @@ function parseEventDates(value) {
 
 function parseInfluencerSocialLinks(value) {
   if (!value) {
-    return { instagram: "", youtube: "" };
+    return { instagram: "", facebook: "", youtube: "" };
   }
   if (typeof value === "object" && !Array.isArray(value)) {
     return {
       instagram: String(value.instagram || "").trim(),
+      facebook: String(value.facebook || "").trim(),
       youtube: String(value.youtube || "").trim()
     };
   }
@@ -100,10 +101,11 @@ function parseInfluencerSocialLinks(value) {
     const parsed = JSON.parse(value);
     return {
       instagram: String(parsed?.instagram || "").trim(),
+      facebook: String(parsed?.facebook || "").trim(),
       youtube: String(parsed?.youtube || "").trim()
     };
   } catch (_err) {
-    return { instagram: "", youtube: "" };
+    return { instagram: "", facebook: "", youtube: "" };
   }
 }
 
@@ -786,8 +788,8 @@ function AdminDashboardPage() {
         city_id: item.city_id ? String(item.city_id) : "",
         category_id: item.category_id ? String(item.category_id) : "",
         instagram: links.instagram || "",
+        facebook: links.facebook || "",
         youtube: links.youtube || "",
-        followers_count: item.followers_count != null ? String(item.followers_count) : "",
         youtube_subscribers_count: item.youtube_subscribers_count != null ? String(item.youtube_subscribers_count) : "",
         contact_email: item.contact_email || "",
         profile_image_url: item.profile_image_url || ""
@@ -2599,18 +2601,21 @@ function AdminDashboardPage() {
                     />
                   </FormField>
                   <FormField
-                    label="Instagram Followers Count"
-                    hint="Saved as Instagram followers (numbers only)."
-                    example="12500"
+                    label="Facebook Page URL"
+                    hint="Paste the influencer's Facebook business page link."
+                    example="https://facebook.com/page_name"
                   >
                     <input
-                      type="number"
-                      min="0"
-                      value={editForm.followers_count || ""}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, followers_count: e.target.value }))}
+                      type="url"
+                      value={editForm.facebook || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, facebook: e.target.value }))}
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
+                  <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                    Use public links in these formats: instagram.com/user_name and facebook.com/page_name. Private pages/accounts may
+                    not render embedded previews for end users.
+                  </div>
                   <FormField
                     label="YouTube URL"
                     hint="Paste the influencer's channel or profile link."
@@ -3656,6 +3661,21 @@ function AdminDashboardPage() {
                     )}
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Facebook Page URL</p>
+                    {hasDisplayValue(parseInfluencerSocialLinks(viewListing.social_links).facebook) ? (
+                      <a
+                        href={parseInfluencerSocialLinks(viewListing.social_links).facebook}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                      >
+                        Open Facebook Page
+                      </a>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-700">-</p>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube URL</p>
                     {hasDisplayValue(parseInfluencerSocialLinks(viewListing.social_links).youtube) ? (
                       <a
@@ -3673,6 +3693,10 @@ function AdminDashboardPage() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Instagram Followers</p>
                     <p className="mt-1 text-sm text-slate-700">{viewListing.followers_count != null ? Number(viewListing.followers_count).toLocaleString() : "-"}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Facebook Followers</p>
+                    <p className="mt-1 text-sm text-slate-700">{viewListing.facebook_followers_count != null ? Number(viewListing.facebook_followers_count).toLocaleString() : "-"}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube Subscribers</p>

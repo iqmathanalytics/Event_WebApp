@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS influencers (
   category_id BIGINT UNSIGNED NULL,
   social_links JSON NULL,
   youtube_subscribers_count INT NOT NULL DEFAULT 0,
+  facebook_followers_count INT NOT NULL DEFAULT 0,
   contact_email VARCHAR(190) NULL,
   profile_image_url VARCHAR(500) NULL,
   profile_view_count INT NOT NULL DEFAULT 0,

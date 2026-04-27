@@ -437,7 +437,6 @@ function resolveEditableColumns(type) {
       "contact_email",
       "profile_image_url",
       "social_links",
-      "followers_count",
       "youtube_subscribers_count"
     ],
     dealers: [
@@ -462,9 +461,15 @@ async function editListing({ type, id, payload }) {
   let normalizedPayload = payload;
 
   // Influencer social links are stored inside `social_links` (JSON column).
-  // Admin UI edits `instagram`/`youtube`, so we map them into `social_links` here.
-  if (type === "influencers" && (Object.prototype.hasOwnProperty.call(payload, "instagram") || Object.prototype.hasOwnProperty.call(payload, "youtube"))) {
+  // Admin UI edits `instagram`/`facebook`/`youtube`, so we map them into `social_links` here.
+  if (
+    type === "influencers" &&
+    (Object.prototype.hasOwnProperty.call(payload, "instagram") ||
+      Object.prototype.hasOwnProperty.call(payload, "facebook") ||
+      Object.prototype.hasOwnProperty.call(payload, "youtube"))
+  ) {
     const hasInstagram = Object.prototype.hasOwnProperty.call(payload, "instagram");
+    const hasFacebook = Object.prototype.hasOwnProperty.call(payload, "facebook");
     const hasYoutube = Object.prototype.hasOwnProperty.call(payload, "youtube");
 
     const [rows] = await pool.query(`SELECT social_links FROM influencers WHERE id = ? LIMIT 1`, [id]);
@@ -482,18 +487,21 @@ async function editListing({ type, id, payload }) {
     }
 
     const instagramValue = hasInstagram ? payload.instagram : existingLinks.instagram || "";
+    const facebookValue = hasFacebook ? payload.facebook : existingLinks.facebook || "";
     const youtubeValue = hasYoutube ? payload.youtube : existingLinks.youtube || "";
 
     normalizedPayload = {
       ...payload,
       social_links: JSON.stringify({
         instagram: String(instagramValue || "").trim(),
+        facebook: String(facebookValue || "").trim(),
         youtube: String(youtubeValue || "").trim()
       })
     };
 
     // Remove keys not present as DB columns.
     delete normalizedPayload.instagram;
+    delete normalizedPayload.facebook;
     delete normalizedPayload.youtube;
   }
 

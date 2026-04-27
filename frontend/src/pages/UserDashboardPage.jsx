@@ -136,8 +136,8 @@ function UserDashboardPage() {
     bio: "",
     category_id: "",
     instagram: "",
+    facebook: "",
     youtube: "",
-    followers_count: "",
     contact_email: "",
     profile_image_url: ""
   });
@@ -184,8 +184,6 @@ function UserDashboardPage() {
       influencerProfile.bio?.trim() &&
       influencerProfile.category_id &&
       profileForm.city_id &&
-      influencerProfile.followers_count !== undefined &&
-      String(influencerProfile.followers_count).trim() !== "" &&
       influencerProfile.contact_email?.trim()
   );
   const hasDealerDetails = Boolean(
@@ -341,8 +339,8 @@ function UserDashboardPage() {
       bio: item.bio || prev.bio,
       category_id: item.category_id ? String(item.category_id) : prev.category_id,
       instagram: links.instagram || prev.instagram,
+      facebook: links.facebook || prev.facebook,
       youtube: links.youtube || prev.youtube,
-      followers_count: item.followers_count != null ? String(item.followers_count) : prev.followers_count,
       contact_email: item.contact_email || prev.contact_email,
       profile_image_url: item.profile_image_url || prev.profile_image_url
     }));
@@ -1479,19 +1477,21 @@ function UserDashboardPage() {
                     <FormField label="Instagram URL" hint="Paste your Instagram profile link." example="https://instagram.com/yourhandle">
                       <input type="url" value={influencerProfile.instagram} onChange={(e) => setInfluencerProfile((s) => ({ ...s, instagram: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                     </FormField>
-                    <FormField label="Instagram Followers Count" hint="Enter your Instagram follower count (numbers only)." example="12500">
+                    <FormField label="Facebook Page URL" hint="Use facebook.com/page_name format." example="https://facebook.com/page_name">
                       <input
-                        type="number"
-                        min="0"
-                        required
-                        value={influencerProfile.followers_count}
-                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, followers_count: e.target.value }))}
+                        type="url"
+                        value={influencerProfile.facebook || ""}
+                        onChange={(e) => setInfluencerProfile((s) => ({ ...s, facebook: e.target.value }))}
                         className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                       />
                     </FormField>
                     <FormField label="YouTube URL" hint="Paste your channel or profile link." example="https://youtube.com/@yourchannel">
                       <input type="url" value={influencerProfile.youtube} onChange={(e) => setInfluencerProfile((s) => ({ ...s, youtube: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                     </FormField>
+                    <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                      Use public links in these formats: instagram.com/user_name and facebook.com/page_name. Private accounts/pages can
+                      render empty embeds.
+                    </div>
                     <FormField label="Profile image" hint="Upload a high-quality profile photo.">
                       <CloudinaryImageInput
                         value={influencerProfile.profile_image_url}

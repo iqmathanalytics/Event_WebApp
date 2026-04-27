@@ -5,7 +5,6 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   ImagePlus,
   Instagram,
   Mail,
@@ -15,7 +14,15 @@ import {
   Youtube
 } from "lucide-react";
 import { FiArrowLeft, FiImage, FiInfo } from "react-icons/fi";
+import { FaFacebookF } from "react-icons/fa";
 import useAuth from "../hooks/useAuth";
+import {
+  normalizeFacebookPageUrl,
+  normalizeInstagramEmbedSrc,
+  normalizeInstagramProfileUrl,
+  normalizeYoutubeUrl,
+  parseInfluencerSocialLinks
+} from "../utils/influencerSocial";
 import {
   fetchInfluencerDetails,
   fetchInfluencerMedia,
@@ -215,11 +222,24 @@ export default function InfluencerDetailsPage() {
   const [lightboxIndex, setLightboxIndex] = useState(-1);
 
   const social = useMemo(() => {
-    if (!influencer) return { instagram: "", youtube: "" };
-    return parseMaybeJson(influencer.social_links) || { instagram: "", youtube: "" };
+    if (!influencer) return { instagram: "", facebook: "", youtube: "" };
+    return parseInfluencerSocialLinks(parseMaybeJson(influencer.social_links));
   }, [influencer]);
+  const instagramUrl = useMemo(() => normalizeInstagramProfileUrl(social?.instagram), [social?.instagram]);
+  const instagramEmbedSrc = useMemo(() => normalizeInstagramEmbedSrc(instagramUrl), [instagramUrl]);
+  const facebookPageUrl = useMemo(() => normalizeFacebookPageUrl(social?.facebook), [social?.facebook]);
+  const facebookEmbedSrc = useMemo(() => {
+    if (!facebookPageUrl) return "";
+    const href = encodeURIComponent(facebookPageUrl);
+    return `https://www.facebook.com/plugins/page.php?href=${href}&tabs=timeline&width=500&height=960&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true`;
+  }, [facebookPageUrl]);
 
-  const hasYoutube = Boolean(String(social?.youtube || "").trim());
+  const youtubeUrl = useMemo(() => normalizeYoutubeUrl(social?.youtube), [social?.youtube]);
+  const hasYoutube = Boolean(youtubeUrl);
+  const hasInstagram = Boolean(instagramUrl);
+  const hasFacebook = Boolean(facebookPageUrl);
+  const hasAnySocialInput = Boolean(String(social?.instagram || "").trim() || String(social?.facebook || "").trim());
+  const socialStatsCount = [hasInstagram, hasFacebook, hasYoutube].filter(Boolean).length;
 
   const isOwner = useMemo(() => {
     return mySubmissionId != null && mySubmissionId === influencerId;
@@ -422,21 +442,42 @@ export default function InfluencerDetailsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.14, duration: 0.35 }}
               className={`grid w-full max-w-md gap-2 sm:max-w-none sm:gap-3 lg:w-auto lg:shrink-0 lg:gap-3 ${
-                hasYoutube ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-2" : "grid-cols-1 sm:max-w-xs lg:max-w-none"
+                socialStatsCount >= 2
+                  ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-2"
+                  : "grid-cols-1 sm:max-w-xs lg:max-w-none"
               }`}
             >
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
-                  <Instagram className="h-3.5 w-3.5 shrink-0 text-pink-300 lg:h-4 lg:w-4" />
-                  Instagram
-                </div>
-                <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
-                  {toDisplayNumber(influencer.followers_count)}
-                </p>
-                <p className="text-[10px] font-medium text-white/50 lg:text-xs">followers</p>
-              </div>
-              {hasYoutube ? (
+              {hasInstagram ? (
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
+                    <Instagram className="h-3.5 w-3.5 shrink-0 text-pink-300 lg:h-4 lg:w-4" />
+                    Instagram
+                  </div>
+                  <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
+                    {toDisplayNumber(influencer.followers_count)}
+                  </p>
+                  <p className="text-[10px] font-medium text-white/50 lg:text-xs">followers</p>
+                </div>
+              ) : null}
+              {hasFacebook ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
+                    <FaFacebookF className="h-3.5 w-3.5 shrink-0 text-blue-300 lg:h-4 lg:w-4" />
+                    Facebook
+                  </div>
+                  <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
+                    {toDisplayNumber(influencer.facebook_followers_count)}
+                  </p>
+                  <p className="text-[10px] font-medium text-white/50 lg:text-xs">followers</p>
+                </div>
+              ) : null}
+              {hasYoutube ? (
+                <a
+                  href={youtubeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md transition hover:bg-white/10 lg:rounded-2xl lg:p-4"
+                >
                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
                     <Youtube className="h-3.5 w-3.5 shrink-0 text-red-400 lg:h-4 lg:w-4" />
                     YouTube
@@ -445,7 +486,7 @@ export default function InfluencerDetailsPage() {
                     {toDisplayNumber(influencer.youtube_subscribers_count)}
                   </p>
                   <p className="text-[10px] font-medium text-white/50 lg:text-xs">subscribers</p>
-                </div>
+                </a>
               ) : null}
             </motion.div>
           </div>
@@ -455,10 +496,10 @@ export default function InfluencerDetailsPage() {
       {/* Below hero: higher z-index + opaque surfaces so hero box-shadow never paints over these cards */}
       <div className="relative z-10 mt-6 flex w-full min-w-0 max-w-full flex-col gap-6 sm:mt-7 lg:mt-8 lg:gap-8">
       {/* Story + contact strip — min-w-0 on grid + items prevents long text from widening past the viewport */}
-      <div className="grid min-w-0 max-w-full gap-4 sm:gap-5 lg:grid-cols-12 lg:gap-8">
+      <div className="grid min-w-0 max-w-full gap-4 sm:gap-5 lg:gap-8">
         <motion.section
           {...fadeUp}
-          className="relative min-w-0 max-w-full overflow-x-clip rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft sm:p-5 md:p-6 lg:col-span-7 lg:rounded-3xl lg:p-8"
+          className="relative min-w-0 max-w-full overflow-x-clip rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft sm:p-5 md:p-6 lg:rounded-3xl lg:p-8"
         >
           <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 overflow-hidden rounded-tr-3xl">
             <div className="absolute right-0 top-0 h-32 w-32 rounded-bl-full bg-gradient-to-bl from-brand-50 to-transparent opacity-80" />
@@ -476,83 +517,68 @@ export default function InfluencerDetailsPage() {
           </div>
         </motion.section>
 
-        <motion.section
-          {...fadeUp}
-          transition={{ ...fadeUp.transition, delay: 0.05 }}
-          className="relative isolate min-w-0 max-w-full overflow-x-clip rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-4 shadow-soft sm:p-5 md:p-6 lg:col-span-5 lg:rounded-3xl lg:p-8"
-        >
-          <h2 className="flex items-center gap-1.5 text-base font-bold text-slate-900 lg:gap-2 lg:text-lg">
-            <Mail className="h-4 w-4 shrink-0 text-brand-600 lg:h-5 lg:w-5" />
-            Contact
-          </h2>
-          <p className="mt-0.5 text-xs text-slate-500 lg:mt-1 lg:text-sm">For collaborations &amp; inquiries</p>
-          <div className="mt-3 min-w-0 max-w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 shadow-inner lg:mt-5 lg:rounded-2xl lg:px-4 lg:py-3.5">
-            <p className="break-all text-xs font-semibold leading-snug text-slate-900 lg:text-sm">
-              {influencer.contact_email || "—"}
-            </p>
-          </div>
-        </motion.section>
       </div>
 
-      {/* Social links */}
-      <motion.section
-        {...fadeUp}
-        className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft sm:p-5 md:p-6 lg:rounded-3xl lg:p-8"
-      >
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 lg:text-xl">Social</h2>
-            <p className="mt-0.5 text-xs text-slate-500 lg:mt-1 lg:text-sm">Follow along on their channels</p>
-          </div>
-        </div>
-
-        <div className={`mt-4 grid gap-3 sm:mt-6 sm:gap-4 ${hasYoutube ? "sm:grid-cols-2" : ""}`}>
-          <a
-            href={social?.instagram || undefined}
-            target="_blank"
-            rel="noreferrer"
-            className={`group relative overflow-hidden rounded-xl border p-4 transition lg:rounded-2xl lg:p-5 ${
-              social?.instagram
-                ? "border-pink-200/80 bg-gradient-to-br from-pink-50 via-white to-fuchsia-50 hover:border-pink-300 hover:shadow-md"
-                : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-70"
-            }`}
-            onClick={(e) => {
-              if (!social?.instagram) e.preventDefault();
-            }}
-          >
-            <div className="flex items-start justify-between gap-2 lg:gap-3">
-              <div className="grid h-10 w-10 place-content-center rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30 lg:h-12 lg:w-12 lg:rounded-2xl">
-                <Instagram className="h-5 w-5 lg:h-6 lg:w-6" />
-              </div>
-              {social?.instagram ? (
-                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-pink-600 opacity-0 transition group-hover:opacity-100 lg:h-4 lg:w-4" />
-              ) : null}
+      {(instagramEmbedSrc || facebookEmbedSrc) ? (
+        <motion.section
+          {...fadeUp}
+          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft sm:p-5 md:p-6 lg:rounded-3xl lg:p-8"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 lg:text-xl">Social Pages</h2>
+              <p className="mt-0.5 text-xs text-slate-500 lg:mt-1 lg:text-sm">
+                Social previews are shown from the creator’s public Instagram and Facebook links.
+              </p>
             </div>
-            <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-pink-900/70 lg:mt-4 lg:text-xs">Instagram</p>
-            <p className="mt-0.5 text-xs font-semibold text-slate-900 lg:mt-1 lg:text-sm">
-              {social?.instagram ? "Open profile" : "Not linked"}
-            </p>
-          </a>
-
-          {hasYoutube ? (
-            <a
-              href={social.youtube}
-              target="_blank"
-              rel="noreferrer"
-              className="group relative overflow-hidden rounded-xl border border-red-200/80 bg-gradient-to-br from-red-50 via-white to-orange-50 p-4 transition hover:border-red-300 hover:shadow-md lg:rounded-2xl lg:p-5"
-            >
-              <div className="flex items-start justify-between gap-2 lg:gap-3">
-                <div className="grid h-10 w-10 place-content-center rounded-xl bg-gradient-to-br from-red-600 to-red-500 text-white shadow-lg shadow-red-600/30 lg:h-12 lg:w-12 lg:rounded-2xl">
-                  <Youtube className="h-5 w-5 lg:h-6 lg:w-6" />
+          </div>
+          <div className="mt-3 space-y-3 sm:mt-4 sm:space-y-4">
+            {instagramEmbedSrc ? (
+              <div className="rounded-2xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Instagram
                 </div>
-                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-red-600 opacity-0 transition group-hover:opacity-100 lg:h-4 lg:w-4" />
+                <div className="flex justify-center p-1.5 sm:p-3 md:p-4">
+                  <iframe
+                    src={instagramEmbedSrc}
+                    title="Instagram profile embed"
+                    width="100%"
+                    frameBorder="0"
+                    scrolling="yes"
+                    className="block h-[420px] w-full max-w-[760px] rounded-lg border-0 sm:h-[clamp(680px,88vh,1100px)] sm:max-w-[820px] lg:max-w-none"
+                  />
+                </div>
               </div>
-              <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-red-900/70 lg:mt-4 lg:text-xs">YouTube</p>
-              <p className="mt-0.5 text-xs font-semibold text-slate-900 lg:mt-1 lg:text-sm">Open channel</p>
-            </a>
-          ) : null}
-        </div>
-      </motion.section>
+            ) : null}
+            {facebookEmbedSrc ? (
+              <div className="rounded-2xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Facebook Page
+                </div>
+                <div className="flex justify-center p-1.5 sm:p-3">
+                  <iframe
+                    src={facebookEmbedSrc}
+                    title="Facebook page embed"
+                    width="500"
+                    height="960"
+                    frameBorder="0"
+                    scrolling="yes"
+                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                    style={{ border: "none", display: "block", width: "100%", maxWidth: "500px" }}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </motion.section>
+      ) : !hasAnySocialInput ? (
+        <motion.section
+          {...fadeUp}
+          className="rounded-2xl border border-slate-200/80 bg-white p-4 text-sm text-slate-600 shadow-soft sm:p-5 md:p-6 lg:rounded-3xl lg:p-8"
+        >
+          Add Instagram and Facebook links to view embedded social pages.
+        </motion.section>
+      ) : null}
 
       {/* Gallery */}
       <motion.section

@@ -27,11 +27,13 @@ async function listInfluencers({ cityId, categoryId, dateStart, dateEnd, monthSt
     relevanceValues.push(`%${q}%`, `%${q}%`);
   }
 
-  let orderBy = "(COALESCE(i.followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) DESC";
+  let orderBy =
+    "(COALESCE(i.followers_count,0) + COALESCE(i.facebook_followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) DESC";
   if (sortBy === "newest") {
     orderBy = "i.created_at DESC";
   } else if (sortBy === "relevance" && q) {
-    orderBy = "relevance_score DESC, (COALESCE(i.followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) DESC";
+    orderBy =
+      "relevance_score DESC, (COALESCE(i.followers_count,0) + COALESCE(i.facebook_followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) DESC";
   }
 
   const relevanceSelect = q
@@ -45,7 +47,7 @@ async function listInfluencers({ cityId, categoryId, dateStart, dateEnd, monthSt
      c.name AS city_name,
      cat.name AS category_name,
      ${relevanceSelect},
-     (COALESCE(i.followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) AS audience_total,
+     (COALESCE(i.followers_count,0) + COALESCE(i.facebook_followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) AS audience_total,
      (COALESCE(i.profile_click_count,0) + COALESCE(i.profile_view_count,0)) AS total_engagement,
      (
        CASE
@@ -74,13 +76,14 @@ async function createInfluencer({
   contact_email,
   profile_image_url,
   followers_count,
+  facebook_followers_count,
   created_by
 }) {
   const socialLinksValue = social_links ? JSON.stringify(social_links) : null;
   const [result] = await pool.query(
     `INSERT INTO influencers
-      (name, bio, city_id, category_id, social_links, youtube_subscribers_count, contact_email, profile_image_url, followers_count, is_verified, status, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW(), NOW())`,
+      (name, bio, city_id, category_id, social_links, youtube_subscribers_count, contact_email, profile_image_url, followers_count, facebook_followers_count, is_verified, status, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW(), NOW())`,
     [
       name,
       bio || null,
@@ -91,6 +94,7 @@ async function createInfluencer({
       contact_email || null,
       profile_image_url || null,
       followers_count || 0,
+      facebook_followers_count || 0,
       created_by
     ]
   );
@@ -110,6 +114,7 @@ async function listInfluencersByCreator(createdBy) {
          i.category_id,
          i.followers_count,
          i.youtube_subscribers_count,
+         i.facebook_followers_count,
          i.profile_view_count,
          i.profile_click_count,
          i.contact_email,
@@ -199,7 +204,7 @@ async function fetchInfluencerDetailsById(id) {
       i.*,
       c.name AS city_name,
       cat.name AS category_name,
-      (COALESCE(i.followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) AS audience_total,
+      (COALESCE(i.followers_count,0) + COALESCE(i.facebook_followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) AS audience_total,
       (COALESCE(i.profile_click_count,0) + COALESCE(i.profile_view_count,0)) AS total_engagement,
       (
         CASE
@@ -228,6 +233,7 @@ async function updateInfluencerByCreator({ id, createdBy, payload }) {
     "contact_email",
     "profile_image_url",
     "followers_count",
+    "facebook_followers_count",
     "youtube_subscribers_count"
   ];
   const entries = Object.entries(payload).filter(([key, value]) => allowed.includes(key) && value !== undefined);

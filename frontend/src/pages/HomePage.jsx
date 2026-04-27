@@ -3,7 +3,12 @@ import { Link, useOutletContext } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import InfluencerCard from "../components/InfluencerCard";
-import { parseInfluencerSocialLinks } from "../utils/influencerSocial";
+import {
+  normalizeFacebookPageUrl,
+  normalizeInstagramProfileUrl,
+  normalizeYoutubeUrl,
+  parseInfluencerSocialLinks
+} from "../utils/influencerSocial";
 import DealCard from "../components/DealCard";
 import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
 import HeroSlideshow from "../components/HeroSlideshow";
@@ -414,7 +419,9 @@ function HomePage() {
               />
             ))
           : liveInfluencers.length > 0
-            ? liveInfluencers.slice(0, 9).map((item) => (
+            ? liveInfluencers.slice(0, 9).map((item) => {
+                const socialLinks = parseInfluencerSocialLinks(item.social_links);
+                return (
                 <div
                   key={item.id}
                   className="min-w-[260px] max-w-[260px] snap-start lg:min-w-[calc((100%-2rem)/3)] lg:max-w-[calc((100%-2rem)/3)]"
@@ -426,15 +433,19 @@ function HomePage() {
                       category: item.category_name || "Lifestyle",
                       city: item.city_name || "City",
                       followers: item.followers_count || 0,
+                      facebookFollowers: item.facebook_followers_count || 0,
                       youtubeSubscribers: item.youtube_subscribers_count || 0,
-                      youtubeUrl: parseInfluencerSocialLinks(item.social_links).youtube,
+                      instagramUrl: normalizeInstagramProfileUrl(socialLinks.instagram),
+                      facebookUrl: normalizeFacebookPageUrl(socialLinks.facebook),
+                      youtubeUrl: normalizeYoutubeUrl(socialLinks.youtube),
                       tags: item.tags || [],
                       image: item.profile_image_url
                     }}
                     onViewDetails={(id) => trackInfluencerClick(id).catch(() => {})}
                   />
                 </div>
-              ))
+                );
+              })
             : (
               <p className="min-w-[260px] text-sm text-slate-500">No influencers available right now.</p>
             )}

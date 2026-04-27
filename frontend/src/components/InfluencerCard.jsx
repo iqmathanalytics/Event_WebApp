@@ -7,6 +7,8 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
   const tags = Array.isArray(item?.tags) ? item.tags : [];
   const visibleTags = tags.slice(0, 2);
   const overflowTags = tags.slice(2);
+  const hasInstagram = Boolean(String(item?.instagramUrl || "").trim());
+  const hasFacebook = Boolean(String(item?.facebookUrl || "").trim());
 
   const getTagStyles = (tag) => {
     const t = String(tag || "");
@@ -102,9 +104,16 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
           </div>
         ) : null}
         <div className="mt-auto flex flex-col gap-1">
-          <p className="text-xs text-slate-500 sm:text-sm">
-            {toDisplayNumber(item.followers)} Instagram followers
-          </p>
+          {hasInstagram ? (
+            <p className="text-xs text-slate-500 sm:text-sm">
+              {toDisplayNumber(item.followers)} Instagram followers
+            </p>
+          ) : null}
+          {hasFacebook ? (
+            <p className="text-xs text-slate-500 sm:text-sm">
+              {toDisplayNumber(item.facebookFollowers)} Facebook followers
+            </p>
+          ) : null}
           {item.youtubeUrl ? (
             <p className="text-xs text-slate-500 sm:text-sm">
               {toDisplayNumber(item.youtubeSubscribers)} YouTube subscribers

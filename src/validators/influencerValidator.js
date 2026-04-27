@@ -28,7 +28,7 @@ const submitInfluencerSchema = z.object({
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
     instagram: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
-    instagram_followers_count: z.preprocess(emptyStringToUndefined, z.coerce.number().int().min(0).optional()),
+    facebook: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
     youtube: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
     contact_email: z.string().trim().email(),
     profile_image_url: z.preprocess(emptyStringToUndefined, z.string().trim().url().optional())
@@ -50,7 +50,7 @@ const editOwnInfluencerSchema = z.object({
     city_id: z.coerce.number().int().positive(),
     category_id: z.coerce.number().int().positive(),
     instagram: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
-    instagram_followers_count: z.preprocess(emptyStringToUndefined, z.coerce.number().int().min(0).optional()),
+    facebook: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
     youtube: z.preprocess(emptyStringToUndefined, z.string().trim().max(255).optional()),
     contact_email: z.string().trim().email(),
     profile_image_url: z.preprocess(emptyStringToUndefined, z.string().trim().url().optional())

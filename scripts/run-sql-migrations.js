@@ -26,6 +26,7 @@ const FILES = [
   "event_manual_one_of_a_kind_flag.sql",
   "event_yay_deal_fields.sql",
   "google_oauth_users.sql",
+  "influencer_facebook_followers_count.sql",
   "influencer_premium_gallery_and_metrics.sql",
   "influencer_engagement_timestamp.sql",
   "event_gallery_image_urls.sql",
