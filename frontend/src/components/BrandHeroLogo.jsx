@@ -24,20 +24,11 @@ const logoBit = {
   }
 };
 
-const bangExtra = {
-  hidden: { opacity: 0, scale: 0.9 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    transition: { duration: 0.62, ease: [0.34, 1.56, 0.64, 1] }
-  }
-};
-
 const BrandHeroLogo = forwardRef(function BrandHeroLogo({ className = "", entranceActive = true }, ref) {
   return (
     <motion.div
       ref={ref}
-      aria-label="Yay! Eventz"
+      aria-label="Book My Tickets"
       className={`yay-hero-logo ${className}`}
       style={{
         fontFamily: '"Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -53,16 +44,19 @@ const BrandHeroLogo = forwardRef(function BrandHeroLogo({ className = "", entran
         className="yay-hero-word yay-hero-strong yay-hero-gradient-text inline-block"
         variants={logoBit}
       >
-        Yay
-      </motion.span>
-      <motion.span className="yay-hero-bang inline-block" variants={bangExtra}>
-        !
+        Book
       </motion.span>
       <motion.span
         className="yay-hero-word yay-hero-soft yay-hero-gradient-text inline-block"
         variants={logoBit}
       >
-        &nbsp;Eventz
+        &nbsp;My
+      </motion.span>
+      <motion.span
+        className="yay-hero-word yay-hero-strong yay-hero-gradient-text inline-block"
+        variants={logoBit}
+      >
+        &nbsp;Tickets
       </motion.span>
     </motion.div>
   );

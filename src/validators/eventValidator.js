@@ -167,7 +167,7 @@ const editOwnEventBodySchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["deal_event_discount_code"],
-          message: "Discount code is required for Yay! Deal events"
+          message: "Discount code is required for exclusive deal events"
         });
       }
     }

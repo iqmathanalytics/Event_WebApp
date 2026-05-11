@@ -70,10 +70,10 @@ function buildLayout({ eyebrow, title, subtitle, ctaLabel, ctaUrl, rows, footerN
                 ${rowsHtml ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rowsHtml}</table>` : ""}
                 ${ctaHtml}
                 <p style="margin: 22px 0 0; color: #64748b; font-size: 12px; line-height: 1.55;">
-                  ${escapeHtml(footerNote || "Thanks for being part of Yay! Eventz.")}
+                  ${escapeHtml(footerNote || "Thanks for being part of Book My Tickets.")}
                 </p>
                 <p style="margin: 8px 0 0; color: #94a3b8; font-size: 11px;">
-                  Yay! Eventz • This is a transactional email related to your account activity.
+                  Book My Tickets • This is a transactional email related to your account activity.
                 </p>
               </td>
             </tr>
@@ -87,22 +87,22 @@ function buildLayout({ eyebrow, title, subtitle, ctaLabel, ctaUrl, rows, footerN
 
 function buildWelcomeEmail({ firstName }) {
   const safeFirstName = String(firstName || "there").trim() || "there";
-  const subject = `Welcome to Yay! Eventz, ${safeFirstName}!`;
+  const subject = `Welcome to Book My Tickets, ${safeFirstName}!`;
   const text = [
     `Hey ${safeFirstName},`,
     "",
-    "Welcome to Yay! Eventz.",
+    "Welcome to Book My Tickets.",
     "Your account is live — you can now discover events, explore creator spotlights, and post your own updates.",
     "",
     "See you inside,",
-    "Yay! Eventz Team"
+    "Book My Tickets Team"
   ].join("\n");
   const html = buildLayout({
     eyebrow: "Welcome",
     title: `Hey ${safeFirstName}, you're in.`,
-    subtitle: "Your Yay! Eventz account is ready. Discover the hottest events, creator spotlights, and premium deals in one place.",
+    subtitle: "Your Book My Tickets account is ready. Discover the hottest events, creator spotlights, and premium deals in one place.",
     preheader: "Your account is ready. Start exploring events, influencers, and deals.",
-    ctaLabel: "Open Yay! Eventz",
+    ctaLabel: "Open Book My Tickets",
     ctaUrl: process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || "",
     highlights: [
       "Discover curated local events and premium experiences",
@@ -131,11 +131,11 @@ function buildApprovalEmail({ listingType, recipientName, title, details, review
           ? "Deal"
           : "Listing";
   const safeRecipient = String(recipientName || "there").trim() || "there";
-  const subject = `${typeLabel} Approved on Yay! Eventz`;
+  const subject = `${typeLabel} Approved on Book My Tickets`;
   const textLines = [
     `Hi ${safeRecipient},`,
     "",
-    `Great news — your ${typeLabel.toLowerCase()} has been approved on Yay! Eventz.`,
+    `Great news — your ${typeLabel.toLowerCase()} has been approved on Book My Tickets.`,
     `Title: ${title || "Untitled"}`,
     ...(Array.isArray(details) ? details.map((d) => `${d.label}: ${d.value}`) : []),
     ...(reviewNote ? ["", `Admin note: ${reviewNote}`] : []),
@@ -145,8 +145,8 @@ function buildApprovalEmail({ listingType, recipientName, title, details, review
   const html = buildLayout({
     eyebrow: `${typeLabel} Approved`,
     title: `Your ${typeLabel.toLowerCase()} is now live`,
-    subtitle: `Hi ${safeRecipient}, your submission passed moderation and is now visible on Yay! Eventz.`,
-    preheader: `${typeLabel} approved. Your listing is now live on Yay! Eventz.`,
+    subtitle: `Hi ${safeRecipient}, your submission passed moderation and is now visible on Book My Tickets.`,
+    preheader: `${typeLabel} approved. Your listing is now live on Book My Tickets.`,
     ctaLabel: "Open My Dashboard",
     ctaUrl: `${process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || ""}/dashboard/user`,
     highlights: [

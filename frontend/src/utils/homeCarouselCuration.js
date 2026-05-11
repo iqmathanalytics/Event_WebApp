@@ -1,6 +1,6 @@
 /**
  * Home page carousels: 6 items — first 4 favor Hot Selling / Trending / One of a Kind (non-premium),
- * last 2 are premium (Yay! deal events or premium deals), tag-ranked within each group.
+ * last 2 are premium (exclusive deal events or premium deals), tag-ranked within each group.
  * If the pool is only premium or only standard, the row is still split 4 + 2 by tag score.
  */
 

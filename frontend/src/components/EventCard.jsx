@@ -6,6 +6,7 @@ import { formatCurrency } from "../utils/format";
 import { trackEventClick } from "../services/eventService";
 import useAuth from "../hooks/useAuth";
 import PremiumLockOverlay from "./PremiumLockOverlay";
+import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 
 function EventCard({
   item,
@@ -51,7 +52,7 @@ function EventCard({
       {showBadge ? (
         <div className="pointer-events-none absolute right-3 top-3 z-20 max-w-[6.75rem] rounded-lg border border-amber-300/80 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-2 py-1.5 text-center shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl sm:max-w-[8rem] sm:rounded-full sm:px-2.5 sm:py-1">
           <span className="block text-[9px] font-bold uppercase leading-tight tracking-wide text-slate-900 sm:text-[10px]">
-            Yay! Deal Event
+            {EXCLUSIVE_DEAL_EVENT_LABEL}
           </span>
         </div>
       ) : null}

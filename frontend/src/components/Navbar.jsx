@@ -4,7 +4,8 @@ import { AnimatePresence, motion, useAnimation, useReducedMotion } from "framer-
 import { FiCheck, FiChevronDown, FiMapPin, FiMenu, FiSearch, FiUser, FiX } from "react-icons/fi";
 import useAuth from "../hooks/useAuth";
 import useCityFilter from "../hooks/useCityFilter";
-import YayUserGreeting from "./YayUserGreeting";
+import { BRAND_LOGO_URL } from "../constants/brand";
+import BrandUserGreeting from "./BrandUserGreeting";
 import BrandHeroLogo from "./BrandHeroLogo";
 
 const navItems = [
@@ -196,8 +197,8 @@ function Navbar({
             ) : null}
             <motion.img
               ref={headerLogoRef}
-              src="/branding/yay-tickets-logo.png"
-              alt="Yay! Eventz"
+              src={BRAND_LOGO_URL}
+              alt="Book My Tickets"
               loading="eager"
               className="h-8 w-auto max-w-[128px] object-contain sm:h-9 sm:max-w-[140px]"
               initial={false}
@@ -326,7 +327,7 @@ function Navbar({
           {isAuthenticated ? (
             <div className="flex min-w-0 items-center gap-2">
               <div className="hidden min-w-0 max-w-[min(15rem,30vw)] items-center rounded-full border border-slate-200/90 bg-gradient-to-r from-white via-white to-slate-50 py-1.5 pl-3 pr-2.5 shadow-sm ring-1 ring-slate-100/80 lg:flex">
-                <YayUserGreeting name={user?.name} variant="light" size="sm" className="min-w-0" />
+                <BrandUserGreeting name={user?.name} variant="light" size="sm" className="min-w-0" />
               </div>
               <Link
                 to={isAdmin ? "/dashboard/admin" : "/dashboard/user"}
@@ -493,7 +494,7 @@ function Navbar({
                     <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 text-white shadow-md ring-1 ring-white/10">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/50">Signed in</p>
                       <div className="mt-1.5">
-                        <YayUserGreeting name={user?.name} variant="dark" size="sm" />
+                        <BrandUserGreeting name={user?.name} variant="dark" size="sm" />
                       </div>
                     </div>
                   ) : null}

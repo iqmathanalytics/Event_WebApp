@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { BRAND_LOGO_URL } from "../constants/brand";
 
 const ease = [0.25, 0.46, 0.45, 0.94];
 
@@ -110,7 +111,7 @@ export default function AppLoadingOverlay({
             }
           >
             <img
-              src="/branding/yay-tickets-logo.png"
+              src={BRAND_LOGO_URL}
               alt=""
               className="mx-auto h-11 w-auto max-w-[148px] object-contain sm:h-[3.25rem] sm:max-w-[168px]"
               decoding="async"

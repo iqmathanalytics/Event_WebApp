@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BRAND_LOGO_HANDOFF_DURATION, BRAND_LOGO_HANDOFF_EASE } from "../constants/brandMotion";
+import { BRAND_LOGO_URL } from "../constants/brand";
 
 const MIN_MS = 1500;
 const STALE_MAX_MS = 90000;
@@ -174,7 +175,7 @@ function LandingSplash({ busy, onRevealed, onExitComplete, headerLogoRef, startL
           </motion.div>
 
           <div className="relative z-[1] flex flex-col items-center px-6">
-            <span className="sr-only">Loading Yay! Eventz</span>
+            <span className="sr-only">Loading Book My Tickets</span>
 
             <motion.div
               className="relative flex items-center justify-center"
@@ -184,7 +185,7 @@ function LandingSplash({ busy, onRevealed, onExitComplete, headerLogoRef, startL
             >
               <motion.img
                 ref={splashLogoRef}
-                src="/branding/yay-tickets-logo.png"
+                src={BRAND_LOGO_URL}
                 alt=""
                 decoding="async"
                 animate={logoMotion}

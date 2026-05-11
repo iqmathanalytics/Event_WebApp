@@ -14,7 +14,7 @@ function isYayEvent(ev) {
 }
 
 function HeroSlideOverlay({ variant = "featured" }) {
-  const badgeLabel = variant === "yay" ? "Yay! Event" : "Featured Event";
+  const badgeLabel = variant === "yay" ? "Spotlight event" : "Featured Event";
   const badgeSubLabel = variant === "yay" ? "Members-only perks" : "Handpicked for you";
   const badgeClass =
     variant === "yay"

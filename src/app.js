@@ -14,7 +14,12 @@ if (nodeEnv === "production") {
   app.set("trust proxy", 1);
 }
 
-const explicitCorsOrigins = ["https://yayeventz.com", "https://www.yayeventz.com"];
+const explicitCorsOrigins = [
+  "http://bookmytickets.us",
+  "http://www.bookmytickets.us",
+  "https://bookmytickets.us",
+  "https://www.bookmytickets.us"
+];
 const envOrigins = String(corsOrigin || "")
   .split(",")
   .map((item) => item.trim())
@@ -24,12 +29,13 @@ const wildcardOriginSuffixes = envOrigins
   .map((item) => item.slice(1));
 const corsOriginAllowlist = [...new Set([...explicitCorsOrigins, ...envOrigins.filter((o) => !o.startsWith("*."))])];
 
-function isHttpsYayeventzOrigin(origin) {
+/** bookmytickets.us and subdomains over http or https (http while SSL is not yet enforced). */
+function isBookmyticketsOrigin(origin) {
   try {
     const u = new URL(origin);
-    if (u.protocol !== "https:") return false;
+    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
     const host = u.hostname.toLowerCase();
-    return host === "yayeventz.com" || host.endsWith(".yayeventz.com");
+    return host === "bookmytickets.us" || host.endsWith(".bookmytickets.us");
   } catch (_e) {
     return false;
   }
@@ -45,7 +51,7 @@ const corsOptions = {
       callback(null, origin);
       return;
     }
-    if (nodeEnv === "production" && isHttpsYayeventzOrigin(origin)) {
+    if (nodeEnv === "production" && isBookmyticketsOrigin(origin)) {
       callback(null, origin);
       return;
     }
@@ -111,9 +117,9 @@ app.get("/health", (_req, res) => {
 app.get("/", (_req, res) => {
   res.type("html").send(`<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Yay! Eventz API</title></head>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Book My Tickets API</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:36rem;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#0f172a">
-  <h1 style="font-size:1.25rem">Yay! Eventz API</h1>
+  <h1 style="font-size:1.25rem">Book My Tickets API</h1>
   <p>This URL is the <strong>REST API</strong> (not the website UI). Use <strong>HTTP</strong>, not HTTPS, in the browser bar:</p>
   <p><code>http://localhost:5000</code></p>
   <p>If you see “invalid response,” you likely opened <code>https://</code> — switch to <code>http://</code>.</p>

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { FiEdit2, FiInfo, FiKey, FiUser } from "react-icons/fi";
 import useFavorites from "../hooks/useFavorites";
 import useAuth from "../hooks/useAuth";
-import YayUserGreeting from "../components/YayUserGreeting";
+import BrandUserGreeting from "../components/BrandUserGreeting";
 import { fetchMyBookings } from "../services/bookingService";
 import { createDeal, fetchMyDealSubmissions, fetchMyInfluencerSubmissions } from "../services/listingService";
 import DealSubmissionModal, { emptyDealSubmitForm } from "../components/DealSubmissionModal";
@@ -244,7 +244,7 @@ function UserDashboardPage() {
     }
     return {
       label: "Share your creator story",
-      sub: "Tell us about you — get spotlighted on Yay!"
+      sub: "Tell us about you — get spotlighted on Book My Tickets"
     };
   }, [infStatusLower, myInfluencerSubmissions.length, hasInfluencerDetails]);
 
@@ -479,9 +479,20 @@ function UserDashboardPage() {
   }, [bookings, bookingFilter]);
 
   useEffect(() => {
-    if (location.hash === "#host-events") {
-      requestAnimationFrame(() => setEventsWorkspaceOpen(true));
+    if (location.pathname !== "/dashboard/user" || location.hash !== "#host-events") {
+      return undefined;
     }
+    const scrollToHostWorkspace = () => {
+      const desktop = document.querySelector('[data-host-workspace="desktop"]');
+      const mobile = document.querySelector('[data-host-workspace="mobile"]');
+      const wide = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(min-width: 1024px)").matches;
+      const el = wide ? desktop : mobile;
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    const id = window.requestAnimationFrame(() => {
+      scrollToHostWorkspace();
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [location.hash, location.pathname]);
 
   useEffect(() => {
@@ -680,7 +691,7 @@ function UserDashboardPage() {
             <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
               <div className="min-w-0 flex-1">
                 <div className="min-w-0">
-                  <YayUserGreeting
+                  <BrandUserGreeting
                     name={profile?.name || user?.name || "User"}
                     variant="dark"
                     size="sm"
@@ -766,7 +777,10 @@ function UserDashboardPage() {
           </p>
         ) : null}
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-soft">
+        <section
+          data-host-workspace="mobile"
+          className="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-3.5 shadow-soft sm:scroll-mt-28"
+        >
           <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5">
             <button
               type="button"
@@ -807,7 +821,7 @@ function UserDashboardPage() {
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your space</p>
           <h1 className="mt-1 text-2xl font-bold leading-tight text-slate-900">
-            <YayUserGreeting name={profile?.name || user?.name || "User"} variant="light" size="lg" />
+            <BrandUserGreeting name={profile?.name || user?.name || "User"} variant="light" size="lg" />
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
             Your hub for plans you&apos;re attending. Hosting, deals, and creator tools stay tucked behind a single workspace so this page stays calm.
@@ -896,7 +910,10 @@ function UserDashboardPage() {
 
       {profileMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
       {profileError ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+      <section
+        data-host-workspace="desktop"
+        className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:scroll-mt-28"
+      >
         <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5">
           <button
             type="button"

@@ -5,7 +5,7 @@ const configuredBaseURL = (import.meta.env.VITE_API_BASE_URL || "").trim().repla
 const sameOriginProdBaseURL =
   typeof window !== "undefined"
     ? `${window.location.origin}/api`
-    : "https://www.yayeventz.com/api";
+    : "https://api.bookmytickets.us/api";
 const baseURL = configuredBaseURL || (import.meta.env.PROD ? sameOriginProdBaseURL : localBaseURL);
 const api = axios.create({
   baseURL,

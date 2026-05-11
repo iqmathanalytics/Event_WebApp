@@ -706,7 +706,7 @@ function AdminDashboardPage() {
       pushText("Event Highlights", reviewForm.event_highlights.join(", "));
     }
     items.push({
-      label: "Yay! Deal Event",
+      label: "Exclusive deal event",
       value: reviewForm.is_yay_deal_event ? "Yes" : "No",
       type: "text"
     });
@@ -2223,7 +2223,7 @@ function AdminDashboardPage() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
-              <FormField label="Email Address" hint="Use a valid email for immediate login access." example="riya@yayeventz.com">
+              <FormField label="Email Address" hint="Use a valid email for immediate login access." example="riya@bookmytickets.us">
                 <input
                   type="email"
                   required
@@ -2855,7 +2855,7 @@ function AdminDashboardPage() {
                         className="mt-1 h-4 w-4 rounded border-amber-300 text-slate-900 focus:ring-amber-500"
                       />
                       <div>
-                        <span className="text-sm font-semibold text-slate-900">Yay! Deal Event</span>
+                        <span className="text-sm font-semibold text-slate-900">Exclusive deal event</span>
                         <p className="mt-1 text-xs text-slate-600">
                           Premium deal-style listing; guests must log in to see the discount code on the public site.
                         </p>
@@ -3410,7 +3410,7 @@ function AdminDashboardPage() {
                       className="mt-1 h-4 w-4 rounded border-amber-300 text-slate-900 focus:ring-amber-500"
                     />
                     <div>
-                      <span className="text-sm font-semibold text-slate-900">Yay! Deal Event</span>
+                      <span className="text-sm font-semibold text-slate-900">Exclusive deal event</span>
                       <p className="mt-1 text-xs text-slate-600">
                         Premium deal-style listing; guests must log in to see the discount code on the public site.
                       </p>
@@ -3560,7 +3560,7 @@ function AdminDashboardPage() {
                     <p className="mt-1 text-sm text-slate-700">{viewListing.venue_name || viewListing.venue || "-"}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Yay! Deal Event</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Exclusive deal event</p>
                     <p className="mt-1 text-sm text-slate-700">
                       {viewListing.is_yay_deal_event === 1 ||
                       viewListing.is_yay_deal_event === true ||

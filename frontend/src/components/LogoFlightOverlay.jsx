@@ -5,6 +5,7 @@ import {
   BRAND_LOGO_HANDOFF_DURATION,
   BRAND_LOGO_HANDOFF_EASE
 } from "../constants/brandMotion";
+import { BRAND_LOGO_URL } from "../constants/brand";
 
 /**
  * Single flying logo: move splash → header, then fade overlay out while header fades in.
@@ -83,7 +84,7 @@ function LogoFlightOverlay({ flight, onMoveComplete, onFadeComplete }) {
       style={{ position: "fixed" }}
     >
       <img
-        src="/branding/yay-tickets-logo.png"
+        src={BRAND_LOGO_URL}
         alt=""
         className="h-full w-full object-contain drop-shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
         decoding="async"

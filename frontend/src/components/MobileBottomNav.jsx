@@ -28,7 +28,7 @@ function MobileBottomNav() {
           <NavLink
             key={`${item.to}-${item.label}`}
             to={item.to}
-            title={isProfile && isAuthenticated && profileName ? `Yay! – ${profileName}` : undefined}
+            title={isProfile && isAuthenticated && profileName ? `Book My Tickets – ${profileName}` : undefined}
             className={({ isActive }) =>
               `inline-flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-1 text-[11px] font-semibold transition ${
                 isActive ? "text-brand-600" : "text-slate-500"

@@ -83,8 +83,8 @@ function LockPromoPanel({ variant = "deal", onClose }) {
               Members only
             </motion.p>
             <h3 className="premium-lock-title mt-2 font-['Sora',sans-serif] text-[1.35rem] font-extrabold leading-[1.15] tracking-tight sm:text-2xl">
-              <span className="premium-lock-title-shine block">Yay!</span>
-              <span className="premium-lock-title-shine-delayed mt-0.5 block text-lg sm:text-xl">Deal Event</span>
+              <span className="premium-lock-title-shine block">Exclusive</span>
+              <span className="premium-lock-title-shine-delayed mt-0.5 block text-lg sm:text-xl">deal event</span>
             </h3>
           </>
         ) : (
@@ -144,7 +144,7 @@ function LockPromoPanel({ variant = "deal", onClose }) {
 }
 
 /**
- * Full-screen gate shown when a guest taps “View details” on a Yay! Deal event or premium deal card.
+ * Full-screen gate when a guest taps “View details” on an exclusive deal event or premium deal card.
  * @param {"event" | "deal"} variant
  */
 function PremiumLockOverlay({ open, onClose, variant = "deal" }) {
@@ -179,7 +179,7 @@ function PremiumLockOverlay({ open, onClose, variant = "deal" }) {
           onClick={onClose}
         >
           <span id="premium-lock-heading" className="sr-only">
-            {variant === "event" ? "Yay! Deal event — sign in to view" : "Premium deal — sign in to view"}
+            {variant === "event" ? "Exclusive deal event — sign in to view" : "Premium deal — sign in to view"}
           </span>
           <LockPromoPanel variant={variant} onClose={onClose} />
         </motion.div>

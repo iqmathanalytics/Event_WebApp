@@ -8,6 +8,7 @@ import { formatCurrency, formatDateUS } from "../utils/format";
 import useAuth from "../hooks/useAuth";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import EventDetailBanner from "../components/EventDetailBanner";
+import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 
 function parseHighlights(value) {
   if (!value) {
@@ -144,7 +145,7 @@ function EventDetailsPage() {
   const partialDescription =
     fullDescription.length > 240 ? `${fullDescription.slice(0, 240).trim()}...` : fullDescription;
   const aboutText = yayDealGuestLocked
-    ? "Login to unlock full Yay! Deal Event details, highlights, location, and your exclusive discount code."
+    ? `Login to unlock full ${EXCLUSIVE_DEAL_EVENT_LABEL.toLowerCase()} details, highlights, location, and your exclusive discount code.`
     : isGuest
       ? partialDescription
       : fullDescription;
@@ -243,7 +244,7 @@ function EventDetailsPage() {
 
           {isYayDealEvent ? (
             <div className="mt-5 rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50 to-amber-50/40 p-4 lg:rounded-2xl lg:p-4">
-              <p className="text-sm font-semibold text-slate-900">Yay! Deal Event — discount code</p>
+              <p className="text-sm font-semibold text-slate-900">{EXCLUSIVE_DEAL_EVENT_LABEL} — discount code</p>
               {isGuest ? (
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <span className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-amber-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-600">

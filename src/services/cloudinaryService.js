@@ -25,7 +25,7 @@ function uploadImageBuffer(buffer) {
     err.statusCode = 503;
     throw err;
   }
-  const folder = String(process.env.CLOUDINARY_UPLOAD_FOLDER || "yayeventz").trim() || "yayeventz";
+  const folder = String(process.env.CLOUDINARY_UPLOAD_FOLDER || "bookmytickets").trim() || "bookmytickets";
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream({ folder, resource_type: "image" }, (error, result) => {
       if (error) {

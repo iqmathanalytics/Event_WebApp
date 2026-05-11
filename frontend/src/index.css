@@ -469,7 +469,7 @@ textarea {
   }
 }
 
-/* Premium lock cards (Yay! deal events + premium deals) */
+/* Premium lock cards (exclusive deal events + premium deals) */
 .premium-lock-panel {
   border: 1px solid rgba(251, 191, 36, 0.4);
   background: linear-gradient(155deg, rgba(15, 23, 42, 0.94) 0%, rgba(49, 46, 129, 0.92) 45%, rgba(30, 27, 75, 0.96) 100%);

@@ -1,6 +1,6 @@
-# Yay! Eventz - Backend
+# Book My Tickets — Backend
 
-Production-grade Node.js + Express backend for the Yay! Eventz platform.
+Production-grade Node.js + Express backend for the Book My Tickets platform.
 
 ## Tech
 

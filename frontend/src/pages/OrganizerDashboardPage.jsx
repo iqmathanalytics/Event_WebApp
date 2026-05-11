@@ -469,7 +469,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         throw new Error("Please select a category.");
       }
       if (form.is_yay_deal_event && !String(form.deal_event_discount_code || "").trim()) {
-        throw new Error("Please enter a discount code for Yay! Deal events.");
+        throw new Error("Please enter a discount code for exclusive deal events.");
       }
 
       const venueMapsUrl = normalizeOptionalUrl(form.google_maps_link, "Google Maps");
@@ -1828,7 +1828,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     className="mt-1 h-4 w-4 rounded border-amber-300 text-slate-900 focus:ring-amber-500"
                   />
                   <div>
-                    <span className="text-sm font-semibold text-slate-900">Yay! Deal Event</span>
+                    <span className="text-sm font-semibold text-slate-900">Exclusive deal event</span>
                     <p className="mt-1 text-xs text-slate-600">
                       Mark this as a premium deal-style listing. Guests will need to log in to see full details and the
                       discount code on the public events page.
@@ -1840,7 +1840,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     <FormField
                       label="Discount code"
                       hint="Shown to logged-in visitors on the event page (not visible to guests)."
-                      example="YAYSPRING20"
+                      example="SAVE20"
                     >
                       <input
                         value={form.deal_event_discount_code}

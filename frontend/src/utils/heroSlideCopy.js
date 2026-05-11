@@ -3,7 +3,7 @@
 export const DEFAULT_HERO_NARRATIVE = {
   headline: "Discover events, deals, and creators around you.",
   subline:
-    "Explore trusted local experiences with one unified platform built for city life."
+    "Explore trusted local experiences with Book My Tickets — one platform built for city life."
 };
 
 function truncateTitle(raw, max = 46) {
@@ -24,10 +24,10 @@ export function buildHeroNarrativeFromSlide(slide) {
 
   if (isYay) {
     return {
-      headline: `Yay! members get the glow-up on ${short}`,
+      headline: `Book My Tickets members get the glow-up on ${short}`,
       subline: countdown
         ? `${countdown} until go-time — early access, add-ons, and perks that turn a ticket into a flex.`
-        : "The Yay! circle locked this one early — unlock perks, skip FOMO, and feel like an insider."
+        : "Insider access locked this one early — unlock perks, skip FOMO, and feel like part of the crowd."
     };
   }
 
