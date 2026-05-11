@@ -4,9 +4,8 @@ import { AnimatePresence, motion, useAnimation, useReducedMotion } from "framer-
 import { FiCheck, FiChevronDown, FiMapPin, FiMenu, FiSearch, FiUser, FiX } from "react-icons/fi";
 import useAuth from "../hooks/useAuth";
 import useCityFilter from "../hooks/useCityFilter";
-import { BRAND_LOGO_URL } from "../constants/brand";
+import { BRAND_BANNER_URL, BRAND_LOGO_URL } from "../constants/brand";
 import BrandUserGreeting from "./BrandUserGreeting";
-import BrandHeroLogo from "./BrandHeroLogo";
 
 const navItems = [
   { to: "/events", label: "Events" },
@@ -176,7 +175,7 @@ function Navbar({
       className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 backdrop-blur-md"
     >
       <div className="container-page flex h-16 items-center justify-between gap-3 sm:h-20">
-        <Link to="/" className="flex items-center gap-2.5 text-slate-900">
+        <Link to="/" className="flex min-w-0 items-center gap-2 text-slate-900 sm:gap-2.5">
           <motion.span
             className="relative inline-flex origin-[center_62%] will-change-[transform,filter]"
             animate={headerLogoCelebrateControls}
@@ -214,6 +213,7 @@ function Navbar({
             />
           </motion.span>
           <motion.div
+            className="min-w-0 shrink"
             initial={false}
             animate={{
               opacity: headerLogoEntranceActive ? 1 : 0
@@ -225,7 +225,14 @@ function Navbar({
               }
             }}
           >
-            <BrandHeroLogo className="navbar-brand-wordmark" entranceActive={headerLogoEntranceActive} />
+            <img
+              src={BRAND_BANNER_URL}
+              alt=""
+              width={320}
+              height={48}
+              decoding="async"
+              className="navbar-brand-banner pointer-events-none select-none"
+            />
           </motion.div>
         </Link>
 

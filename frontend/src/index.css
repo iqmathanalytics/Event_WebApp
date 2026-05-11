@@ -418,22 +418,27 @@ textarea {
   will-change: transform;
 }
 
-/* Same animated wordmark as hero, sized for the sticky header */
-.navbar-brand-wordmark {
-  font-size: 1.45rem;
-  transform: scaleX(0.85);
-  transform-origin: left center;
+/* Banner image beside mark in sticky header (replaces animated wordmark) */
+.navbar-brand-banner {
+  display: block;
+  height: 1.55rem;
+  width: auto;
+  max-width: min(46vw, 11rem);
+  object-fit: contain;
+  object-position: left center;
 }
 
 @media (min-width: 640px) {
-  .navbar-brand-wordmark {
-    font-size: 1.7rem;
+  .navbar-brand-banner {
+    height: 1.75rem;
+    max-width: min(40vw, 13rem);
   }
 }
 
 @media (min-width: 1024px) {
-  .navbar-brand-wordmark {
-    font-size: 1.9rem;
+  .navbar-brand-banner {
+    height: 2rem;
+    max-width: 15rem;
   }
 }
 
