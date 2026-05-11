@@ -418,27 +418,26 @@ textarea {
   will-change: transform;
 }
 
-/* Banner image beside mark in sticky header (replaces animated wordmark) */
+/* Banner: ~75% of nav bar (h-16=4rem → 3rem; sm:h-20=5rem → 3.75rem) */
 .navbar-brand-banner {
   display: block;
-  height: 1.55rem;
+  height: 3rem;
   width: auto;
-  max-width: min(46vw, 11rem);
+  max-width: min(52vw, 14rem);
   object-fit: contain;
   object-position: left center;
 }
 
 @media (min-width: 640px) {
   .navbar-brand-banner {
-    height: 1.75rem;
-    max-width: min(40vw, 13rem);
+    height: 3.75rem;
+    max-width: min(50vw, 22rem);
   }
 }
 
 @media (min-width: 1024px) {
   .navbar-brand-banner {
-    height: 2rem;
-    max-width: 15rem;
+    max-width: min(42vw, 26rem);
   }
 }
 

@@ -199,7 +199,7 @@ function Navbar({
               src={BRAND_LOGO_URL}
               alt="Book My Tickets"
               loading="eager"
-              className="h-8 w-auto max-w-[128px] object-contain sm:h-9 sm:max-w-[140px]"
+              className="h-12 w-auto max-w-[min(52vw,220px)] object-contain sm:h-[3.75rem] sm:max-w-[min(48vw,260px)]"
               initial={false}
               animate={{
                 opacity: headerLogoEntranceActive ? 1 : 0
