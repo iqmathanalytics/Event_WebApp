@@ -418,6 +418,28 @@ textarea {
   will-change: transform;
 }
 
+/* Home intro splash only — RM mark before navbar handoff (half of hero scale) */
+.landing-splash-brand-logo {
+  display: block;
+  width: auto;
+  height: min(36vw, 11rem);
+  max-width: min(47vw, 16rem);
+}
+
+@media (min-width: 640px) {
+  .landing-splash-brand-logo {
+    height: min(25vw, 13rem);
+    max-width: min(41vw, 18rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-splash-brand-logo {
+    height: min(21vw, 14rem);
+    max-width: min(35vw, 20rem);
+  }
+}
+
 /* Banner: ~75% of nav bar (h-16=4rem → 3rem; sm:h-20=5rem → 3.75rem) */
 .navbar-brand-banner {
   display: block;

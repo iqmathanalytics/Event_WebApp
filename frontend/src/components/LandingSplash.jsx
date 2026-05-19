@@ -191,7 +191,7 @@ function LandingSplash({ busy, onRevealed, onExitComplete, headerLogoRef, startL
                 animate={logoMotion}
                 transition={logoTransition}
                 style={{ willChange: reduceMotion ? "auto" : "transform" }}
-                className={`relative z-[1] h-16 w-auto max-w-[200px] object-contain drop-shadow-[0_18px_44px_rgba(0,0,0,0.42)] sm:h-[4.5rem] sm:max-w-[220px] ${
+                className={`landing-splash-brand-logo relative z-[1] object-contain drop-shadow-[0_22px_56px_rgba(0,0,0,0.48)] ${
                   suppressCenterLogo ? "pointer-events-none invisible opacity-0" : ""
                 }`}
               />
@@ -199,7 +199,7 @@ function LandingSplash({ busy, onRevealed, onExitComplete, headerLogoRef, startL
                 <>
                   <motion.div
                     aria-hidden
-                    className="pointer-events-none absolute inset-[-35%] rounded-full bg-gradient-to-r from-rose-400/35 via-fuchsia-400/25 to-indigo-400/35 blur-3xl"
+                    className="pointer-events-none absolute inset-[-48%] rounded-full bg-gradient-to-r from-rose-400/35 via-fuchsia-400/25 to-indigo-400/35 blur-3xl"
                     animate={{ opacity: [0.35, 0.65, 0.4, 0.6, 0.35], scale: [0.92, 1.05, 0.96, 1.02, 0.92] }}
                     transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
                   />

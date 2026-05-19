@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useAnimation, useReducedMotion } from "framer-
 import { FiCheck, FiChevronDown, FiMapPin, FiMenu, FiSearch, FiUser, FiX } from "react-icons/fi";
 import useAuth from "../hooks/useAuth";
 import useCityFilter from "../hooks/useCityFilter";
-import { BRAND_BANNER_URL, BRAND_LOGO_URL } from "../constants/brand";
+import { BRAND_BANNER_URL, BRAND_HEADER_LOGO_URL } from "../constants/brand";
 import BrandUserGreeting from "./BrandUserGreeting";
 
 const navItems = [
@@ -196,7 +196,7 @@ function Navbar({
             ) : null}
             <motion.img
               ref={headerLogoRef}
-              src={BRAND_LOGO_URL}
+              src={BRAND_HEADER_LOGO_URL}
               alt="Book My Tickets"
               loading="eager"
               className="h-12 w-auto max-w-[min(52vw,220px)] object-contain sm:h-[3.75rem] sm:max-w-[min(48vw,260px)]"
