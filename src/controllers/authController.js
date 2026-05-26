@@ -1,8 +1,9 @@
 const asyncHandler = require("../utils/asyncHandler");
+const { getValidatedBody } = require("../utils/validatedRequest");
 const authService = require("../services/authService");
 
 const register = asyncHandler(async (req, res) => {
-  const result = await authService.register(req.validated.body);
+  const result = await authService.register(getValidatedBody(req));
   res.status(201).json({
     success: true,
     message: "User registered successfully",
@@ -11,7 +12,7 @@ const register = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  const result = await authService.login({ ...req.validated.body, portal: "user" });
+  const result = await authService.login({ ...getValidatedBody(req), portal: "user" });
   res.status(200).json({
     success: true,
     message: "User login successful",
@@ -20,7 +21,7 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const loginStaff = asyncHandler(async (req, res) => {
-  const result = await authService.login({ ...req.validated.body, portal: "staff" });
+  const result = await authService.login({ ...getValidatedBody(req), portal: "staff" });
   res.status(200).json({
     success: true,
     message: "Staff login successful",
@@ -29,7 +30,8 @@ const loginStaff = asyncHandler(async (req, res) => {
 });
 
 const refreshToken = asyncHandler(async (req, res) => {
-  const result = await authService.refreshAccessToken(req.validated.body.refreshToken);
+  const body = getValidatedBody(req);
+  const result = await authService.refreshAccessToken(body.refreshToken);
   res.status(200).json({
     success: true,
     message: "Token refreshed successfully",
@@ -38,7 +40,7 @@ const refreshToken = asyncHandler(async (req, res) => {
 });
 
 const googleLoginUser = asyncHandler(async (req, res) => {
-  const result = await authService.loginWithGoogleIdToken(req.validated.body.idToken);
+  const result = await authService.loginWithGoogleIdToken(getValidatedBody(req).idToken);
   res.status(200).json({
     success: true,
     message: "Signed in with Google successfully.",
@@ -47,7 +49,7 @@ const googleLoginUser = asyncHandler(async (req, res) => {
 });
 
 const googleRegisterUser = asyncHandler(async (req, res) => {
-  const result = await authService.registerWithGoogleIdToken(req.validated.body.idToken);
+  const result = await authService.registerWithGoogleIdToken(getValidatedBody(req).idToken);
   res.status(201).json({
     success: true,
     message: "Welcome! Finish setting up your profile to get started.",

@@ -44,14 +44,32 @@ async function createUser({
 }
 
 async function findUserById(id) {
-  const [rows] = await pool.query(
-    `SELECT id, name, email, mobile_number, auth_provider, google_id, profile_image_url, role, organizer_enabled,
-            can_post_events, can_create_influencer_profile, can_post_deals, can_sell_platform_tickets, is_active, created_at
-     FROM users
-     WHERE id = ? LIMIT 1`,
-    [id]
-  );
-  return rows[0] || null;
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, name, email, mobile_number, auth_provider, google_id, profile_image_url, role, organizer_enabled,
+              can_post_events, can_create_influencer_profile, can_post_deals, can_sell_platform_tickets, is_active, created_at
+       FROM users
+       WHERE id = ? LIMIT 1`,
+      [id]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    if (err?.code !== "ER_BAD_FIELD_ERROR") {
+      throw err;
+    }
+    const [rows] = await pool.query(
+      `SELECT id, name, email, mobile_number, auth_provider, google_id, profile_image_url, role, organizer_enabled,
+              can_post_events, can_create_influencer_profile, can_post_deals, is_active, created_at
+       FROM users
+       WHERE id = ? LIMIT 1`,
+      [id]
+    );
+    const row = rows[0];
+    if (row) {
+      row.can_sell_platform_tickets = 0;
+    }
+    return row || null;
+  }
 }
 
 async function findUserByEmail(email) {

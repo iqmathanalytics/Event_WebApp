@@ -1,7 +1,8 @@
 const STORAGE_PREFIX = "bmt_event_checkout_v1";
 
 function storageKey(eventId, userId) {
-  return `${STORAGE_PREFIX}_${Number(eventId)}_${Number(userId)}`;
+  const userKey = userId === "guest" ? "guest" : Number(userId);
+  return `${STORAGE_PREFIX}_${Number(eventId)}_${userKey}`;
 }
 
 export function parseExpiresMs(value) {
@@ -35,7 +36,9 @@ export function loadEventCheckoutDraft(eventId, userId) {
       return null;
     }
     const draft = JSON.parse(raw);
-    if (Number(draft.eventId) !== Number(eventId) || Number(draft.userId) !== Number(userId)) {
+    const draftUserKey = draft.userId === "guest" ? "guest" : Number(draft.userId);
+    const expectedUserKey = userId === "guest" ? "guest" : Number(userId);
+    if (Number(draft.eventId) !== Number(eventId) || draftUserKey !== expectedUserKey) {
       return null;
     }
     if (draft.couponHold && isHoldExpired(draft.couponHold)) {

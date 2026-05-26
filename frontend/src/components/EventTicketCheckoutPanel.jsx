@@ -3,8 +3,11 @@ import { Link } from "react-router-dom";
 import { Ticket } from "lucide-react";
 import {
   confirmBookingPayment,
+  confirmGuestBookingPayment,
   createBookingCheckout,
-  createBookingPaymentIntent
+  createBookingPaymentIntent,
+  createGuestBookingCheckout,
+  createGuestBookingPaymentIntent
 } from "../services/bookingService";
 import StripePaymentModal from "./StripePaymentModal";
 import StripePaymentReturnRelay from "./StripePaymentReturnRelay";
@@ -143,9 +146,10 @@ function CheckoutCard({ children, pill = `${BRAND_NAME} · your city's event gui
   );
 }
 
-export default function EventTicketCheckoutPanel({ event }) {
+export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const { user } = useAuth();
   const userId = user?.id ?? user?.userId;
+  const checkoutUserId = guestMode ? "guest" : userId;
   const eventId = event?.id;
   const availableDates = useMemo(() => getEventAvailableDates(event), [event]);
   const scheduleType = event?.schedule_type || "single";
@@ -211,12 +215,12 @@ export default function EventTicketCheckoutPanel({ event }) {
     setCheckoutReady(false);
 
     const dates = getEventAvailableDates(event);
-    if (!dates.length || !eventId || !userId) {
+    if (!dates.length || !eventId || !checkoutUserId) {
       setCheckoutReady(true);
       return;
     }
 
-    const draft = loadEventCheckoutDraft(eventId, userId);
+    const draft = loadEventCheckoutDraft(eventId, checkoutUserId);
     if (!draft) {
       if (scheduleType === "single") {
         setSelectedDates([dates[0]]);
@@ -279,11 +283,11 @@ export default function EventTicketCheckoutPanel({ event }) {
     }
 
     setCheckoutReady(true);
-  }, [eventId, userId, event, scheduleType, buildHoldState]);
+  }, [eventId, checkoutUserId, event, scheduleType, buildHoldState]);
 
   useEffect(() => {
     const dates = getEventAvailableDates(event);
-    if (!dates.length || restoredFromDraftRef.current || !eventId || !userId) {
+    if (!dates.length || restoredFromDraftRef.current || !eventId || !checkoutUserId) {
       return;
     }
     if (scheduleType === "single") {
@@ -291,7 +295,7 @@ export default function EventTicketCheckoutPanel({ event }) {
     } else {
       setSelectedDates([dates[0]]);
     }
-  }, [event, scheduleType, eventId, userId]);
+  }, [event, scheduleType, eventId, checkoutUserId]);
 
   useEffect(() => {
     if (
@@ -299,7 +303,8 @@ export default function EventTicketCheckoutPanel({ event }) {
       !restoredFromDraftRef.current ||
       !couponHold?.holdToken ||
       !eventId ||
-      !userId ||
+      !checkoutUserId ||
+      guestMode ||
       resumeAttemptedRef.current
     ) {
       return;
@@ -332,13 +337,16 @@ export default function EventTicketCheckoutPanel({ event }) {
         );
       }
     })();
-  }, [checkoutReady, couponHold?.holdToken, eventId, userId, buildHoldState]);
+  }, [checkoutReady, couponHold?.holdToken, eventId, checkoutUserId, guestMode, buildHoldState]);
 
   useEffect(() => {
+    if (guestMode) {
+      return;
+    }
     setName(String(user?.name || "").trim());
     setEmail(String(user?.email || "").trim());
     setPhone(String(user?.mobile_number || "").trim());
-  }, [user]);
+  }, [user, guestMode]);
 
   const maxTickets = useMemo(
     () => (SHOW_SEAT_AVAILABILITY_UI ? maxTicketsForBooking(event) : 50),
@@ -407,7 +415,7 @@ export default function EventTicketCheckoutPanel({ event }) {
 
   const persistDraft = useCallback(
     (overrides = {}) => {
-      if (!eventId || !userId) {
+      if (!eventId || !checkoutUserId) {
         return;
       }
       const dates = normalizeDateList(overrides.selectedDates || selectedDates);
@@ -419,7 +427,7 @@ export default function EventTicketCheckoutPanel({ event }) {
         : null;
       saveEventCheckoutDraft({
         eventId: Number(eventId),
-        userId: Number(userId),
+        userId: checkoutUserId === "guest" ? "guest" : Number(checkoutUserId),
         selectedDates: dates,
         attendeeCount: guests,
         ticketItems: buildTicketItemsPayload(ticketLevels, cart),
@@ -452,16 +460,16 @@ export default function EventTicketCheckoutPanel({ event }) {
       phone,
       selectedDates,
       step,
-      userId
+      checkoutUserId
     ]
   );
 
   useEffect(() => {
-    if (!checkoutReady || !eventId || !userId) {
+    if (!checkoutReady || !eventId || !checkoutUserId) {
       return;
     }
     persistDraft();
-  }, [checkoutReady, eventId, userId, persistDraft]);
+  }, [checkoutReady, eventId, checkoutUserId, persistDraft]);
 
   useEffect(() => {
     if (skipHoldClearRef.current > 0) {
@@ -560,7 +568,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       setCouponMessage(message);
       saveEventCheckoutDraft({
         eventId: Number(eventId),
-        userId: Number(userId),
+        userId: checkoutUserId === "guest" ? "guest" : Number(checkoutUserId),
         selectedDates: normalizeDateList(selectedDates),
         attendeeCount,
         ticketItems: buildTicketItemsPayload(ticketLevels, ticketCart),
@@ -600,7 +608,17 @@ export default function EventTicketCheckoutPanel({ event }) {
     if (attendeeCount > ticketCap) {
       return `You can book up to ${ticketCap} ticket${ticketCap === 1 ? "" : "s"} per order.`;
     }
+    const nameTrim = name.trim();
+    const emailTrim = email.trim();
     const phoneTrim = phone.trim();
+    if (guestMode || !userId) {
+      if (nameTrim.length < 2) {
+        return "Enter your full name to continue.";
+      }
+      if (!emailTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+        return "Enter a valid email address.";
+      }
+    }
     if (!phoneTrim) {
       return "Phone number is required to complete your booking.";
     }
@@ -608,7 +626,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       return "Enter a valid phone number (at least 8 digits).";
     }
     return "";
-  }, [availableDates, attendeeCount, phone, selectedDates, maxTickets, ticketCart]);
+  }, [availableDates, attendeeCount, phone, selectedDates, maxTickets, ticketCart, guestMode, name, email, userId]);
 
   useEffect(() => {
     if (ticketLevels.length && Object.keys(ticketCart).length !== ticketLevels.length) {
@@ -623,7 +641,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       setError(msg);
       return;
     }
-    if (couponCodeInput.trim() && !couponHold?.holdToken) {
+    if (!guestMode && couponCodeInput.trim() && !couponHold?.holdToken) {
       setError("Apply your coupon code before continuing, or remove it.");
       return;
     }
@@ -652,9 +670,9 @@ export default function EventTicketCheckoutPanel({ event }) {
       setCouponHold(null);
       setPaymentModalOpen(false);
       setPaymentClientSecret("");
-      clearPendingStripePayment(eventId, userId);
+      clearPendingStripePayment(eventId, checkoutUserId);
       clearStripeReturnParams();
-      clearEventCheckoutDraft(eventId, userId);
+      clearEventCheckoutDraft(eventId, checkoutUserId);
       setStep("done");
     },
     [
@@ -667,7 +685,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       ticketLevels,
       totalAmount,
       totalDays,
-      userId
+      checkoutUserId
     ]
   );
 
@@ -679,7 +697,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       setStep("form");
       return;
     }
-    if (!userId) {
+    if (!guestMode && !userId) {
       setError("Sign in to complete your booking.");
       return;
     }
@@ -699,13 +717,17 @@ export default function EventTicketCheckoutPanel({ event }) {
       setSubmitting(true);
 
       if (!needsCardPayment) {
-        const body = await createBookingCheckout(payload);
+        const body = guestMode
+          ? await createGuestBookingCheckout(payload)
+          : await createBookingCheckout(payload);
         const data = body?.data || body;
         finishBookingSuccess(data, sortedDates);
         return;
       }
 
-      const intentRes = await createBookingPaymentIntent(payload);
+      const intentRes = guestMode
+        ? await createGuestBookingPaymentIntent(payload)
+        : await createBookingPaymentIntent(payload);
       const intent = intentRes?.data || intentRes;
       const pubKey =
         intent?.publishableKey ||
@@ -718,7 +740,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       setPaymentClientSecret(intent.clientSecret);
       setPaymentPublishableKey(pubKey);
       setPaymentIntentId(intent.paymentIntentId || "");
-      savePendingStripePayment(eventId, userId, {
+      savePendingStripePayment(eventId, checkoutUserId, {
         paymentIntentId: intent.paymentIntentId,
         returnUrl: buildStripeReturnUrl(eventId)
       });
@@ -737,7 +759,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       try {
         setSubmitting(true);
         const sortedDates = normalizeDateList(selectedDates);
-        const body = await confirmBookingPayment(piId);
+        const body = guestMode ? await confirmGuestBookingPayment(piId) : await confirmBookingPayment(piId);
         const data = body?.data || body;
         finishBookingSuccess(data, sortedDates);
       } catch (err) {
@@ -795,7 +817,7 @@ export default function EventTicketCheckoutPanel({ event }) {
   }, [handleStripePaymentReturn]);
 
   useEffect(() => {
-    if (!checkoutReady || !userId || !eventId || paymentReturnHandledRef.current || popupReturnRelay) {
+    if (!checkoutReady || !checkoutUserId || !eventId || paymentReturnHandledRef.current || popupReturnRelay) {
       return;
     }
     const stripeReturn = parseStripeReturnParams();
@@ -812,7 +834,7 @@ export default function EventTicketCheckoutPanel({ event }) {
       return;
     }
     void handleStripePaymentReturn(stripeReturn.paymentIntentId, stripeReturn.redirectStatus);
-  }, [checkoutReady, userId, eventId, popupReturnRelay, handleStripePaymentReturn]);
+  }, [checkoutReady, checkoutUserId, eventId, popupReturnRelay, handleStripePaymentReturn]);
 
   const onPaymentModalClose = () => {
     if (submitting) {
@@ -885,12 +907,21 @@ export default function EventTicketCheckoutPanel({ event }) {
               ))}
             </ul>
           ) : null}
-          <Link
-            to="/dashboard/user"
-            className="inline-flex w-full items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-base font-semibold text-white transition hover:bg-[#D70466]"
-          >
-            Open my dashboard
-          </Link>
+          {guestMode ? (
+            <Link
+              to="/events"
+              className="inline-flex w-full items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-base font-semibold text-white transition hover:bg-[#D70466]"
+            >
+              Browse more events
+            </Link>
+          ) : (
+            <Link
+              to="/dashboard/user"
+              className="inline-flex w-full items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-base font-semibold text-white transition hover:bg-[#D70466]"
+            >
+              Open my dashboard
+            </Link>
+          )}
           {doneSummary.paidWithCard ? (
             <p className="text-xs text-slate-500">Paid securely with Stripe.</p>
           ) : (
@@ -1065,38 +1096,52 @@ export default function EventTicketCheckoutPanel({ event }) {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Name on tickets</label>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+            Name on tickets <span className="text-rose-600">*</span>
+          </label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-900"
             autoComplete="name"
+            required
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Email</label>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+            Email <span className="text-rose-600">*</span>
+          </label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
             autoComplete="email"
+            required
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Phone</label>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+            Phone <span className="text-rose-600">*</span>
+          </label>
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
-            placeholder={user?.mobile_number ? "Required for booking" : "Mobile number"}
+            placeholder="Mobile number"
             autoComplete="tel"
             required
           />
         </div>
       </div>
 
-      {subtotalAmount > 0 ? (
+      {guestMode ? (
+        <p className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
+          Checking out as a guest — no account needed. We will email your confirmation to the address above.
+        </p>
+      ) : null}
+
+      {!guestMode && subtotalAmount > 0 ? (
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Coupon code</p>
           <div className="mt-2 flex gap-2">

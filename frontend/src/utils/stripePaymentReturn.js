@@ -1,7 +1,8 @@
 const PENDING_PREFIX = "bmt_stripe_pending_v1";
 
 function pendingKey(eventId, userId) {
-  return `${PENDING_PREFIX}_${Number(eventId)}_${Number(userId)}`;
+  const userKey = userId === "guest" ? "guest" : Number(userId);
+  return `${PENDING_PREFIX}_${Number(eventId)}_${userKey}`;
 }
 
 export function buildStripeReturnUrl(eventId) {
@@ -22,7 +23,7 @@ export function savePendingStripePayment(eventId, userId, data) {
       JSON.stringify({
         ...data,
         eventId: Number(eventId),
-        userId: Number(userId),
+        userId: userId === "guest" ? "guest" : Number(userId),
         savedAt: Date.now()
       })
     );

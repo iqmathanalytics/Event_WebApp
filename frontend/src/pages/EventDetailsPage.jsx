@@ -386,8 +386,8 @@ function EventDetailsPage() {
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:z-10 lg:self-start">
-          {ticketSalesMode === "platform" && isAuthenticated ? (
-            <EventTicketCheckoutPanel event={event} />
+          {ticketSalesMode === "platform" && (isAuthenticated || !isYayDealEvent) ? (
+            <EventTicketCheckoutPanel event={event} guestMode={!isAuthenticated} />
           ) : (
             <EventAirbnbBookingShell
               event={event}

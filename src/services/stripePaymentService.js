@@ -6,7 +6,11 @@ const checkoutPaymentModel = require("../models/checkoutPaymentModel");
 const { createBooking, findBookingByPaymentIntentId } = require("../models/bookingModel");
 const couponModel = require("../models/couponModel");
 const couponService = require("./couponService");
-const { resolveEventBookingPricing, dispatchBookingConfirmationEmail } = require("./bookingService");
+const {
+  resolveEventBookingPricing,
+  resolveGuestEventBookingPricing,
+  dispatchBookingConfirmationEmail
+} = require("./bookingService");
 
 const PAYMENT_HOLD_EXTENSION_MINUTES = 30;
 
@@ -32,9 +36,11 @@ function mapFulfillResult(bookingId, pricing, extra = {}) {
   };
 }
 
-async function createPaymentIntentForBooking({ userId, payload }) {
+async function createPaymentIntentCore({ userId, payload, isGuest }) {
   const stripe = assertStripeConfigured();
-  const pricing = await resolveEventBookingPricing({ userId, payload });
+  const pricing = isGuest
+    ? await resolveGuestEventBookingPricing({ payload })
+    : await resolveEventBookingPricing({ userId, payload });
 
   if (!requiresStripePayment(pricing.totalAmount)) {
     throw new ApiError(
@@ -69,7 +75,8 @@ async function createPaymentIntentForBooking({ userId, payload }) {
       currency: "usd",
       payment_method_types: ["card"],
       metadata: {
-        user_id: String(userId),
+        guest_checkout: isGuest ? "1" : "0",
+        user_id: userId != null ? String(userId) : "",
         event_id: String(payload.event_id),
         attendee_count: String(pricing.attendeeCount)
       },
@@ -81,7 +88,7 @@ async function createPaymentIntentForBooking({ userId, payload }) {
 
   await checkoutPaymentModel.createCheckoutPayment({
     stripe_payment_intent_id: paymentIntent.id,
-    user_id: userId,
+    user_id: userId ?? null,
     event_id: payload.event_id,
     status: "requires_payment",
     amount_cents: amountCents,
@@ -100,6 +107,14 @@ async function createPaymentIntentForBooking({ userId, payload }) {
     totalAmount: pricing.totalAmount,
     couponCode: pricing.couponCode
   };
+}
+
+async function createPaymentIntentForBooking({ userId, payload }) {
+  return createPaymentIntentCore({ userId, payload, isGuest: false });
+}
+
+async function createPaymentIntentForGuestBooking({ payload }) {
+  return createPaymentIntentCore({ userId: null, payload, isGuest: true });
 }
 
 /**
@@ -122,8 +137,12 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
     throw new ApiError(404, "Checkout session not found for this payment.");
   }
 
-  if (userId != null && Number(checkout.user_id) !== Number(userId)) {
+  const isGuestCheckout = checkout.user_id == null;
+  if (!isGuestCheckout && userId != null && Number(checkout.user_id) !== Number(userId)) {
     throw new ApiError(403, "This payment belongs to another account.");
+  }
+  if (isGuestCheckout && userId != null) {
+    throw new ApiError(403, "This guest payment cannot be confirmed with a signed-in account.");
   }
 
   if (checkout.status === "failed" || checkout.status === "canceled") {
@@ -135,10 +154,12 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
     throw new ApiError(500, "Checkout data is invalid.");
   }
 
-  const pricing = await resolveEventBookingPricing({
-    userId: checkout.user_id,
-    payload
-  });
+  const pricing = isGuestCheckout
+    ? await resolveGuestEventBookingPricing({ payload })
+    : await resolveEventBookingPricing({
+        userId: checkout.user_id,
+        payload
+      });
 
   const expectedCents = dollarsToCents(pricing.totalAmount);
   if (expectedCents !== Number(checkout.amount_cents)) {
@@ -155,10 +176,11 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
       {
         event_id: payload.event_id,
         organizer_id: pricing.organizerId,
-        user_id: checkout.user_id,
-        name: payload.name?.trim() || pricing.userName,
-        email: payload.email?.trim() || pricing.userEmail,
-        phone: payload.phone?.trim() || pricing.userPhone,
+        user_id: isGuestCheckout ? null : checkout.user_id,
+        is_guest_booking: isGuestCheckout,
+        name: pricing.userName,
+        email: pricing.userEmail,
+        phone: pricing.userPhone,
         attendee_count: pricing.attendeeCount,
         ticket_items_json: pricing.ticketCart?.length
           ? JSON.stringify(pricing.ticketCart)
@@ -181,7 +203,7 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
       conn
     );
 
-    if (holdToken && pricing.couponId) {
+    if (holdToken && pricing.couponId && checkout.user_id) {
       await couponService.finalizeCouponRedemption(
         { couponId: pricing.couponId, userId: checkout.user_id, bookingId, holdToken },
         conn
@@ -277,11 +299,15 @@ async function handleStripeWebhookEvent(event) {
   return { handled: false };
 }
 
-async function confirmPaymentForUser({ userId, paymentIntentId }) {
+async function confirmPaymentCore({ userId, paymentIntentId, isGuest }) {
   const stripe = assertStripeConfigured();
   const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-  if (Number(pi.metadata?.user_id) !== Number(userId)) {
+  if (isGuest) {
+    if (pi.metadata?.guest_checkout !== "1") {
+      throw new ApiError(403, "This payment is not a guest checkout session.");
+    }
+  } else if (Number(pi.metadata?.user_id) !== Number(userId)) {
     throw new ApiError(403, "This payment belongs to another account.");
   }
 
@@ -327,10 +353,20 @@ async function confirmPaymentForUser({ userId, paymentIntentId }) {
   throw new ApiError(400, `Payment could not be completed (status: ${pi.status}).`);
 }
 
+async function confirmPaymentForUser({ userId, paymentIntentId }) {
+  return confirmPaymentCore({ userId, paymentIntentId, isGuest: false });
+}
+
+async function confirmPaymentForGuest({ paymentIntentId }) {
+  return confirmPaymentCore({ userId: null, paymentIntentId, isGuest: true });
+}
+
 module.exports = {
   createPaymentIntentForBooking,
+  createPaymentIntentForGuestBooking,
   fulfillPaymentIntent,
   confirmPaymentForUser,
+  confirmPaymentForGuest,
   handleStripeWebhookEvent,
   markCheckoutFailed,
   markCheckoutCanceled

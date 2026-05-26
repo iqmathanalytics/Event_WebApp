@@ -981,7 +981,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       <p className="mt-1 text-xs text-slate-600">{item.name} • {item.email}</p>
                       <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
                         <p><span className="font-semibold">Guests:</span> {item.attendee_count}</p>
-                        <p><span className="font-semibold">Booked:</span> {formatDateUS(item.booking_date)}</p>
+                        <p>
+                          <span className="font-semibold">Booked:</span>{" "}
+                          {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
+                        </p>
                         <p className="col-span-2">
                           <span className="font-semibold">Dates:</span>{" "}
                           {Array.isArray(item.selected_dates) && item.selected_dates.length
@@ -1324,7 +1327,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             : "-"}
                         </p>
                         <p><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
-                        <p><span className="font-semibold">Booked:</span> {formatDateUS(item.booking_date)}</p>
+                        <p>
+                          <span className="font-semibold">Booked:</span>{" "}
+                          {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
+                        </p>
                         <div className="col-span-2 mt-1">
                           <BookingPaymentSummary booking={item} />
                         </div>
@@ -1337,30 +1343,31 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 <table className="min-w-full text-left text-sm">
                   <thead className="border-b border-slate-200 text-slate-600">
                     <tr>
+                      <th className="px-2 py-2">Type</th>
                       <th className="px-2 py-2">Event Name</th>
                       <th className="px-2 py-2">Attendee Name</th>
                       <th className="px-2 py-2">Email</th>
                       <th className="px-2 py-2">Phone</th>
                       <th className="px-2 py-2">Guests</th>
-                      <th className="px-2 py-2">Selected Dates</th>
+                      <th className="px-2 py-2">Event Dates</th>
                       <th className="px-2 py-2 text-right">Order Total</th>
                       <th className="px-2 py-2">Payment</th>
                       <th className="px-2 py-2 text-right">Charged</th>
                       <th className="px-2 py-2">Stripe</th>
-                      <th className="px-2 py-2">Booking Date</th>
+                      <th className="px-2 py-2">Booked</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loadingBookingRows ? (
                       <tr>
-                        <td className="px-2 py-2 text-slate-500" colSpan={11}>
+                        <td className="px-2 py-2 text-slate-500" colSpan={12}>
                           Loading bookings...
                         </td>
                       </tr>
                     ) : null}
                     {!loadingBookingRows && bookingRows.length === 0 ? (
                       <tr>
-                        <td className="px-2 py-2 text-slate-500" colSpan={11}>
+                        <td className="px-2 py-2 text-slate-500" colSpan={12}>
                           No bookings match the selected filters.
                         </td>
                       </tr>
@@ -1368,6 +1375,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     {!loadingBookingRows
                       ? bookingRows.map((item) => (
                           <tr key={item.id} className="border-b border-slate-100">
+                            <td className="px-2 py-2">
+                              {item.is_guest_booking === 1 ||
+                              item.is_guest_booking === true ||
+                              String(item.is_guest_booking || "") === "1" ||
+                              item.user_id == null ? (
+                                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+                                  Guest
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-500">Registered</span>
+                              )}
+                            </td>
                             <td className="px-2 py-2 font-medium text-slate-900">{item.event_title}</td>
                             <td className="px-2 py-2 text-slate-600">{item.name}</td>
                             <td className="px-2 py-2 text-slate-600">{item.email}</td>
@@ -1382,7 +1401,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             <BookingPaymentStatusCell booking={item} />
                             <BookingAmountPaidCell booking={item} />
                             <BookingStripeRefCell booking={item} />
-                            <td className="px-2 py-2 text-slate-600">{formatDateUS(item.booking_date)}</td>
+                            <td className="px-2 py-2 text-slate-600">
+                              {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
+                            </td>
                           </tr>
                         ))
                       : null}

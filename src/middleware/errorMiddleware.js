@@ -8,8 +8,13 @@ function notFoundMiddleware(req, res) {
 }
 
 function errorMiddleware(err, _req, res, _next) {
-  if (err instanceof ApiError) {
-    return res.status(err.statusCode).json({
+  const statusCode = Number(err?.statusCode);
+  const isApiError =
+    err instanceof ApiError ||
+    (Number.isFinite(statusCode) && statusCode >= 400 && statusCode < 600 && typeof err?.message === "string");
+
+  if (isApiError) {
+    return res.status(statusCode).json({
       success: false,
       message: err.message,
       details: err.details || undefined

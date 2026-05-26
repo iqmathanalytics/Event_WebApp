@@ -7,6 +7,7 @@ const organizerAccessMiddleware = require("../middleware/organizerAccessMiddlewa
 const validateRequest = require("../middleware/validateRequest");
 const {
   createBookingSchema,
+  guestCreateBookingSchema,
   confirmPaymentSchema,
   organizerBookingsSchema
 } = require("../validators/bookingValidator");
@@ -20,6 +21,22 @@ const {
 } = require("../validators/couponValidator");
 
 const router = express.Router();
+
+router.post(
+  "/guest/checkout",
+  validateRequest(guestCreateBookingSchema),
+  paymentController.createGuestBookingCheckout
+);
+router.post(
+  "/guest/payment-intent",
+  validateRequest(guestCreateBookingSchema),
+  paymentController.createGuestPaymentIntent
+);
+router.post(
+  "/guest/confirm-payment",
+  validateRequest(confirmPaymentSchema),
+  paymentController.confirmGuestPayment
+);
 
 router.post("/", authMiddleware, validateRequest(createBookingSchema), bookingController.createBooking);
 router.post(

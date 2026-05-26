@@ -1,9 +1,9 @@
 const asyncHandler = require("../utils/asyncHandler");
-const ApiError = require("../utils/ApiError");
 const { webhookSecret } = require("../config/stripe");
 const stripePaymentService = require("../services/stripePaymentService");
 const bookingService = require("../services/bookingService");
 const { getStripe } = require("../config/stripe");
+const { getValidatedBody } = require("../utils/validatedRequest");
 
 const createPaymentIntent = asyncHandler(async (req, res) => {
   const data = await stripePaymentService.createPaymentIntentForBooking({
@@ -41,6 +41,39 @@ const createBookingCheckout = asyncHandler(async (req, res) => {
   });
 });
 
+const createGuestBookingCheckout = asyncHandler(async (req, res) => {
+  const data = await bookingService.createGuestEventBooking({
+    payload: getValidatedBody(req)
+  });
+  res.status(201).json({
+    success: true,
+    message: "Guest booking created successfully",
+    data: { ...data, requiresPayment: false }
+  });
+});
+
+const createGuestPaymentIntent = asyncHandler(async (req, res) => {
+  const data = await stripePaymentService.createPaymentIntentForGuestBooking({
+    payload: getValidatedBody(req)
+  });
+  res.status(200).json({
+    success: true,
+    data
+  });
+});
+
+const confirmGuestPayment = asyncHandler(async (req, res) => {
+  const { payment_intent_id } = getValidatedBody(req);
+  const result = await stripePaymentService.confirmPaymentForGuest({
+    paymentIntentId: payment_intent_id
+  });
+  res.status(200).json({
+    success: true,
+    message: "Payment confirmed and booking saved",
+    data: result
+  });
+});
+
 const stripeWebhook = asyncHandler(async (req, res) => {
   const stripe = getStripe();
   if (!stripe || !webhookSecret) {
@@ -74,5 +107,8 @@ module.exports = {
   createPaymentIntent,
   confirmPayment,
   createBookingCheckout,
+  createGuestBookingCheckout,
+  createGuestPaymentIntent,
+  confirmGuestPayment,
   stripeWebhook
 };

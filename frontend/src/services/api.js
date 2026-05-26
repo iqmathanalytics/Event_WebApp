@@ -87,7 +87,8 @@ api.interceptors.response.use(
       requestUrl.includes("/auth/login") ||
       requestUrl.includes("/auth/register") ||
       requestUrl.includes("/auth/google") ||
-      requestUrl.includes("/auth/refresh-token");
+      requestUrl.includes("/auth/refresh-token") ||
+      requestUrl.includes("/bookings/guest");
 
     if (status === 401 && !isAuthRequest && originalRequest && !originalRequest.__isRetryRequest) {
       const storedRefreshToken = localStorage.getItem("refreshToken");

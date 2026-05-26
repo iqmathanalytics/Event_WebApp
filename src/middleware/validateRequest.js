@@ -9,8 +9,9 @@ function validateRequest(schema) {
     });
 
     if (!result.success) {
-      const details = result.error.errors.map((e) => ({
-        path: e.path.join("."),
+      const issues = result.error?.issues || result.error?.errors || [];
+      const details = issues.map((e) => ({
+        path: (e.path || []).join("."),
         message: e.message
       }));
       return next(new ApiError(400, "Validation failed", details));

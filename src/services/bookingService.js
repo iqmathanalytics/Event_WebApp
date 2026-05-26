@@ -22,6 +22,7 @@ const {
   buildBookingConfirmationEmail,
   ticketBlocksFromCart
 } = require("../utils/transactionalEmailTemplates");
+const { isExclusiveDealEvent } = require("../utils/exclusiveDealEvent");
 
 function amountPaidForExport(row) {
   if (row.amount_paid_cents != null && row.amount_paid_cents !== "") {
@@ -33,12 +34,13 @@ function amountPaidForExport(row) {
 function toCsv(rows) {
   const headers = [
     "Event",
+    "Guest",
     "User",
     "Email",
     "Phone",
     "Attendee Count",
-    "Selected Dates",
-    "Booking Date",
+    "Event Dates",
+    "Booked On",
     "Total Days",
     "Subtotal",
     "Discount",
@@ -61,7 +63,7 @@ function toCsv(rows) {
       row.phone || "",
       row.attendee_count || 0,
       selectedDates,
-      row.booking_date || "",
+      row.created_at ? String(row.created_at).slice(0, 10) : "",
       row.total_days || 0,
       row.subtotal_amount ?? row.total_amount ?? "",
       row.discount_amount ?? 0,
@@ -118,8 +120,15 @@ function parseTicketItemsJson(value) {
 
 function mapBookingRow(row) {
   const ticket_items = parseTicketItemsJson(row.ticket_items_json);
+  const isGuest =
+    row.is_guest_booking === 1 ||
+    row.is_guest_booking === true ||
+    String(row.is_guest_booking || "") === "1" ||
+    row.user_id == null;
   return {
     ...row,
+    is_guest_booking: isGuest ? 1 : 0,
+    guest_label: isGuest ? "Guest" : "Registered",
     selected_dates: parseSelectedDates(row.selected_dates_json),
     ticket_items: ticket_items.length
       ? ticket_items
@@ -136,13 +145,10 @@ function mapBookingRow(row) {
   };
 }
 
-/** Shared validation and pricing for bookings and Stripe checkout. */
-async function resolveEventBookingPricing({ userId, payload }) {
-  const event = await findEventById(payload.event_id);
+function assertPlatformEventForBooking(event) {
   if (!event || event.status !== "approved") {
     throw new ApiError(404, "Event not found");
   }
-
   const ticketSalesMode = event.ticket_sales_mode || "external";
   if (ticketSalesMode !== "platform") {
     throw new ApiError(
@@ -150,10 +156,39 @@ async function resolveEventBookingPricing({ userId, payload }) {
       "This event sells tickets through an external link. Use the organizer’s ticket page to reserve."
     );
   }
+}
 
-  const user = await findUserById(userId);
-  if (!user || !user.is_active) {
-    throw new ApiError(403, "Active user account required");
+function requireGuestContactFields(payload) {
+  const name = String(payload.name || "").trim();
+  const email = String(payload.email || "")
+    .trim()
+    .toLowerCase();
+  const phone = String(payload.phone || "").trim();
+  if (name.length < 2) {
+    throw new ApiError(400, "Full name is required for guest checkout.");
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiError(400, "A valid email address is required for guest checkout.");
+  }
+  if (phone.length < 8) {
+    throw new ApiError(400, "Phone number is required for guest checkout.");
+  }
+  return { name, email, phone };
+}
+
+async function resolveEventBookingPricingCore({ event, payload, userId, user, isGuest }) {
+  assertPlatformEventForBooking(event);
+
+  if (isGuest) {
+    if (isExclusiveDealEvent(event)) {
+      throw new ApiError(
+        403,
+        "Exclusive deal events require an account. Please sign in or register to book."
+      );
+    }
+    if (payload.coupon_hold_token) {
+      throw new ApiError(400, "Coupon codes are not available for guest checkout. Sign in to use a coupon.");
+    }
   }
 
   const availableDates = getEventAvailableDates(event);
@@ -190,7 +225,7 @@ async function resolveEventBookingPricing({ userId, payload }) {
   let totalAmount = subtotalAmount;
   let couponId = null;
   let couponCode = null;
-  const holdToken = payload.coupon_hold_token || null;
+  const holdToken = !isGuest ? payload.coupon_hold_token || null : null;
 
   if (holdToken) {
     const applied = await couponService.consumeHoldForBooking({
@@ -208,13 +243,22 @@ async function resolveEventBookingPricing({ userId, payload }) {
     selectedDates = applied.selectedDates;
   }
 
+  const contact = isGuest
+    ? requireGuestContactFields(payload)
+    : {
+        name: payload.name?.trim() || user.name,
+        email: payload.email?.trim()?.toLowerCase() || user.email,
+        phone: String(payload.phone || user.mobile_number || "").trim()
+      };
+
   return {
     event,
     user,
+    isGuest,
     organizerId: event.organizer_id,
-    userName: user.name,
-    userEmail: user.email,
-    userPhone: user.mobile_number || "",
+    userName: contact.name,
+    userEmail: contact.email,
+    userPhone: contact.phone,
     selectedDates,
     bookingDate,
     totalDays,
@@ -227,6 +271,28 @@ async function resolveEventBookingPricing({ userId, payload }) {
     couponCode,
     holdToken
   };
+}
+
+/** Shared validation and pricing for signed-in bookings and Stripe checkout. */
+async function resolveEventBookingPricing({ userId, payload }) {
+  const event = await findEventById(payload.event_id);
+  const user = await findUserById(userId);
+  if (!user || !user.is_active) {
+    throw new ApiError(403, "Active user account required");
+  }
+  return resolveEventBookingPricingCore({ event, payload, userId, user, isGuest: false });
+}
+
+/** Guest checkout — no account; exclusive deal events blocked. */
+async function resolveGuestEventBookingPricing({ payload }) {
+  const event = await findEventById(payload.event_id);
+  return resolveEventBookingPricingCore({
+    event,
+    payload,
+    userId: null,
+    user: null,
+    isGuest: true
+  });
 }
 
 async function dispatchBookingConfirmationEmail({ bookingId, payload, pricing, paymentStatus }) {
@@ -264,6 +330,7 @@ async function dispatchBookingConfirmationEmail({ bookingId, payload, pricing, p
 
 async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta }) {
   const user = pricing.user;
+  const isGuest = Boolean(pricing.isGuest);
   const holdToken = pricing.holdToken;
   const payment_status = paymentMeta?.payment_status || "paid";
   const conn = await pool.getConnection();
@@ -271,21 +338,20 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
   try {
     await conn.beginTransaction();
 
+    const phone = String(pricing.userPhone || payload.phone || "").trim();
+    if (phone.length < 8) {
+      throw new ApiError(400, "Phone number is required for booking.");
+    }
+
     const bookingId = await createBooking(
       {
         event_id: payload.event_id,
         organizer_id: pricing.organizerId,
-        user_id: userId,
-        name: payload.name?.trim() || user.name,
-        email: payload.email?.trim() || user.email,
-        phone: (() => {
-          const p = String(payload.phone || "").trim();
-          if (p.length < 8) {
-            const ApiError = require("../utils/ApiError");
-            throw new ApiError(400, "Phone number is required for booking.");
-          }
-          return p;
-        })(),
+        user_id: isGuest ? null : userId,
+        is_guest_booking: isGuest,
+        name: pricing.userName,
+        email: pricing.userEmail,
+        phone,
         attendee_count: pricing.attendeeCount,
         ticket_items_json: pricing.ticketCart?.length
           ? JSON.stringify(pricing.ticketCart)
@@ -308,7 +374,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       conn
     );
 
-    if (holdToken && pricing.couponId) {
+    if (holdToken && pricing.couponId && userId) {
       await couponService.finalizeCouponRedemption(
         { couponId: pricing.couponId, userId, bookingId, holdToken },
         conn
@@ -366,6 +432,28 @@ async function createEventBooking({ userId, payload }) {
   });
 }
 
+async function createGuestEventBooking({ payload }) {
+  const pricing = await resolveGuestEventBookingPricing({ payload });
+
+  if (requiresStripePayment(pricing.totalAmount)) {
+    throw new ApiError(
+      400,
+      "This booking requires card payment. Use the payment checkout flow."
+    );
+  }
+
+  return insertBookingFromPricing({
+    userId: null,
+    payload,
+    pricing,
+    paymentMeta: {
+      payment_status: "free",
+      amount_paid_cents: 0,
+      paid_at: new Date()
+    }
+  });
+}
+
 async function fetchOrganizerBookings({ organizerId, query }) {
   const rows = await listBookingsByOrganizer({
     organizerId,
@@ -408,8 +496,11 @@ async function fetchUserBookings({ userId }) {
 
 module.exports = {
   resolveEventBookingPricing,
+  resolveGuestEventBookingPricing,
   dispatchBookingConfirmationEmail,
   createEventBooking,
+  createGuestEventBooking,
+  insertBookingFromPricing,
   fetchOrganizerBookings,
   fetchAdminBookings,
   fetchUserBookings,

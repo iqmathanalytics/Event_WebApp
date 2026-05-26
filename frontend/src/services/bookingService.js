@@ -11,13 +11,28 @@ export async function createBookingCheckout(payload) {
   return response.data;
 }
 
+export async function createGuestBookingCheckout(payload) {
+  const response = await api.post("/bookings/guest/checkout", payload);
+  return response.data;
+}
+
 export async function createBookingPaymentIntent(payload) {
   const response = await api.post("/bookings/payment-intent", payload);
   return response.data;
 }
 
+export async function createGuestBookingPaymentIntent(payload) {
+  const response = await api.post("/bookings/guest/payment-intent", payload);
+  return response.data;
+}
+
 export async function confirmBookingPayment(payment_intent_id) {
   const response = await api.post("/bookings/confirm-payment", { payment_intent_id });
+  return response.data;
+}
+
+export async function confirmGuestBookingPayment(payment_intent_id) {
+  const response = await api.post("/bookings/guest/confirm-payment", { payment_intent_id });
   return response.data;
 }
 

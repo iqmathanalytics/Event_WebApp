@@ -24,7 +24,8 @@ async function createBooking(payload, conn) {
     stripe_charge_id,
     amount_paid_cents,
     currency,
-    paid_at
+    paid_at,
+    is_guest_booking
   } = payload;
 
   const subtotal = subtotal_amount != null ? subtotal_amount : total_amount;
@@ -34,12 +35,13 @@ async function createBooking(payload, conn) {
 
   const [result] = await runner.query(
     `INSERT INTO event_bookings
-      (event_id, organizer_id, user_id, name, email, phone, attendee_count, ticket_items_json, booking_date, selected_dates_json, total_days, total_amount, coupon_id, subtotal_amount, discount_amount, coupon_code, payment_status, stripe_payment_intent_id, stripe_charge_id, amount_paid_cents, currency, paid_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      (event_id, organizer_id, user_id, is_guest_booking, name, email, phone, attendee_count, ticket_items_json, booking_date, selected_dates_json, total_days, total_amount, coupon_id, subtotal_amount, discount_amount, coupon_code, payment_status, stripe_payment_intent_id, stripe_charge_id, amount_paid_cents, currency, paid_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
     [
       event_id,
       organizer_id,
-      user_id,
+      user_id ?? null,
+      is_guest_booking ? 1 : 0,
       name,
       email,
       phone,
@@ -94,6 +96,7 @@ async function listBookingsByOrganizer({ organizerId, eventId, date }) {
     `SELECT eb.id,
             eb.event_id,
             eb.user_id,
+            eb.is_guest_booking,
             eb.name,
             eb.email,
             eb.phone,
@@ -152,6 +155,7 @@ async function listBookingsForAdmin({ eventId, organizerId, cityId, date }) {
             eb.event_id,
             eb.organizer_id,
             eb.user_id,
+            eb.is_guest_booking,
             eb.name,
             eb.email,
             eb.phone,

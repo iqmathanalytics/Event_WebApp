@@ -46,6 +46,7 @@ import {
   fetchAdminEventInsights
 } from "../services/adminService";
 import OrganizerInsightsPanel from "../components/OrganizerInsightsPanel";
+import EventBookingsTable from "../components/EventBookingsTable";
 import AdminPlatformTicketRequestsPanel from "../components/AdminPlatformTicketRequestsPanel";
 import { downloadBlob } from "../utils/fileDownload";
 import { formatCurrency, formatDateUS } from "../utils/format";
@@ -290,6 +291,9 @@ function AdminDashboardPage() {
   const [adminMessage, setAdminMessage] = useState("");
   const [viewListing, setViewListing] = useState(null);
   const [viewListingType, setViewListingType] = useState("events");
+  const [viewEventTab, setViewEventTab] = useState("details");
+  const [viewEventBookings, setViewEventBookings] = useState([]);
+  const [loadingViewEventBookings, setLoadingViewEventBookings] = useState(false);
   const [bookingRows, setBookingRows] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [bookingFilters, setBookingFilters] = useState({
@@ -837,6 +841,8 @@ function AdminDashboardPage() {
 
   const handleView = async (item) => {
     setViewListingType(listingType);
+    setViewEventTab("details");
+    setViewEventBookings([]);
     const row = await fetchHydratedEventRow(item);
     setViewListing(row);
   };
@@ -936,7 +942,42 @@ function AdminDashboardPage() {
   const closeViewModal = () => {
     setViewListing(null);
     setViewListingType("events");
+    setViewEventTab("details");
+    setViewEventBookings([]);
+    setLoadingViewEventBookings(false);
   };
+
+  useEffect(() => {
+    if (
+      !viewListing ||
+      viewListingType !== "events" ||
+      viewEventTab !== "sales" ||
+      resolveEventTicketSalesMode(viewListing) !== "platform"
+    ) {
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingViewEventBookings(true);
+        const res = await fetchAdminBookings({ event_id: String(viewListing.id) });
+        if (!cancelled) {
+          setViewEventBookings(Array.isArray(res?.data) ? res.data : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setViewEventBookings([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingViewEventBookings(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewListing, viewListingType, viewEventTab]);
 
   const closeRejectModal = () => {
     setRejectListing(null);
@@ -2151,7 +2192,10 @@ function AdminDashboardPage() {
                           : "-"}
                       </p>
                       <p><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
-                      <p><span className="font-semibold">Booked:</span> {formatDateUS(item.booking_date)}</p>
+                      <p>
+                        <span className="font-semibold">Booked:</span>{" "}
+                        {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
+                      </p>
                       <div className="col-span-2 mt-1">
                         <BookingPaymentSummary booking={item} />
                       </div>
@@ -2194,12 +2238,12 @@ function AdminDashboardPage() {
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Attendee Count</th>
-                    <th className="px-4 py-3">Selected Dates</th>
+                    <th className="px-4 py-3">Event Dates</th>
                     <th className="px-4 py-3 text-right">Order Total</th>
                     <th className="px-4 py-3">Payment</th>
                     <th className="px-4 py-3 text-right">Charged</th>
                     <th className="px-4 py-3">Stripe</th>
-                    <th className="px-4 py-3">Booking Date</th>
+                    <th className="px-4 py-3">Booked</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2234,7 +2278,9 @@ function AdminDashboardPage() {
                           <AdminBookingPaymentStatusCell booking={item} />
                           <AdminBookingAmountPaidCell booking={item} />
                           <AdminBookingStripeRefCell booking={item} />
-                          <td className="px-4 py-3 text-slate-600">{formatDateUS(item.booking_date)}</td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
+                          </td>
                         </tr>
                       ))
                     : null}
@@ -3951,8 +3997,8 @@ function AdminDashboardPage() {
             }`}
           >
             <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4">
-              <div className="flex items-start justify-between">
-                <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
                   <h3 className="text-lg font-semibold text-slate-900">
                     {viewListingType === "events"
                       ? "View Event Submission"
@@ -3965,6 +4011,33 @@ function AdminDashboardPage() {
                   <p className="text-sm text-slate-500">
                     Validate details and take moderation action.
                   </p>
+                  {viewListingType === "events" &&
+                  resolveEventTicketSalesMode(viewListing) === "platform" ? (
+                    <div className="mt-3 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setViewEventTab("details")}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                          viewEventTab === "details"
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Submission details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewEventTab("sales")}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                          viewEventTab === "sales"
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Sales &amp; bookings
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <button type="button" onClick={closeViewModal} className="text-[11px] font-semibold text-slate-500">
                   Close
@@ -3973,6 +4046,27 @@ function AdminDashboardPage() {
             </div>
             <div className="hide-scrollbar flex-1 overflow-y-auto overscroll-contain px-4 py-3 lg:px-5 lg:py-4">
               {viewListingType === "events" ? (
+                resolveEventTicketSalesMode(viewListing) === "platform" && viewEventTab === "sales" ? (
+                <div className="space-y-6">
+                  <OrganizerInsightsPanel
+                    fixedEventId={String(viewListing.id)}
+                    embedded
+                    fetchEventInsightsFn={fetchAdminEventInsights}
+                  />
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold text-slate-900">Bookings</h4>
+                    <p className="mb-3 text-xs text-slate-500">
+                      Guest bookings are labeled for organizers and admins. Registered users show as Registered.
+                    </p>
+                    <EventBookingsTable
+                      rows={viewEventBookings}
+                      loading={loadingViewEventBookings}
+                      showEventColumn={false}
+                      emptyMessage="No bookings for this event yet."
+                    />
+                  </div>
+                </div>
+                ) : (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:gap-3">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Title</p>
@@ -4089,15 +4183,6 @@ function AdminDashboardPage() {
                       <p className="mt-2 text-sm font-medium text-amber-800">No ticket link on file.</p>
                     )}
                   </div>
-                  {resolveEventTicketSalesMode(viewListing) === "platform" ? (
-                    <div className="sm:col-span-2">
-                      <OrganizerInsightsPanel
-                        fixedEventId={String(viewListing.id)}
-                        embedded
-                        fetchEventInsightsFn={fetchAdminEventInsights}
-                      />
-                    </div>
-                  ) : null}
                   {hasDisplayValue(viewListing.image_url) ? (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cover image</p>
@@ -4126,6 +4211,7 @@ function AdminDashboardPage() {
                     </div>
                   ) : null}
                 </div>
+                )
               ) : viewListingType === "influencers" ? (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">

@@ -232,6 +232,9 @@ async function login({ email, password, portal }) {
 
 async function readGoogleIdentity(idToken) {
   const payload = await verifyGoogleIdToken(idToken);
+  if (!payload || typeof payload !== "object") {
+    throw new ApiError(401, "Invalid or expired Google sign-in. Please try again.");
+  }
   const email = payload.email;
   const emailVerified = payload.email_verified;
   const sub = payload.sub;

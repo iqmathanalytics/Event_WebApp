@@ -45,6 +45,8 @@ const FILES = [
   "event_coupons.sql",
   "event_booking_coupon_backfill.sql",
   "event_booking_stripe.sql",
+  "event_guest_bookings.sql",
+  "event_checkout_payments_guest.sql",
   "listing_public_slugs.sql",
   "event_total_seats.sql",
   "users_role_mobile_migration.sql",
