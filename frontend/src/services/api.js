@@ -5,12 +5,47 @@ const configuredBaseURL = (import.meta.env.VITE_API_BASE_URL || "").trim().repla
 const sameOriginProdBaseURL =
   typeof window !== "undefined"
     ? `${window.location.origin}/api`
-    : "https://api.bookmytickets.us/api";
+    : "https://www.bookmytickets.us/api";
 const baseURL = configuredBaseURL || (import.meta.env.PROD ? sameOriginProdBaseURL : localBaseURL);
+export const API_BASE_URL = baseURL;
+
 const api = axios.create({
   baseURL,
   timeout: 15000
 });
+
+/**
+ * POST that survives SPA navigation (fetch keepalive). Use for track-click / track-view.
+ */
+export function postKeepalive(path, data = {}) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${baseURL}${normalizedPath}`;
+  const headers = { "Content-Type": "application/json" };
+  const token = localStorage.getItem("accessToken");
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(data ?? {}),
+    keepalive: true
+  }).then(async (res) => {
+    let json = {};
+    try {
+      json = await res.json();
+    } catch {
+      json = {};
+    }
+    if (!res.ok) {
+      const err = new Error(json?.message || `Request failed (${res.status})`);
+      err.response = { status: res.status, data: json };
+      throw err;
+    }
+    return json;
+  });
+}
 const refreshClient = axios.create({
   baseURL,
   timeout: 15000

@@ -25,7 +25,7 @@ const { listMessagesPaginated, getAllMessagesForExport } = require("../models/co
 const {
   syncMailchimpSubscriber,
   isMailchimpConfigured,
-  sendSendGridEmail
+  sendTransactionalEmail
 } = require("../utils/emailIntegrations");
 const { buildApprovalEmail } = require("../utils/transactionalEmailTemplates");
 const {
@@ -35,6 +35,8 @@ const {
   purgeReadNotificationsOlderThan,
   deleteAdminNotificationById
 } = require("../models/adminModel");
+const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
+const { findEventById } = require("../models/eventModel");
 
 async function getModerationQueue() {
   const [rows] = await pool.query(
@@ -275,45 +277,74 @@ async function getApprovalEmailContext({ type, id }) {
   return null;
 }
 
-async function listListings({ type, status, city, category, date, month }) {
+async function listListings({ type, status, city, category, date, month, id }) {
   const table = resolveTable(type);
+  const listingId = id != null && String(id).trim() !== "" ? Number(id) : NaN;
+  const narrowById = Number.isFinite(listingId) && listingId > 0;
+
+  if (narrowById && table === "events") {
+    const ev = await findEventById(listingId);
+    if (!ev) {
+      return [];
+    }
+    const [[cityRows], [catRows]] = await Promise.all([
+      pool.query("SELECT name FROM cities WHERE id = ? LIMIT 1", [ev.city_id]),
+      pool.query("SELECT name FROM categories WHERE id = ? LIMIT 1", [ev.category_id])
+    ]);
+    return [
+      {
+        ...ev,
+        city_name: cityRows[0]?.name ?? null,
+        category_name: catRows[0]?.name ?? null
+      }
+    ];
+  }
+
   const { dateStart, dateEnd } = getDateRange(date || null);
   const { monthStart, monthEnd } = getMonthRange(month || null);
   const values = [];
   const conditions = [];
-  if (status) {
-    conditions.push("t.status = ?");
-    values.push(status);
+
+  if (narrowById) {
+    conditions.push("t.id = ?");
+    values.push(listingId);
+  } else {
+    if (status) {
+      conditions.push("t.status = ?");
+      values.push(status);
+    }
+    if (city) {
+      conditions.push("t.city_id = ?");
+      values.push(Number(city));
+    }
+    if (category) {
+      conditions.push("t.category_id = ?");
+      values.push(Number(category));
+    }
+    if (table === "events" && date) {
+      conditions.push("t.event_date = ?");
+      values.push(date);
+    } else if (table === "deals" && date) {
+      conditions.push("t.expiry_date = ?");
+      values.push(date);
+    } else if (dateStart && dateEnd) {
+      conditions.push("t.created_at >= ? AND t.created_at < ?");
+      values.push(dateStart, dateEnd);
+    }
+    if (table === "events" && monthStart && monthEnd) {
+      conditions.push("t.event_date >= ? AND t.event_date < ?");
+      values.push(monthStart, monthEnd);
+    } else if (table === "deals" && monthStart && monthEnd) {
+      conditions.push("t.expiry_date >= ? AND t.expiry_date < ?");
+      values.push(monthStart, monthEnd);
+    } else if (monthStart && monthEnd) {
+      conditions.push("t.created_at >= ? AND t.created_at < ?");
+      values.push(monthStart, monthEnd);
+    }
   }
-  if (city) {
-    conditions.push("t.city_id = ?");
-    values.push(Number(city));
-  }
-  if (category) {
-    conditions.push("t.category_id = ?");
-    values.push(Number(category));
-  }
-  if (table === "events" && date) {
-    conditions.push("t.event_date = ?");
-    values.push(date);
-  } else if (table === "deals" && date) {
-    conditions.push("t.expiry_date = ?");
-    values.push(date);
-  } else if (dateStart && dateEnd) {
-    conditions.push("t.created_at >= ? AND t.created_at < ?");
-    values.push(dateStart, dateEnd);
-  }
-  if (table === "events" && monthStart && monthEnd) {
-    conditions.push("t.event_date >= ? AND t.event_date < ?");
-    values.push(monthStart, monthEnd);
-  } else if (table === "deals" && monthStart && monthEnd) {
-    conditions.push("t.expiry_date >= ? AND t.expiry_date < ?");
-    values.push(monthStart, monthEnd);
-  } else if (monthStart && monthEnd) {
-    conditions.push("t.created_at >= ? AND t.created_at < ?");
-    values.push(monthStart, monthEnd);
-  }
+
   const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const limit = narrowById ? 1 : 500;
 
   const [rows] = await pool.query(
     `SELECT t.*, c.name AS city_name, cat.name AS category_name
@@ -322,10 +353,48 @@ async function listListings({ type, status, city, category, date, month }) {
      LEFT JOIN categories cat ON cat.id = t.category_id
      ${whereClause}
      ORDER BY t.created_at DESC
-     LIMIT 500`,
+     LIMIT ${limit}`,
     values
   );
+  if (table === "events") {
+    return rows.map((row) => ({
+      ...row,
+      ticket_sales_mode: normalizeTicketSalesMode(readTicketSalesModeRaw(row))
+    }));
+  }
   return rows;
+}
+
+async function getListingById({ type, id }) {
+  const table = resolveTable(type);
+  if (table === "events") {
+    const ev = await findEventById(id);
+    if (!ev) {
+      return null;
+    }
+    const { attachEventSeatAvailability } = require("../utils/eventSeats");
+    const withSeats = await attachEventSeatAvailability(ev);
+    const [[cityRows], [catRows]] = await Promise.all([
+      pool.query("SELECT name FROM cities WHERE id = ? LIMIT 1", [ev.city_id]),
+      pool.query("SELECT name FROM categories WHERE id = ? LIMIT 1", [ev.category_id])
+    ]);
+    return {
+      ...withSeats,
+      city_name: cityRows[0]?.name ?? null,
+      category_name: catRows[0]?.name ?? null
+    };
+  }
+
+  const [rows] = await pool.query(
+    `SELECT t.*, c.name AS city_name, cat.name AS category_name
+     FROM ${table} t
+     LEFT JOIN cities c ON c.id = t.city_id
+     LEFT JOIN categories cat ON cat.id = t.category_id
+     WHERE t.id = ?
+     LIMIT 1`,
+    [id]
+  );
+  return rows[0] || null;
 }
 
 async function updateListingStatus({ type, id, status, note, adminId }) {
@@ -348,7 +417,7 @@ async function updateListingStatus({ type, id, status, note, adminId }) {
           details: emailContext.details,
           reviewNote: note || ""
         });
-        await sendSendGridEmail({
+        await sendTransactionalEmail({
           to: emailContext.recipientEmail,
           subject: emailPayload.subject,
           text: emailPayload.text,
@@ -386,7 +455,7 @@ async function updateListingStatus({ type, id, status, note, adminId }) {
         details: emailContext.details,
         reviewNote: note || ""
       });
-      await sendSendGridEmail({
+      await sendTransactionalEmail({
         to: emailContext.recipientEmail,
         subject: emailPayload.subject,
         text: emailPayload.text,
@@ -416,9 +485,12 @@ function resolveEditableColumns(type) {
       "venue_address",
       "google_maps_link",
       "ticket_link",
+      "ticket_sales_mode",
+      "total_seats",
       "image_url",
       "gallery_image_urls",
       "duration_hours",
+      "duration_minutes",
       "age_limit",
       "languages",
       "genres",
@@ -536,6 +608,19 @@ async function editListing({ type, id, payload }) {
           : [];
         return [key, urls.length ? JSON.stringify(urls) : null];
       }
+      if (key === "ticket_sales_mode") {
+        return [key, normalizeTicketSalesMode(value)];
+      }
+      if (key === "total_seats") {
+        const { parseTotalSeats } = require("../utils/eventSeats");
+        const mode = normalizedPayload.ticket_sales_mode
+          ? normalizeTicketSalesMode(normalizedPayload.ticket_sales_mode)
+          : null;
+        if (mode === "external") {
+          return [key, null];
+        }
+        return [key, parseTotalSeats(value)];
+      }
     }
     return [key, value];
   });
@@ -628,7 +713,8 @@ async function updateTeamUserCapabilities({ userId, capabilities }) {
     id: userId,
     can_post_events: capabilities.can_post_events,
     can_create_influencer_profile: capabilities.can_create_influencer_profile,
-    can_post_deals: capabilities.can_post_deals
+    can_post_deals: capabilities.can_post_deals,
+    can_sell_platform_tickets: capabilities.can_sell_platform_tickets
   });
   if (!updated) {
     throw new ApiError(404, "User not found");
@@ -853,6 +939,7 @@ module.exports = {
   getModerationQueue,
   getAnalytics,
   listListings,
+  getListingById,
   updateListingStatus,
   editListing,
   deleteListing,

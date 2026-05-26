@@ -11,6 +11,23 @@ import "swiper/css/effect-fade";
 const AUTOPLAY_MS = 4200;
 const FADE_MS = 850;
 
+const bannerImgClass =
+  "h-full w-full object-fill object-center motion-safe:transition-transform motion-safe:duration-[9000ms] motion-safe:ease-out motion-safe:group-hover/hero:scale-[1.03]";
+
+function BannerImageFrame({ src, alt, guestLocked, eager }) {
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-slate-900">
+      <img
+        src={src}
+        alt={alt}
+        className={`${bannerImgClass} ${guestLocked ? "blur-sm" : ""}`}
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+      />
+    </div>
+  );
+}
+
 /**
  * Hero slideshow: automatic cross-fade, fraction counter, soft edge prev/next, respects reduced motion.
  */
@@ -21,7 +38,6 @@ export default function EventDetailBanner({ event, title, className = "", guestL
   const multi = urls.length > 1;
   const hasImage = urls.length > 0;
 
-  // Mobile / tablet: ~⅓ viewport (deal-style proportion); desktop: full immersive hero.
   const heroH =
     "h-[33vh] min-h-[168px] max-h-[400px] sm:h-[42vh] sm:max-h-[480px] sm:min-h-[220px] md:h-[50vh] md:max-h-[560px] lg:h-[75vh] lg:max-h-[920px] lg:min-h-[280px]";
 
@@ -34,7 +50,7 @@ export default function EventDetailBanner({ event, title, className = "", guestL
 
   const autoplayActive = multi && !reduceMotion;
 
-  const baseSection = `relative w-full overflow-hidden rounded-2xl bg-slate-900 shadow-xl ring-1 ring-slate-900/10 lg:rounded-3xl ${heroH} ${className}`;
+  const baseSection = `relative w-full overflow-hidden rounded-2xl bg-slate-950 shadow-xl ring-1 ring-slate-900/10 lg:rounded-3xl ${heroH} ${className}`;
 
   const railBtn =
     "group absolute inset-y-0 z-20 flex items-center w-[4.25rem] touch-manipulation border-0 bg-transparent p-0 outline-none sm:w-28 " +
@@ -89,23 +105,12 @@ export default function EventDetailBanner({ event, title, className = "", guestL
           >
             {urls.map((src, idx) => (
               <SwiperSlide key={`${src}-${idx}`} className="!h-full">
-                <div className="relative h-full w-full">
-                  <img
-                    src={src}
-                    alt={idx === 0 ? `${title} — cover` : `${title} — photo ${idx + 1}`}
-                    className={`h-full w-full object-cover object-center motion-safe:transition-transform motion-safe:duration-[9000ms] motion-safe:ease-out motion-safe:group-hover/hero:scale-[1.025] ${guestLocked ? "blur-sm" : ""}`}
-                    loading={idx === 0 ? "eager" : "lazy"}
-                    decoding="async"
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/60 via-slate-950/10 to-slate-950/25"
-                    aria-hidden
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/55 to-transparent sm:h-28"
-                    aria-hidden
-                  />
-                </div>
+                <BannerImageFrame
+                  src={src}
+                  alt={idx === 0 ? `${title} — cover` : `${title} — photo ${idx + 1}`}
+                  guestLocked={guestLocked}
+                  eager={idx === 0}
+                />
               </SwiperSlide>
             ))}
           </Swiper>
@@ -136,19 +141,7 @@ export default function EventDetailBanner({ event, title, className = "", guestL
           </button>
         </>
       ) : (
-        <div className="relative h-full w-full overflow-hidden">
-          <img
-            src={urls[0]}
-            alt={title}
-            className={`h-full w-full object-cover object-center ${guestLocked ? "blur-sm" : ""}`}
-            loading="eager"
-            decoding="async"
-          />
-          <div
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-slate-950/20"
-            aria-hidden
-          />
-        </div>
+        <BannerImageFrame src={urls[0]} alt={title} guestLocked={guestLocked} eager />
       )}
     </section>
   );

@@ -35,7 +35,7 @@ const editOwnInfluencerSubmission = asyncHandler(async (req, res) => {
 });
 
 const fetchInfluencerById = asyncHandler(async (req, res) => {
-  const influencer = await influencerService.fetchInfluencerById(Number(req.params.id));
+  const influencer = await influencerService.fetchInfluencerById(req.params.id);
   res.status(200).json({
     success: true,
     data: influencer
@@ -43,17 +43,17 @@ const fetchInfluencerById = asyncHandler(async (req, res) => {
 });
 
 const trackInfluencerView = asyncHandler(async (req, res) => {
-  await influencerService.trackInfluencerView(Number(req.params.id));
+  await influencerService.trackInfluencerView(req.params.id);
   res.status(200).json({ success: true });
 });
 
 const trackInfluencerClick = asyncHandler(async (req, res) => {
-  await influencerService.trackInfluencerClick(Number(req.params.id));
+  await influencerService.trackInfluencerClick(req.params.id);
   res.status(200).json({ success: true });
 });
 
 const fetchInfluencerGalleryById = asyncHandler(async (req, res) => {
-  const rows = await influencerService.fetchInfluencerGalleryById(Number(req.params.id));
+  const rows = await influencerService.fetchInfluencerGalleryById(req.params.id);
   res.status(200).json({
     success: true,
     data: rows

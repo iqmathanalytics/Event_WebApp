@@ -9,7 +9,7 @@ const {
   findAnyInfluencerByCreator,
   findInfluencerById,
   updateInfluencerByCreator,
-  fetchInfluencerDetailsById,
+  fetchInfluencerDetailsBySlugOrId,
   incrementInfluencerView,
   incrementInfluencerClick,
   fetchInfluencerGallery,
@@ -507,8 +507,8 @@ async function editOwnInfluencerSubmission(id, payload, userId) {
   });
 }
 
-async function fetchInfluencerById(id) {
-  const row = await fetchInfluencerDetailsById(id);
+async function fetchInfluencerById(slugOrId) {
+  const row = await fetchInfluencerDetailsBySlugOrId(slugOrId);
   if (!row) {
     throw new ApiError(404, "Influencer not found");
   }
@@ -517,7 +517,16 @@ async function fetchInfluencerById(id) {
   return attachDynamicInfluencerTags(row);
 }
 
-async function trackInfluencerView(id) {
+function resolveInfluencerIdFromParam(param) {
+  const { id } = require("../utils/listingSlug").resolveListingIdFromParam(param);
+  if (!id) {
+    throw new ApiError(404, "Influencer not found");
+  }
+  return id;
+}
+
+async function trackInfluencerView(slugOrId) {
+  const id = resolveInfluencerIdFromParam(slugOrId);
   const ok = await incrementInfluencerView(id);
   if (!ok) {
     throw new ApiError(404, "Influencer not found");
@@ -525,7 +534,8 @@ async function trackInfluencerView(id) {
   return { success: true };
 }
 
-async function trackInfluencerClick(id) {
+async function trackInfluencerClick(slugOrId) {
+  const id = resolveInfluencerIdFromParam(slugOrId);
   const ok = await incrementInfluencerClick(id);
   if (!ok) {
     throw new ApiError(404, "Influencer not found");
@@ -548,7 +558,8 @@ async function uploadInfluencerGallery({ influencerId, imageUrls, userId }) {
   return { success: true };
 }
 
-async function fetchInfluencerGalleryById(influencerId) {
+async function fetchInfluencerGalleryById(slugOrId) {
+  const influencerId = resolveInfluencerIdFromParam(slugOrId);
   return fetchInfluencerGallery(influencerId);
 }
 

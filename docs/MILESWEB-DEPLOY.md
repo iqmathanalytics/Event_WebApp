@@ -13,33 +13,48 @@ The API listens on a **port** (e.g. `5000`). MilesWeb’s **Node.js app** connec
 
 ## 0. Before you start
 
-- **MySQL / TiDB** database already created in MilesWeb (or external), with host, port, user, password, database name.
+- **MySQL** database in MilesWeb **mPanel** (Remote MySQL / phpMyAdmin), with host, port, user, password, database name.
 - **Two DNS names** (examples):
   - `bookmytickets.us` → website (static files).
   - `api.bookmytickets.us` → Node API (or use only main domain + `/api` proxy — see §6).
 - Repo on your PC: `git clone` … or upload a zip of the project.
 
+### Quick prep on your PC
+
+```bash
+cp .env.production.example .env          # edit with production secrets
+cp frontend/.env.production.example frontend/.env   # set VITE_API_BASE_URL
+npm install
+npm run prepare:deploy    # verifies .env + prints checklist
+npm run db:migrate        # against production DB (remote access on)
+npm run build:frontend    # creates frontend/dist/
+```
+
+See also **[PRODUCTION-CHECKLIST.md](./PRODUCTION-CHECKLIST.md)**.
+
 ---
 
-## 1. Database
+## 1. Database (TiDB Cloud — not MilesWeb)
 
-1. In MilesWeb **phpMyAdmin** or **Remote MySQL**, create a database and user; note **host** (often not `localhost` on shared hosting — use the host MilesWeb gives you).
-2. From your PC (with Node installed), copy `.env.example` → `.env` in the **repo root** and fill **all required** DB + JWT fields (see `.env.example`).
-3. Run migrations **against production DB** (one-time and after schema updates):
+**MilesWeb only hosts the Node API + static frontend.** The database stays on **TiDB Cloud**.
+
+1. In `.env`, set **`PRODUCTION_DB_*`** to your production TiDB cluster (see `.env.example`).
+2. From your PC:
 
    ```bash
-   cd /path/to/US-Event-Website
    npm install
-   npm run db:migrate
+   npm run db:migrate:production
    ```
 
-   If this is a brand-new empty DB, use bootstrap once if your team uses it:
+   Optional slug backfill:
 
    ```bash
-   npm run db:migrate:fresh
+   npm run db:migrate:production:full
    ```
 
-   (Confirm with your team — `fresh` can be destructive.)
+3. On the **MilesWeb Node app**, set **`DB_*`** to the **same production TiDB** values (not localhost MySQL).
+
+Local dev keeps **`DB_*`** pointed at your isolated test cluster; production migrations use **`PRODUCTION_DB_*`** only.
 
 ---
 
@@ -104,7 +119,7 @@ The frontend is **not** Node in production — it is **static files** after buil
 
 ### 3.1 Build on your PC (recommended)
 
-1. Copy `frontend/.env.example` → `frontend/.env`.
+1. Copy `frontend/.env.production.example` → `frontend/.env`.
 
 2. Set **production API base URL** (must match how users reach the API in the browser):
 
@@ -126,24 +141,13 @@ The frontend is **not** Node in production — it is **static files** after buil
    ```
 
 5. Upload **everything inside** `frontend/dist/` to the **document root** of `bookmytickets.us` (often `public_html` for the main domain).  
-   - Include hidden files if any (e.g. `.htaccess` if you add one for SPA routing below).
+   - **Include `.htaccess`** — it is copied from `frontend/public/.htaccess` when you run `npm run build:frontend`.
 
 ### 3.2 SPA routing (React Router)
 
-For direct URLs like `/events/123` to work on refresh, Apache must **fallback to `index.html`**. In `public_html`, add or merge an **`.htaccess`** (if MilesWeb allows):
+The repo includes `frontend/public/.htaccess` (SPA fallback to `index.html`). It is included in `dist/` after build.
 
-```apache
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
-</IfModule>
-```
-
-If the site shows **blank** or **404 on refresh**, this rule is usually missing.
+If the site shows **blank** or **404 on refresh**, confirm `.htaccess` was uploaded and **AllowOverride** is enabled on MilesWeb Apache.
 
 ---
 

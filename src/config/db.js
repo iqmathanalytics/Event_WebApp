@@ -11,7 +11,12 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  ssl: db.ssl ? { minVersion: "TLSv1.2", rejectUnauthorized: true } : undefined
+  ssl: db.ssl
+    ? {
+        minVersion: "TLSv1.2",
+        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false"
+      }
+    : undefined
 });
 
 async function testConnection() {

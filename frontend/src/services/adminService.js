@@ -10,6 +10,33 @@ export async function fetchAdminListings(params = {}) {
   return response.data;
 }
 
+/**
+ * Load one listing row for admin modals. Uses GET /admin/listings?type=&id= so it works
+ * on hosts that have not deployed GET /admin/listings/:type/:id yet.
+ */
+export async function fetchAdminListingById(type, id) {
+  const want = String(id);
+  try {
+    const byId = await api.get(`/admin/listings/${type}/${want}`);
+    const row = byId.data?.data;
+    if (row != null && String(row.id) === want) {
+      return { success: byId.data?.success !== false, data: row };
+    }
+  } catch (err) {
+    if (err?.response?.status !== 404) {
+      /* try list fallback below */
+    }
+  }
+  const response = await api.get("/admin/listings", {
+    params: { type, id: want }
+  });
+  const body = response.data;
+  const raw = body?.data;
+  const rows = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? [raw] : [];
+  const row = rows.find((r) => r != null && String(r.id) === want) ?? null;
+  return { success: body?.success !== false, data: row };
+}
+
 export async function updateAdminListingStatus({ type, id, status, note }) {
   const response = await api.patch(`/admin/listings/${type}/${id}/status`, {
     status,
@@ -62,6 +89,15 @@ export async function deleteAdminUser(id) {
 
 export async function updateTeamUserCapabilities(id, payload) {
   const response = await api.patch(`/admin/team/users/${id}/capabilities`, payload);
+  return response.data;
+}
+
+export async function fetchAdminEventInsights(eventId, { hourlyDate } = {}) {
+  const params = {};
+  if (hourlyDate) {
+    params.hourly_date = hourlyDate;
+  }
+  const response = await api.get(`/admin/events/${eventId}/insights`, { params });
   return response.data;
 }
 

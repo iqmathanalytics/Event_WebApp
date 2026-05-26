@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { FiInfo } from "react-icons/fi";
 import { categories } from "../utils/filterOptions";
 import CloudinaryImageInput from "./CloudinaryImageInput";
+import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
 
 export const emptyDealSubmitForm = {
   title: "",
@@ -176,7 +177,11 @@ export default function DealSubmissionModal({
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                 />
               </FormField>
-              <FormField label="Deal image" hint="Upload a high-quality image to improve clicks." className="sm:col-span-2">
+              <FormField
+                label="Deal image"
+                hint={`Upload a high-quality banner. ${LISTING_BANNER_IMAGE_HINT}`}
+                className="sm:col-span-2"
+              >
                 <CloudinaryImageInput
                   value={form.image_url}
                   onChange={(url) => setForm((p) => ({ ...p, image_url: url }))}

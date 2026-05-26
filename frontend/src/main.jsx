@@ -1,4 +1,5 @@
 import "./utils/homeSplashPolicy";
+import { initGoogleAnalytics } from "./utils/googleAnalytics";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -8,6 +9,8 @@ import "./index.css";
 import { AuthProvider } from "./context/AuthContext";
 import { CityFilterProvider } from "./context/CityFilterContext";
 import { RouteContentReadyProvider } from "./context/RouteContentReadyContext";
+
+initGoogleAnalytics();
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || "";
 

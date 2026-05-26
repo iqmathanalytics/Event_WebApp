@@ -82,6 +82,16 @@ src/
 3. Start dev server:
    - `npm run dev`
 
+## Deploy to MilesWeb (mPanel) — production
+
+Primary hosting guide for **bookmytickets.us**:
+
+1. **[docs/MILESWEB-DEPLOY.md](./docs/MILESWEB-DEPLOY.md)** — step-by-step (API + static frontend)
+2. **[docs/PRODUCTION-CHECKLIST.md](./docs/PRODUCTION-CHECKLIST.md)** — go-live checklist
+3. On your PC: `npm run prepare:deploy` then `npm run build:frontend`
+
+Use **`.env.production.example`** (API) and **`frontend/.env.production.example`** (build-time).
+
 ## Deploy to Render (backend API)
 
 The API is a **Node web service** on [Render](https://render.com). Repo: [Event_WebApp](https://github.com/iqmathanalytics/Event_WebApp).

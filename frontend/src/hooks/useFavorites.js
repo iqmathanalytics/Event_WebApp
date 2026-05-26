@@ -41,7 +41,10 @@ function useFavorites() {
   }, [isAuthenticated]);
 
   const isFavorite = useCallback(
-    (listingType, listingId) => favoriteKeys.has(makeFavoriteKey(listingType, listingId)),
+    (listingType, listingId) =>
+      favoriteKeys.has(
+        makeFavoriteKey(String(listingType || "").toLowerCase(), Number(listingId))
+      ),
     [favoriteKeys]
   );
 
@@ -51,24 +54,33 @@ function useFavorites() {
         redirectToAuthForFavorites();
         return { requiresAuth: true };
       }
+      const normalizedType = String(listingType || "").toLowerCase();
+      const normalizedId = Number(listingId);
+      if (!normalizedType || !Number.isFinite(normalizedId) || normalizedId <= 0) {
+        return { requiresAuth: false };
+      }
       try {
-        const key = makeFavoriteKey(listingType, listingId);
+        const key = makeFavoriteKey(normalizedType, normalizedId);
         const exists = favoriteKeys.has(key);
 
         if (exists) {
           await deleteFavorite({
-            listing_type: listingType,
-            listing_id: listingId
+            listing_type: normalizedType,
+            listing_id: normalizedId
           });
           setFavorites((prev) =>
             prev.filter(
-              (item) => !(item.listing_type === listingType && Number(item.listing_id) === Number(listingId))
+              (item) =>
+                !(
+                  String(item.listing_type).toLowerCase() === normalizedType &&
+                  Number(item.listing_id) === normalizedId
+                )
             )
           );
         } else {
           await createFavorite({
-            listing_type: listingType,
-            listing_id: listingId
+            listing_type: normalizedType,
+            listing_id: normalizedId
           });
           await loadFavorites();
         }

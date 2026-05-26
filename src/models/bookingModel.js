@@ -1,6 +1,7 @@
 const { pool } = require("../config/db");
 
-async function createBooking(payload) {
+async function createBooking(payload, conn) {
+  const runner = conn || pool;
   const {
     event_id,
     organizer_id,
@@ -9,16 +10,32 @@ async function createBooking(payload) {
     email,
     phone,
     attendee_count,
+    ticket_items_json,
     booking_date,
     selected_dates_json,
     total_days,
-    total_amount
+    total_amount,
+    coupon_id,
+    subtotal_amount,
+    discount_amount,
+    coupon_code,
+    payment_status,
+    stripe_payment_intent_id,
+    stripe_charge_id,
+    amount_paid_cents,
+    currency,
+    paid_at
   } = payload;
 
-  const [result] = await pool.query(
+  const subtotal = subtotal_amount != null ? subtotal_amount : total_amount;
+  const discount = discount_amount != null ? discount_amount : 0;
+  const payStatus = payment_status || "paid";
+  const paidAt = paid_at || (payStatus === "paid" || payStatus === "free" ? new Date() : null);
+
+  const [result] = await runner.query(
     `INSERT INTO event_bookings
-      (event_id, organizer_id, user_id, name, email, phone, attendee_count, booking_date, selected_dates_json, total_days, total_amount, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      (event_id, organizer_id, user_id, name, email, phone, attendee_count, ticket_items_json, booking_date, selected_dates_json, total_days, total_amount, coupon_id, subtotal_amount, discount_amount, coupon_code, payment_status, stripe_payment_intent_id, stripe_charge_id, amount_paid_cents, currency, paid_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
     [
       event_id,
       organizer_id,
@@ -27,14 +44,37 @@ async function createBooking(payload) {
       email,
       phone,
       attendee_count,
+      ticket_items_json || null,
       booking_date,
       selected_dates_json,
       total_days,
-      total_amount
+      total_amount,
+      coupon_id || null,
+      subtotal,
+      discount,
+      coupon_code || null,
+      payStatus,
+      stripe_payment_intent_id || null,
+      stripe_charge_id || null,
+      amount_paid_cents ?? null,
+      currency || "usd",
+      paidAt
     ]
   );
 
   return result.insertId;
+}
+
+async function findBookingByPaymentIntentId(paymentIntentId, conn) {
+  const runner = conn || pool;
+  const [rows] = await runner.query(
+    `SELECT id, payment_status, stripe_payment_intent_id, total_amount, amount_paid_cents
+     FROM event_bookings
+     WHERE stripe_payment_intent_id = ?
+     LIMIT 1`,
+    [paymentIntentId]
+  );
+  return rows[0] || null;
 }
 
 async function listBookingsByOrganizer({ organizerId, eventId, date }) {
@@ -62,6 +102,15 @@ async function listBookingsByOrganizer({ organizerId, eventId, date }) {
             eb.selected_dates_json,
             eb.total_days,
             eb.total_amount,
+            eb.subtotal_amount,
+            eb.discount_amount,
+            eb.coupon_code,
+            eb.payment_status,
+            eb.amount_paid_cents,
+            eb.currency,
+            eb.paid_at,
+            eb.stripe_payment_intent_id,
+            eb.stripe_charge_id,
             eb.created_at,
             e.title AS event_title,
             e.city_id,
@@ -111,6 +160,15 @@ async function listBookingsForAdmin({ eventId, organizerId, cityId, date }) {
             eb.selected_dates_json,
             eb.total_days,
             eb.total_amount,
+            eb.subtotal_amount,
+            eb.discount_amount,
+            eb.coupon_code,
+            eb.payment_status,
+            eb.amount_paid_cents,
+            eb.currency,
+            eb.paid_at,
+            eb.stripe_payment_intent_id,
+            eb.stripe_charge_id,
             eb.created_at,
             e.title AS event_title,
             e.city_id,
@@ -133,6 +191,7 @@ async function listBookingsByUser({ userId }) {
     `SELECT eb.id AS booking_id,
             eb.event_id,
             e.title AS event_title,
+            e.public_slug AS event_public_slug,
             e.image_url AS event_image,
             e.event_date,
             e.event_time,
@@ -141,10 +200,17 @@ async function listBookingsByUser({ userId }) {
             c.name AS city,
             e.price,
             eb.attendee_count,
+            eb.ticket_items_json,
             eb.booking_date,
             eb.selected_dates_json,
             eb.total_days,
             eb.total_amount,
+            eb.subtotal_amount,
+            eb.discount_amount,
+            eb.coupon_code,
+            eb.payment_status,
+            eb.amount_paid_cents,
+            eb.paid_at,
             org.name AS organizer_name,
             e.google_maps_link
      FROM event_bookings eb
@@ -158,9 +224,43 @@ async function listBookingsByUser({ userId }) {
   return rows;
 }
 
+/**
+ * Seats counted against capacity: confirmed bookings + active coupon holds.
+ */
+async function countReservedSeatsForEvent(eventId, options = {}) {
+  const { excludeHoldToken } = options;
+  const [bookingRows] = await pool.query(
+    `SELECT COALESCE(SUM(attendee_count), 0) AS seats
+     FROM event_bookings
+     WHERE event_id = ?
+       AND payment_status IN ('paid', 'free', 'pending')`,
+    [eventId]
+  );
+  let heldSeats = 0;
+  try {
+    const holdParams = [eventId];
+    let holdSql = `SELECT COALESCE(SUM(attendee_count), 0) AS seats
+       FROM event_coupon_holds
+       WHERE event_id = ? AND expires_at >= NOW()`;
+    if (excludeHoldToken) {
+      holdSql += " AND hold_token <> ?";
+      holdParams.push(excludeHoldToken);
+    }
+    const [holdRows] = await pool.query(holdSql, holdParams);
+    heldSeats = Number(holdRows[0]?.seats || 0);
+  } catch (err) {
+    if (err?.code !== "ER_NO_SUCH_TABLE") {
+      throw err;
+    }
+  }
+  return Number(bookingRows[0]?.seats || 0) + heldSeats;
+}
+
 module.exports = {
   createBooking,
+  findBookingByPaymentIntentId,
   listBookingsByOrganizer,
   listBookingsForAdmin,
-  listBookingsByUser
+  listBookingsByUser,
+  countReservedSeatsForEvent
 };

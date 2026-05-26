@@ -8,6 +8,28 @@ const highlightsSchema = z
   .optional();
 const dateArraySchema = z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(366).optional();
 const galleryImageUrlsSchema = z.array(z.string().url().max(1000)).max(12).optional();
+const ticketSalesModeEnum = z.enum(["external", "platform"]);
+const { coerceTicketSalesModeBodyInput } = require("../utils/eventTicketSalesMode");
+
+const ticketLevelSchema = z.object({
+  id: z.string().min(1).max(80).optional(),
+  name: z.string().min(1).max(120),
+  description: z.string().max(2000).optional().default(""),
+  price: z.coerce.number().min(0),
+  sort_order: z.coerce.number().int().min(0).max(99).optional()
+});
+
+const ticketLevelsField = z
+  .union([z.array(ticketLevelSchema).max(12), z.string().max(50000)])
+  .optional();
+
+/** JSON often sends `null`; coerce so older Zod / strict string schemas still accept it. */
+function optionalTicketLinkUrl(maxLen) {
+  return z.preprocess(
+    (v) => (v === null || v === "" ? undefined : v),
+    z.string().url().max(maxLen).optional()
+  );
+}
 
 const submitEventBodySchema = z
   .object({
@@ -25,18 +47,24 @@ const submitEventBodySchema = z
     google_maps_link: z.string().url().max(1000).optional(),
     city_id: z.number().int().positive(),
     category_id: z.number().int().positive(),
-    ticket_link: z.string().url().optional(),
+    /** Required on create so we never infer "external" from a stale ticket_link when mode was omitted. */
+    ticket_sales_mode: z.preprocess(coerceTicketSalesModeBodyInput, ticketSalesModeEnum),
+    total_seats: z.coerce.number().int().min(1).max(50000).optional(),
+    ticket_link: optionalTicketLinkUrl(1000),
     image_url: z.string().url().optional(),
     gallery_image_urls: galleryImageUrlsSchema,
     price: z.number().min(0).optional(),
     price_per_day: z.number().min(0).optional(),
-    duration_hours: z.number().int().min(1).max(168).optional(),
+    duration_hours: z.number().int().min(0).max(168).optional(),
+    duration_minutes: z.number().int().min(0).max(59).optional(),
     age_limit: ageLimitEnum.optional(),
     languages: z.string().max(255).optional(),
     genres: z.string().max(255).optional(),
     event_highlights: highlightsSchema,
     is_yay_deal_event: z.boolean().optional(),
-    deal_event_discount_code: z.string().max(80).optional()
+    deal_event_discount_code: z.string().max(80).optional(),
+    ticket_levels: ticketLevelsField,
+    ticket_levels_json: ticketLevelsField
   })
   .superRefine((data, ctx) => {
     const scheduleType = data.schedule_type || "single";
@@ -48,9 +76,7 @@ const submitEventBodySchema = z
           message: "At least one event date is required for multiple-date events"
         });
       }
-      return;
-    }
-    if (scheduleType === "range") {
+    } else if (scheduleType === "range") {
       if (!data.event_start_date || !data.event_end_date) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -58,14 +84,34 @@ const submitEventBodySchema = z
           message: "Start and end dates are required for range events"
         });
       }
-      return;
-    }
-    if (!data.event_date) {
+    } else if (!data.event_date) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["event_date"],
         message: "Event date is required"
       });
+    }
+
+    const ticketMode = data.ticket_sales_mode;
+    if (ticketMode === "external") {
+      const link = data.ticket_link != null ? String(data.ticket_link).trim() : "";
+      if (!link) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticket_link"],
+          message: "Ticket link is required for external ticketing"
+        });
+      }
+    }
+    if (ticketMode === "platform") {
+      const seats = Number(data.total_seats);
+      if (!Number.isFinite(seats) || seats < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["total_seats"],
+          message: "Total seats is required for on-site ticket booking (at least 1)"
+        });
+      }
     }
   });
 
@@ -106,11 +152,13 @@ const fetchEventsSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const { publicListingParamSchema } = require("./listingParam");
+
 const fetchEventByIdSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
   params: z.object({
-    id: z.string().regex(/^\d+$/)
+    id: publicListingParamSchema
   })
 });
 
@@ -127,7 +175,7 @@ const trackEventAnalyticsSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
   params: z.object({
-    id: z.string().regex(/^\d+$/)
+    id: publicListingParamSchema
   })
 });
 
@@ -147,18 +195,23 @@ const editOwnEventBodySchema = z
     google_maps_link: z.string().url().max(1000).optional(),
     city_id: z.coerce.number().int().positive().optional(),
     category_id: z.coerce.number().int().positive().optional(),
-    ticket_link: z.string().url().optional(),
+    ticket_sales_mode: z.preprocess(coerceTicketSalesModeBodyInput, ticketSalesModeEnum.optional()),
+    total_seats: z.coerce.number().int().min(1).max(50000).optional(),
+    ticket_link: optionalTicketLinkUrl(1000),
     image_url: z.string().url().optional(),
     gallery_image_urls: galleryImageUrlsSchema,
     price: z.coerce.number().min(0).optional(),
     price_per_day: z.coerce.number().min(0).optional(),
-    duration_hours: z.coerce.number().int().min(1).max(168).optional(),
+    duration_hours: z.coerce.number().int().min(0).max(168).optional(),
+    duration_minutes: z.coerce.number().int().min(0).max(59).optional(),
     age_limit: ageLimitEnum.optional(),
     languages: z.string().max(255).optional(),
     genres: z.string().max(255).optional(),
     event_highlights: highlightsSchema,
     is_yay_deal_event: z.boolean().optional(),
-    deal_event_discount_code: z.string().max(80).optional()
+    deal_event_discount_code: z.string().max(80).optional(),
+    ticket_levels: ticketLevelsField,
+    ticket_levels_json: ticketLevelsField
   })
   .superRefine((data, ctx) => {
     if (data.is_yay_deal_event === true) {
@@ -191,6 +244,27 @@ const editOwnEventBodySchema = z
         path: ["event_start_date"],
         message: "Start and end dates are required for range events"
       });
+    }
+
+    if (data.ticket_sales_mode === "external") {
+      const link = data.ticket_link != null ? String(data.ticket_link).trim() : "";
+      if (!link) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ticket_link"],
+          message: "Ticket link is required for external ticketing"
+        });
+      }
+    }
+    if (data.ticket_sales_mode === "platform") {
+      const seats = Number(data.total_seats);
+      if (data.total_seats !== undefined && (!Number.isFinite(seats) || seats < 1)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["total_seats"],
+          message: "Total seats must be at least 1 for on-site ticket booking"
+        });
+      }
     }
   });
 

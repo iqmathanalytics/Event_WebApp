@@ -97,11 +97,11 @@ export default function AppLoadingOverlay({
       </span>
 
       <div className="relative flex flex-col items-center px-6">
-        <div className="relative flex h-[min(52vw,220px)] w-[min(52vw,220px)] items-center justify-center sm:h-[240px] sm:w-[240px]">
+        <div className="relative flex h-[min(72vw,300px)] w-[min(72vw,300px)] items-center justify-center sm:h-[min(64vw,340px)] sm:w-[min(64vw,340px)]">
           {!reduceMotion ? <NavOrbitRings /> : null}
 
           <motion.div
-            className="relative z-[2] rounded-2xl border border-white/40 bg-white/90 p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-sm sm:p-5"
+            className="relative z-[2] rounded-2xl border border-white/40 bg-white/90 p-5 shadow-2xl ring-1 ring-black/5 backdrop-blur-sm sm:rounded-3xl sm:p-7"
             initial={instantEnter ? { scale: 1, opacity: 1 } : { scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={
@@ -113,7 +113,7 @@ export default function AppLoadingOverlay({
             <img
               src={BRAND_LOGO_URL}
               alt=""
-              className="mx-auto h-11 w-auto max-w-[148px] object-contain sm:h-[3.25rem] sm:max-w-[168px]"
+              className="mx-auto h-20 w-auto max-w-[min(72vw,240px)] object-contain sm:h-28 sm:max-w-[min(68vw,280px)]"
               decoding="async"
             />
             {!reduceMotion ? (

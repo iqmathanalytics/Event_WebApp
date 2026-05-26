@@ -1,4 +1,5 @@
-import api from "./api";
+import api, { postKeepalive } from "./api";
+import { encodePublicListingParam } from "../utils/listingPaths";
 
 export async function fetchInfluencers(params = {}) {
   const response = await api.get("/influencers", { params });
@@ -10,19 +11,19 @@ export async function fetchDeals(params = {}) {
   return response.data;
 }
 
-export async function fetchDealById(id) {
-  const response = await api.get(`/deals/${id}`);
+export async function fetchDealById(slugOrId) {
+  const response = await api.get(`/deals/${encodePublicListingParam(slugOrId)}`);
   return response.data;
 }
 
-export async function trackDealClick(dealId) {
-  const response = await api.post(`/deals/${dealId}/track-click`);
-  return response.data;
+export function trackDealClick(slugOrId) {
+  const path = `/deals/${encodePublicListingParam(slugOrId)}/track-click`;
+  return postKeepalive(path).catch(() => ({ success: false }));
 }
 
-export async function trackDealView(dealId) {
-  const response = await api.post(`/deals/${dealId}/track-view`);
-  return response.data;
+export function trackDealView(slugOrId) {
+  const path = `/deals/${encodePublicListingParam(slugOrId)}/track-view`;
+  return postKeepalive(path).catch(() => ({ success: false }));
 }
 
 export async function fetchServices(params = {}) {
@@ -45,13 +46,13 @@ export async function updateInfluencerProfile(id, payload) {
   return response.data;
 }
 
-export async function fetchInfluencerDetails(id) {
-  const response = await api.get(`/influencers/${id}/details`);
+export async function fetchInfluencerDetails(slugOrId) {
+  const response = await api.get(`/influencers/${encodePublicListingParam(slugOrId)}/details`);
   return response.data;
 }
 
-export async function fetchInfluencerMedia(id) {
-  const response = await api.get(`/influencers/${id}/media`);
+export async function fetchInfluencerMedia(slugOrId) {
+  const response = await api.get(`/influencers/${encodePublicListingParam(slugOrId)}/media`);
   return response.data;
 }
 
@@ -62,14 +63,14 @@ export async function uploadInfluencerMedia(id, imageUrls) {
   return response.data;
 }
 
-export async function trackInfluencerView(id) {
-  const response = await api.post(`/influencers/${id}/track-view`);
-  return response.data;
+export function trackInfluencerView(slugOrId) {
+  const path = `/influencers/${encodePublicListingParam(slugOrId)}/track-view`;
+  return postKeepalive(path).catch(() => ({ success: false }));
 }
 
-export async function trackInfluencerClick(id) {
-  const response = await api.post(`/influencers/${id}/track-click`);
-  return response.data;
+export function trackInfluencerClick(slugOrId) {
+  const path = `/influencers/${encodePublicListingParam(slugOrId)}/track-click`;
+  return postKeepalive(path).catch(() => ({ success: false }));
 }
 
 export async function createDeal(payload) {

@@ -1,27 +1,67 @@
 const byLabelAsc = (a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" });
 
-/** Display names for the five metros (same order as API). */
-export const ALLOWED_CITY_NAMES_IN_ORDER = ["Atlanta", "Austin", "Dallas", "Houston", "San Antonio"];
+/** Legacy metro list — dropdown cities are managed in DB (`show_in_dropdown`). */
+export const ALLOWED_CITY_NAMES_IN_ORDER = [
+  "Atlanta",
+  "Austin",
+  "Dallas",
+  "Houston",
+  "San Antonio",
+  "Simi Valley",
+  "Boise",
+  "Phoenix",
+  "San Francisco",
+  "Ashburn",
+  "Raleigh"
+];
 
-/** Must match `APP_METRO_SEED` slugs in `src/services/cityService.js` (one row per slug). */
-export const APP_METRO_SLUGS_IN_ORDER = ["atlanta-ga", "austin-tx", "dallas-tx", "houston-tx", "san-antonio-tx"];
+export const APP_METRO_SLUGS_IN_ORDER = [
+  "atlanta-ga",
+  "austin-tx",
+  "dallas-tx",
+  "houston-tx",
+  "san-antonio-tx",
+  "simi-valley-ca",
+  "boise-id",
+  "phoenix-az",
+  "san-francisco-ca",
+  "ashburn-va",
+  "raleigh-nc"
+];
+
+/** Must match `OTHERS_CITY` in `src/services/cityService.js` (not shown in public city dropdowns). */
+export const OTHERS_CITY_SLUG = "others-us";
+
+const ALLOWED_CITY_SLUGS_IN_ORDER = [...APP_METRO_SLUGS_IN_ORDER];
+
+function citySlugSortIndex(slug) {
+  const normalized = String(slug || "").trim();
+  const index = ALLOWED_CITY_SLUGS_IN_ORDER.indexOf(normalized);
+  return index === -1 ? 999 : index;
+}
+
+function formatCityOptionLabel(row) {
+  return row.label || row.name || "";
+}
 
 /**
  * City dropdowns use `useCityFilter()` (loaded from `/meta/cities` with real DB ids).
  * Rows are filtered by `slug` so homonyms (e.g. Dallas GA) never appear.
  */
 export function orderAllowedCities(rows) {
-  const allowedSlugs = new Set(APP_METRO_SLUGS_IN_ORDER);
   return (rows || [])
-    .filter((r) => r.slug && allowedSlugs.has(String(r.slug).trim()))
-    .sort(
-      (a, b) =>
-        APP_METRO_SLUGS_IN_ORDER.indexOf(String(a.slug).trim()) -
-        APP_METRO_SLUGS_IN_ORDER.indexOf(String(b.slug).trim())
-    )
+    .sort((a, b) => {
+      const orderDiff = citySlugSortIndex(a.slug) - citySlugSortIndex(b.slug);
+      if (orderDiff !== 0) {
+        return orderDiff;
+      }
+      return formatCityOptionLabel(a).localeCompare(formatCityOptionLabel(b), "en", {
+        sensitivity: "base"
+      });
+    })
     .map((r) => ({
       value: String(r.value),
-      label: r.label || r.name,
+      label: formatCityOptionLabel(r),
       name: r.name || r.label,
       state: r.state,
       slug: r.slug

@@ -61,11 +61,13 @@ const editOwnInfluencerSchema = z.object({
   })
 });
 
+const { publicListingParamSchema } = require("./listingParam");
+
 const fetchInfluencerByIdSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
   params: z.object({
-    id: z.string().regex(/^\d+$/)
+    id: publicListingParamSchema
   })
 });
 
@@ -73,7 +75,7 @@ const influencerTrackSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
   params: z.object({
-    id: z.string().regex(/^\d+$/)
+    id: publicListingParamSchema
   })
 });
 
@@ -81,7 +83,7 @@ const fetchInfluencerGallerySchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
   params: z.object({
-    id: z.string().regex(/^\d+$/)
+    id: publicListingParamSchema
   })
 });
 

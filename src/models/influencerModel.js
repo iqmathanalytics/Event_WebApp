@@ -1,4 +1,6 @@
 const { pool } = require("../config/db");
+const { resolveListingIdFromParam } = require("../utils/listingSlug");
+const { setPublicSlug } = require("./listingSlugModel");
 
 async function listInfluencers({ cityId, categoryId, dateStart, dateEnd, monthStart, monthEnd, q, sortBy }) {
   const conditions = ["i.status = 'approved'"];
@@ -98,7 +100,13 @@ async function createInfluencer({
       created_by
     ]
   );
-  return result.insertId;
+  const insertId = result.insertId;
+  try {
+    await setPublicSlug("influencers", insertId, name);
+  } catch (_err) {
+    /* public_slug column may be missing before migration */
+  }
+  return insertId;
 }
 
 async function listInfluencersByCreator(createdBy) {
@@ -198,6 +206,45 @@ async function findInfluencerById(id) {
   return rows[0] || null;
 }
 
+async function fetchInfluencerDetailsBySlugOrId(param) {
+  const { id, slug } = resolveListingIdFromParam(param);
+  if (id) {
+    const byId = await fetchInfluencerDetailsById(id);
+    if (byId) {
+      return byId;
+    }
+  }
+  if (slug) {
+    try {
+      const [rows] = await pool.query(
+        `SELECT
+          i.*,
+          c.name AS city_name,
+          cat.name AS category_name,
+          (COALESCE(i.followers_count,0) + COALESCE(i.facebook_followers_count,0) + COALESCE(i.youtube_subscribers_count,0)) AS audience_total,
+          (COALESCE(i.profile_click_count,0) + COALESCE(i.profile_view_count,0)) AS total_engagement,
+          (
+            CASE
+              WHEN i.engagement_updated_at >= (NOW() - INTERVAL 14 DAY)
+                THEN (COALESCE(i.profile_click_count,0) + (COALESCE(i.profile_view_count,0) * 2))
+              ELSE 0
+            END
+          ) AS recent_engagement_score
+         FROM influencers i
+         LEFT JOIN cities c ON c.id = i.city_id
+         LEFT JOIN categories cat ON cat.id = i.category_id
+         WHERE i.public_slug = ? AND i.status = 'approved'
+         LIMIT 1`,
+        [slug]
+      );
+      return rows[0] || null;
+    } catch (_err) {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function fetchInfluencerDetailsById(id) {
   const [rows] = await pool.query(
     `SELECT
@@ -250,6 +297,13 @@ async function updateInfluencerByCreator({ id, createdBy, payload }) {
        WHERE id = ? AND created_by = ?`,
       [...values, id, createdBy]
     );
+    if (result.affectedRows > 0 && payload.name) {
+      try {
+        await setPublicSlug("influencers", id, payload.name);
+      } catch (_err) {
+        /* ignore */
+      }
+    }
     return result.affectedRows > 0;
   } catch (err) {
     if (err?.code !== "ER_BAD_FIELD_ERROR") {
@@ -261,6 +315,13 @@ async function updateInfluencerByCreator({ id, createdBy, payload }) {
        WHERE id = ? AND created_by = ?`,
       [...values, id, createdBy]
     );
+    if (result.affectedRows > 0 && payload.name) {
+      try {
+        await setPublicSlug("influencers", id, payload.name);
+      } catch (_err) {
+        /* ignore */
+      }
+    }
     return result.affectedRows > 0;
   }
 }
@@ -273,6 +334,7 @@ module.exports = {
   findAnyInfluencerByCreator,
   findInfluencerById,
   fetchInfluencerDetailsById,
+  fetchInfluencerDetailsBySlugOrId,
   updateInfluencerByCreator,
   incrementInfluencerView,
   incrementInfluencerClick,

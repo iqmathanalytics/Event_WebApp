@@ -14,3 +14,6 @@ export const BRAND_HEADER_LOGO_URL = `/branding/${encodeURIComponent(BRAND_HEADE
 
 /** Horizontal banner beside the mark in the sticky header (`public/branding/`). */
 export const BRAND_BANNER_URL = "/branding/Banner.png";
+
+/** Request on-site / platform ticket sales for an organizer account */
+export const PLATFORM_TICKETS_REQUEST_EMAIL = "tickets@bookmytickets.us";

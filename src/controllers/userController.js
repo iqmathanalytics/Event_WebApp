@@ -27,6 +27,7 @@ const {
 const { createAdminNotification } = require("../models/adminModel");
 const { syncSubscriberEmail } = require("../models/newsletterModel");
 const bookingService = require("../services/bookingService");
+const platformTicketRequestService = require("../services/platformTicketRequestService");
 
 const getMe = asyncHandler(async (req, res) => {
   const user = await findUserById(req.user.id);
@@ -405,4 +406,29 @@ function parseJsonArray(value) {
   }
 }
 
-module.exports = { getMe, getMyBookings, enableOrganizer, updateMyProfile, changeMyPassword };
+const getMyPlatformTicketAccessRequest = asyncHandler(async (req, res) => {
+  const data = await platformTicketRequestService.getMyPlatformTicketAccessRequest(req.user.id);
+  res.status(200).json({ success: true, data });
+});
+
+const submitPlatformTicketAccessRequest = asyncHandler(async (req, res) => {
+  const result = await platformTicketRequestService.submitPlatformTicketAccessRequest(
+    req.user.id,
+    req.validated.body
+  );
+  res.status(201).json({
+    success: true,
+    message: "Your request was sent. We will email you after admin review.",
+    data: result
+  });
+});
+
+module.exports = {
+  getMe,
+  getMyBookings,
+  enableOrganizer,
+  updateMyProfile,
+  changeMyPassword,
+  getMyPlatformTicketAccessRequest,
+  submitPlatformTicketAccessRequest
+};

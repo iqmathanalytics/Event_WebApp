@@ -2,6 +2,7 @@ const XLSX = require("xlsx");
 const asyncHandler = require("../utils/asyncHandler");
 const bookingService = require("../services/bookingService");
 
+/** Legacy route: free / zero-total bookings only. Paid bookings use payment-intent flow. */
 const createBooking = asyncHandler(async (req, res) => {
   const data = await bookingService.createEventBooking({
     userId: req.user.id,

@@ -1,6 +1,7 @@
 const { createContactMessage } = require("../models/contactModel");
 const { createAdminNotification } = require("../models/adminModel");
-const { sendSendGridEmail } = require("../utils/emailIntegrations");
+const { sendTransactionalEmail } = require("../utils/emailIntegrations");
+const { buildContactAdminEmail } = require("../utils/transactionalEmailTemplates");
 
 async function submitContact(payload) {
   const contactId = await createContactMessage({
@@ -21,22 +22,19 @@ async function submitContact(payload) {
 
   const adminEmail = process.env.ADMIN_CONTACT_EMAIL || process.env.ADMIN_NOTIFICATION_EMAIL;
   if (adminEmail) {
-    const text = [
-      `New contact form submission (#${contactId})`,
-      `From: ${payload.name} <${payload.email}>`,
-      `Subject: ${payload.subject}`,
-      "",
-      payload.message
-    ].join("\n");
-    const html = `<p><strong>New contact (#${contactId})</strong></p>
-<p><strong>From:</strong> ${escapeHtml(payload.name)} &lt;${escapeHtml(payload.email)}&gt;<br/>
-<strong>Subject:</strong> ${escapeHtml(payload.subject)}</p>
-<pre style="font-family:sans-serif;white-space:pre-wrap;">${escapeHtml(payload.message)}</pre>`;
-    const sent = await sendSendGridEmail({
+    const mail = buildContactAdminEmail({
+      contactId,
+      name: payload.name,
+      email: payload.email,
+      subject: payload.subject,
+      message: payload.message
+    });
+    const sent = await sendTransactionalEmail({
       to: adminEmail,
-      subject: `[Contact] ${payload.subject}`,
-      text,
-      html
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
+      replyTo: payload.email
     });
     if (sent.error && process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
@@ -45,14 +43,6 @@ async function submitContact(payload) {
   }
 
   return { contactId };
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 module.exports = { submitContact };

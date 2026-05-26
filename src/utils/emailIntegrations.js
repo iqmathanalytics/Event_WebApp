@@ -1,9 +1,11 @@
 /**
- * Optional integrations: SendGrid (transactional) and Mailchimp (audience).
- * If env vars are missing, operations no-op and the app still works (DB-only).
+ * Transactional email via Brevo (Sendinblue) SMTP API.
+ * Newsletter audience sync remains optional Mailchimp (separate from transactional).
  */
 
 const crypto = require("crypto");
+
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
 function logSkip(reason) {
   if (process.env.NODE_ENV !== "production") {
@@ -15,6 +17,20 @@ function logSkip(reason) {
 function warnMailchimpConfig(reason) {
   // eslint-disable-next-line no-console
   console.warn(`[emailIntegrations] ${reason}`);
+}
+
+function getBrevoConfig() {
+  const apiKey = String(process.env.BREVO_API_KEY || "").trim();
+  const fromEmail = String(
+    process.env.BREVO_FROM_EMAIL || process.env.SENDGRID_FROM_EMAIL || "tickets@bookmytickets.us"
+  ).trim();
+  const fromName = String(process.env.BREVO_FROM_NAME || process.env.SENDGRID_FROM_NAME || "Book My Tickets").trim();
+  return { apiKey, fromEmail, fromName };
+}
+
+function isBrevoConfigured() {
+  const { apiKey, fromEmail } = getBrevoConfig();
+  return Boolean(apiKey && fromEmail);
 }
 
 /**
@@ -36,45 +52,86 @@ function isMailchimpConfigured() {
   return Boolean(apiKey && listId && server);
 }
 
-/**
- * Send a single email via SendGrid HTTP API.
- * @returns {{ sent: boolean, skipped?: boolean, error?: string }}
- */
-async function sendSendGridEmail({ to, subject, text, html }) {
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const fromEmail = process.env.SENDGRID_FROM_EMAIL;
-  if (!apiKey || !fromEmail) {
-    logSkip("SendGrid skipped: SENDGRID_API_KEY or SENDGRID_FROM_EMAIL not set");
-    return { sent: false, skipped: true };
-  }
-  const fromName = process.env.SENDGRID_FROM_NAME || "Book My Tickets";
-  const body = {
-    personalizations: [{ to: [{ email: to }] }],
-    from: { email: fromEmail, name: fromName },
-    subject,
-    content: [{ type: "text/plain", value: text || "" }]
-  };
-  if (html) {
-    body.content.push({ type: "text/html", value: html });
-  }
+async function parseBrevoErrorResponse(res) {
+  const raw = await res.text();
   try {
-    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    const parsed = JSON.parse(raw);
+    const msg = parsed?.message || parsed?.error;
+    if (msg) {
+      return String(msg);
+    }
+  } catch (_err) {
+    /* plain text body */
+  }
+  return raw || res.statusText || `HTTP ${res.status}`;
+}
+
+/**
+ * Send a single transactional email via Brevo.
+ * @param {{ to: string, subject: string, text?: string, html?: string, replyTo?: string }} params
+ * @returns {Promise<{ sent: boolean, skipped?: boolean, provider?: string, error?: string }>}
+ */
+async function sendTransactionalEmail({ to, subject, text, html, replyTo }) {
+  const { apiKey, fromEmail, fromName } = getBrevoConfig();
+  const recipient = String(to || "").trim();
+
+  if (!apiKey) {
+    logSkip("Brevo skipped: BREVO_API_KEY not set");
+    return { sent: false, skipped: true, provider: "brevo" };
+  }
+  if (!fromEmail) {
+    logSkip("Brevo skipped: BREVO_FROM_EMAIL not set");
+    return { sent: false, skipped: true, provider: "brevo" };
+  }
+  if (!recipient) {
+    return { sent: false, error: "Missing recipient email", provider: "brevo" };
+  }
+
+  const payload = {
+    sender: { name: fromName, email: fromEmail },
+    to: [{ email: recipient }],
+    subject: String(subject || "").trim() || "(no subject)",
+    htmlContent: html || undefined,
+    textContent: text != null ? String(text) : undefined
+  };
+
+  if (!payload.htmlContent && payload.textContent == null) {
+    payload.textContent = "";
+  }
+
+  const reply = String(replyTo || "").trim();
+  if (reply) {
+    payload.replyTo = { email: reply };
+  }
+
+  try {
+    const res = await fetch(BREVO_API_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json"
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(payload)
     });
+
     if (!res.ok) {
-      const errText = await res.text();
-      return { sent: false, error: errText || res.statusText };
+      const errText = await parseBrevoErrorResponse(res);
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, errText);
+      }
+      return { sent: false, error: errText, provider: "brevo" };
     }
-    return { sent: true };
+
+    return { sent: true, provider: "brevo" };
   } catch (err) {
-    return { sent: false, error: err?.message || "SendGrid request failed" };
+    return { sent: false, error: err?.message || "Brevo request failed", provider: "brevo" };
   }
 }
+
+/** @deprecated Use sendTransactionalEmail — kept for existing imports during migration. */
+const sendSendGridEmail = sendTransactionalEmail;
 
 /**
  * Add/update a list member in Mailchimp (double opt-in handled by list settings in Mailchimp).
@@ -102,7 +159,6 @@ async function syncMailchimpSubscriber({ email, firstName = "", lastName = "", c
             PHONE: phoneNumber
           }
         : {}),
-      // Audience "Address" column maps to Mailchimp ADDRESS merge field (structured object).
       ...(cityName
         ? {
             ADDRESS: {
@@ -135,4 +191,10 @@ async function syncMailchimpSubscriber({ email, firstName = "", lastName = "", c
   }
 }
 
-module.exports = { sendSendGridEmail, syncMailchimpSubscriber, isMailchimpConfigured };
+module.exports = {
+  sendTransactionalEmail,
+  sendSendGridEmail,
+  isBrevoConfigured,
+  syncMailchimpSubscriber,
+  isMailchimpConfigured
+};

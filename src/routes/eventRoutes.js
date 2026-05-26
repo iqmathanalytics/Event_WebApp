@@ -1,5 +1,6 @@
 const express = require("express");
 const eventController = require("../controllers/eventController");
+const eventAnalyticsController = require("../controllers/eventAnalyticsController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 const organizerAccessMiddleware = require("../middleware/organizerAccessMiddleware");
@@ -15,6 +16,9 @@ const {
   deleteOwnEventSchema,
   trackEventAnalyticsSchema
 } = require("../validators/eventValidator");
+const {
+  organizerEventInsightsSchema
+} = require("../validators/eventAnalyticsValidator");
 
 const router = express.Router();
 
@@ -41,6 +45,19 @@ router.post(
   organizerAccessMiddleware,
   validateRequest(submitEventSchema),
   eventController.submitEvent
+);
+router.get(
+  "/organizer/insights",
+  authMiddleware,
+  organizerAccessMiddleware,
+  eventAnalyticsController.listOrganizerInsights
+);
+router.get(
+  "/organizer/insights/:eventId",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(organizerEventInsightsSchema),
+  eventAnalyticsController.getOrganizerEventInsights
 );
 router.get(
   "/my-events",

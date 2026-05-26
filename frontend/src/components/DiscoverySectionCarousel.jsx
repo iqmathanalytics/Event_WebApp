@@ -11,12 +11,19 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
     if (!node) {
       return;
     }
-    const base = variant === "landing-grid3" ? node.clientWidth : Math.round(node.clientWidth * 0.8);
+    const base =
+      variant === "landing-grid3" || variant === "landing-grid4"
+        ? node.clientWidth
+        : Math.round(node.clientWidth * 0.8);
     const amount = Math.max(280, base);
     node.scrollBy({ left: direction * amount, behavior: "smooth" });
   };
 
   const isGrid3 = variant === "landing-grid3";
+  const isGrid4 = variant === "landing-grid4";
+  const isGrid8 = variant === "landing-grid8";
+  const isLandingGrid = isGrid3 || isGrid4;
+  const isStaticGrid = isGrid8;
 
   return (
     <motion.section
@@ -34,35 +41,37 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
               {actionLabel}
             </Link>
           ) : null}
-          <button
-            type="button"
-            onClick={() => scrollByAmount(-1)}
-            className={`hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid ${
-              isGrid3 ? "" : ""
-            }`}
-            aria-label={`Scroll ${title} left`}
-          >
-            <FiChevronLeft />
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollByAmount(1)}
-            className={`hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid ${
-              isGrid3 ? "" : ""
-            }`}
-            aria-label={`Scroll ${title} right`}
-          >
-            <FiChevronRight />
-          </button>
+          {isLandingGrid ? (
+            <>
+              <button
+                type="button"
+                onClick={() => scrollByAmount(-1)}
+                className="hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid"
+                aria-label={`Scroll ${title} left`}
+              >
+                <FiChevronLeft />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollByAmount(1)}
+                className="hidden h-8 w-8 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 sm:grid"
+                aria-label={`Scroll ${title} right`}
+              >
+                <FiChevronRight />
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 
       <div
-        ref={sliderRef}
+        ref={isStaticGrid ? null : sliderRef}
         className={
-          isGrid3
-            ? "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            : "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          isStaticGrid
+            ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+            : isLandingGrid
+              ? "flex items-stretch snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              : "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         }
       >
         {children}

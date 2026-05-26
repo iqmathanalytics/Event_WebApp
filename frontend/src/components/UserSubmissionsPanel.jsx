@@ -13,10 +13,12 @@ import {
   updateInfluencerProfile
 } from "../services/listingService";
 import { formatDateUS } from "../utils/format";
+import { dealDetailPath, influencerDetailPath } from "../utils/listingPaths";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import FilterPopupField from "./FilterPopupField";
 import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import CloudinaryImageInput from "./CloudinaryImageInput";
+import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
 
 function formatReadableDate(value) {
   if (!value) {
@@ -105,8 +107,9 @@ function FormField({ label, hint, example, className = "", children }) {
 
 /**
  * @param {"standalone" | "embedded"} variant — embedded: no page chrome; used inside User dashboard hub.
+ * @param {(kind: "influencer" | "deal") => void} [onAfterResubmitSuccess] — If set, success shows parent feedback + full reload instead of only refreshing this panel.
  */
-export default function UserSubmissionsPanel({ variant = "standalone", showBackToHub = true }) {
+export default function UserSubmissionsPanel({ variant = "standalone", showBackToHub = true, onAfterResubmitSuccess }) {
   const embedded = variant === "embedded";
   const { cities } = useCityFilter();
   const navigate = useNavigate();
@@ -356,9 +359,9 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                 }`}
                 role="button"
                 tabIndex={0}
-                onClick={() => navigate(`/influencers/${item.id}`)}
+                onClick={() => navigate(influencerDetailPath(item))}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") navigate(`/influencers/${item.id}`);
+                  if (e.key === "Enter" || e.key === " ") navigate(influencerDetailPath(item));
                 }}
               >
                 <div className="flex w-full min-w-0 items-start gap-3.5 lg:items-center lg:gap-4">
@@ -501,11 +504,11 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                 aria-disabled={!canOpenDeal}
                 onClick={() => {
                   if (!canOpenDeal) return;
-                  navigate(`/deals/${item.id}`);
+                  navigate(dealDetailPath(item));
                 }}
                 onKeyDown={(e) => {
                   if (!canOpenDeal) return;
-                  if (e.key === "Enter" || e.key === " ") navigate(`/deals/${item.id}`);
+                  if (e.key === "Enter" || e.key === " ") navigate(dealDetailPath(item));
                 }}
               >
                   <div className="flex min-w-0 flex-1 items-start gap-3.5 lg:items-center lg:gap-4">
@@ -670,7 +673,11 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                 category_id: Number(editInfluencerForm.category_id)
               });
               setEditInfluencerItem(null);
-              await loadSubmissions();
+              if (onAfterResubmitSuccess) {
+                onAfterResubmitSuccess("influencer");
+              } else {
+                await loadSubmissions();
+              }
             } catch (err) {
               setSubmissionActionError(err?.response?.data?.message || "Could not update influencer submission.");
             } finally {
@@ -770,7 +777,11 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                 category_id: Number(editDealForm.category_id)
               });
               setEditDealItem(null);
-              await loadSubmissions();
+              if (onAfterResubmitSuccess) {
+                onAfterResubmitSuccess("deal");
+              } else {
+                await loadSubmissions();
+              }
             } catch (err) {
               setSubmissionActionError(err?.response?.data?.message || "Could not update deal submission.");
             } finally {
@@ -866,7 +877,11 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
             <FormField label="Deal Link (Optional)" hint="Optional redemption or landing page URL." example="https://brand.com/deals/summer">
               <input type="url" value={editDealForm.deal_link || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, deal_link: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Deal image" hint="Optional visual for better click-through." className="sm:col-span-2">
+            <FormField
+              label="Deal image"
+              hint={`Optional visual for better click-through. ${LISTING_BANNER_IMAGE_HINT}`}
+              className="sm:col-span-2"
+            >
               <CloudinaryImageInput
                 value={editDealForm.image_url || ""}
                 onChange={(url) => setEditDealForm((p) => ({ ...p, image_url: url }))}

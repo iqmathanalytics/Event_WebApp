@@ -5,6 +5,22 @@ export async function createBooking(payload) {
   return response.data;
 }
 
+/** Free or sub-minimum total — no Stripe. */
+export async function createBookingCheckout(payload) {
+  const response = await api.post("/bookings/checkout", payload);
+  return response.data;
+}
+
+export async function createBookingPaymentIntent(payload) {
+  const response = await api.post("/bookings/payment-intent", payload);
+  return response.data;
+}
+
+export async function confirmBookingPayment(payment_intent_id) {
+  const response = await api.post("/bookings/confirm-payment", { payment_intent_id });
+  return response.data;
+}
+
 export async function fetchMyBookings() {
   const response = await api.get("/users/my-bookings");
   return response.data;

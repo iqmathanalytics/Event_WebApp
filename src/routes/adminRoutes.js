@@ -3,9 +3,15 @@ const adminController = require("../controllers/adminController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 const validateRequest = require("../middleware/validateRequest");
+const { organizerEventInsightsSchema } = require("../validators/eventAnalyticsValidator");
+const {
+  adminListPlatformTicketRequestsSchema,
+  adminReviewPlatformTicketRequestSchema
+} = require("../validators/platformTicketRequestValidator");
 const {
   analyticsSchema,
   listListingsSchema,
+  getListingByIdSchema,
   updateListingStatusSchema,
   editListingSchema,
   deleteListingSchema,
@@ -34,6 +40,11 @@ router.use(authMiddleware, adminMiddleware);
 router.get("/moderation/events", adminController.getModerationQueue);
 router.get("/analytics/counts", validateRequest(analyticsSchema), adminController.getAnalytics);
 router.get("/listings", validateRequest(listListingsSchema), adminController.listListings);
+router.get(
+  "/listings/:type/:id",
+  validateRequest(getListingByIdSchema),
+  adminController.getListingById
+);
 router.patch(
   "/listings/:type/:id/status",
   validateRequest(updateListingStatusSchema),
@@ -103,5 +114,30 @@ router.delete(
   validateRequest(adminNotificationsDeleteSchema),
   adminController.deleteAdminNotification
 );
+
+router.get(
+  "/events/:eventId/insights",
+  validateRequest(organizerEventInsightsSchema),
+  adminController.getAdminEventInsights
+);
+router.get(
+  "/platform-ticket-access-requests",
+  validateRequest(adminListPlatformTicketRequestsSchema),
+  adminController.listPlatformTicketAccessRequests
+);
+router.patch(
+  "/platform-ticket-access-requests/:id/approve",
+  validateRequest(adminReviewPlatformTicketRequestSchema),
+  adminController.approvePlatformTicketAccessRequest
+);
+router.patch(
+  "/platform-ticket-access-requests/:id/reject",
+  validateRequest(adminReviewPlatformTicketRequestSchema),
+  adminController.rejectPlatformTicketAccessRequest
+);
+
+router.get("/cities/dropdown", adminController.listDropdownCities);
+router.post("/cities/dropdown", adminController.addDropdownCity);
+router.delete("/cities/dropdown/:id", adminController.removeDropdownCity);
 
 module.exports = router;

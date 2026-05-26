@@ -4,7 +4,7 @@ const {
   createEvent,
   updateEventStatus,
   findEventById,
-  findPublicEventById,
+  findPublicEventBySlugOrId,
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
@@ -13,15 +13,67 @@ const {
   incrementEventPopularity
 } = require("../models/eventModel");
 const { getPagination } = require("../utils/pagination");
+const {
+  attachEventSeatAvailability,
+  parseTotalSeats,
+  requiresTotalSeats
+} = require("../utils/eventSeats");
 const { getMonthRange } = require("../utils/dateRange");
 const { getPrimaryEventDate, normalizeDateList, parseDateOnly } = require("../utils/eventSchedule");
+const {
+  normalizeTicketSalesMode,
+  pickTicketSalesModeFromPayload
+} = require("../utils/eventTicketSalesMode");
+const {
+  sanitizeTicketLevelsForSave,
+  assertValidTicketLevelsForPlatform
+} = require("../utils/eventTicketLevels");
+const { findUserById } = require("../models/userModel");
+
+async function userCanSellPlatformTickets(userId, { role } = {}) {
+  if (role === "admin") {
+    return true;
+  }
+  try {
+    const user = await findUserById(userId);
+    return user?.can_sell_platform_tickets === 1;
+  } catch (err) {
+    if (err?.code === "ER_BAD_FIELD_ERROR") {
+      return false;
+    }
+    throw err;
+  }
+}
+
+async function resolveOrganizerTicketSalesMode(organizerId, requestedMode, existingMode, { role } = {}) {
+  const mode = normalizeTicketSalesMode(requestedMode ?? existingMode ?? "external");
+  if (mode !== "platform") {
+    return mode;
+  }
+  const allowed = await userCanSellPlatformTickets(organizerId, { role });
+  if (allowed) {
+    return "platform";
+  }
+  const existing = normalizeTicketSalesMode(existingMode);
+  if (existing === "platform") {
+    return "platform";
+  }
+  throw new ApiError(
+    403,
+    "On-site ticket sales are not enabled for your account. Submit a hosting request from your user dashboard."
+  );
+}
+const googleAnalytics = require("./googleAnalyticsService");
 
 const EVENT_TAG_RULES = Object.freeze({
   hotSellingMinBookings: 5,
-  trendingMinRecentEngagement: 20,
-  trendingMinTotalEngagement: 30,
+  /** GA page views (last 7 days) — not legacy DB click/view counters. */
+  trendingMinViews7d: 3,
+  trendingMinViews30d: 10,
   rareCategoryMaxEvents: 2
 });
+
+const GA_POPULARITY_FETCH_CAP = 500;
 
 function isYayDealEventRow(row) {
   return (
@@ -49,12 +101,59 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * Popularity for cards/sort comes only from GA4 page_view + bmt_event_id (not DB counters).
+ */
+async function applyGaPopularityMetrics(rows) {
+  if (!rows?.length) {
+    return rows;
+  }
+  if (!googleAnalytics.isConfigured()) {
+    return rows.map((row) => ({
+      ...row,
+      popularity_score: 0,
+      ga_page_views_30d: 0,
+      ga_page_views_7d: 0
+    }));
+  }
+  try {
+    const eventIds = rows.map((r) => String(r.id));
+    const [map30, map7] = await Promise.all([
+      googleAnalytics.getEventPageViewsMap(eventIds, 30),
+      googleAnalytics.getEventPageViewsMap(eventIds, 7)
+    ]);
+    return rows.map((row) => {
+      const id = String(row.id);
+      const views30d = map30[id] || 0;
+      const views7d = map7[id] || 0;
+      return {
+        ...row,
+        popularity_score: views30d,
+        ga_page_views_30d: views30d,
+        ga_page_views_7d: views7d
+      };
+    });
+  } catch (err) {
+    console.error("GA popularity error:", err?.message || err);
+    return rows.map((row) => ({
+      ...row,
+      popularity_score: 0,
+      ga_page_views_30d: 0,
+      ga_page_views_7d: 0
+    }));
+  }
+}
+
+function sortRowsByPopularity(rows) {
+  return [...rows].sort(
+    (a, b) => toNumber(b.ga_page_views_30d ?? b.popularity_score) - toNumber(a.ga_page_views_30d ?? a.popularity_score)
+  );
+}
+
 function attachDynamicEventTags(event) {
   const bookingCount = toNumber(event.booking_count);
-  const clickCount = toNumber(event.click_count);
-  const viewCount = toNumber(event.view_count);
-  const recentEngagement = toNumber(event.recent_engagement_score);
-  const totalEngagement = clickCount + viewCount;
+  const views30d = toNumber(event.ga_page_views_30d);
+  const views7d = toNumber(event.ga_page_views_7d);
   const categoryEventCount = toNumber(event.category_event_count);
   const manualOneOfAKind =
     event.one_of_a_kind_manual === 1 ||
@@ -66,8 +165,8 @@ function attachDynamicEventTags(event) {
     tags.push("Hot Selling");
   }
   if (
-    recentEngagement >= EVENT_TAG_RULES.trendingMinRecentEngagement ||
-    totalEngagement >= EVENT_TAG_RULES.trendingMinTotalEngagement
+    views7d >= EVENT_TAG_RULES.trendingMinViews7d ||
+    views30d >= EVENT_TAG_RULES.trendingMinViews30d
   ) {
     tags.push("Trending");
   }
@@ -123,11 +222,38 @@ function normalizeEventSchedulePayload(payload) {
   };
 }
 
-async function submitEvent(payload, organizerId) {
+function applyTicketLevelsToPayload(payload, ticketMode) {
+  const saved = sanitizeTicketLevelsForSave(payload.ticket_levels ?? payload.ticket_levels_json, {
+    platformMode: ticketMode === "platform"
+  });
+  if (ticketMode === "platform" && saved.levels.length) {
+    assertValidTicketLevelsForPlatform(saved.levels);
+    return {
+      ...payload,
+      ticket_levels_json: saved.json,
+      price: saved.displayPrice ?? 0
+    };
+  }
+  if (ticketMode === "platform") {
+    return { ...payload, ticket_levels_json: saved.json };
+  }
+  return { ...payload, ticket_levels_json: null };
+}
+
+async function submitEvent(payload, organizerId, { role } = {}) {
   const normalizedPayload = normalizeEventSchedulePayload(payload);
+  const modeSource = pickTicketSalesModeFromPayload(normalizedPayload);
+  const ticketMode = await resolveOrganizerTicketSalesMode(organizerId, modeSource, null, { role });
+  const forCreate = applyTicketLevelsToPayload(
+    {
+      ...normalizedPayload,
+      ticket_sales_mode: ticketMode
+    },
+    ticketMode
+  );
   let eventId;
   try {
-    eventId = await createEvent({ ...normalizedPayload, organizer_id: organizerId });
+    eventId = await createEvent({ ...forCreate, organizer_id: organizerId });
   } catch (err) {
     if (err?.code === "ER_NO_REFERENCED_ROW_2") {
       throw new ApiError(400, "Selected city or category is invalid. Please reselect and try again.");
@@ -137,6 +263,9 @@ async function submitEvent(payload, organizerId) {
         500,
         "Event schema is not up to date in the database. Please run the latest event migration scripts."
       );
+    }
+    if (err?.code === "ER_WRONG_VALUE_COUNT_ON_ROW") {
+      throw new ApiError(500, "Event create failed: database column mismatch. Please run the latest SQL migrations.");
     }
     throw err;
   }
@@ -189,6 +318,9 @@ async function fetchEvents(query, viewerUser) {
   const search = query.q || query.search || null;
   const { monthStart, monthEnd } = getMonthRange(query.month || null);
   const status = query.status || "approved";
+  const sort = query.sort || "newest";
+  const sortByPopularity = sort === "popularity";
+  const useGaPopularitySort = sortByPopularity && googleAnalytics.isConfigured();
 
   const filters = {
     status,
@@ -201,16 +333,39 @@ async function fetchEvents(query, viewerUser) {
     priceMin: query.price_min ? Number(query.price_min) : null,
     priceMax: query.price_max ? Number(query.price_max) : null,
     q: search,
-    sortBy: query.sort || "newest",
+    sortBy: useGaPopularitySort ? "newest" : sort,
     sortOrder: query.sort_order || "asc",
-    // Hide expired events by default for approved events unless user explicitly filters by date/month.
     futureOnly: status === "approved" && !query.date && !query.month
   };
 
-  const data = await listEvents({ filters, pagination });
-  const rows = (data.rows || [])
+  const listPagination = useGaPopularitySort
+    ? { page: 1, limit: GA_POPULARITY_FETCH_CAP, offset: 0 }
+    : pagination;
+
+  const data = await listEvents({ filters, pagination: listPagination });
+  let rows = await applyGaPopularityMetrics(data.rows || []);
+
+  if (useGaPopularitySort) {
+    rows = sortRowsByPopularity(rows);
+    const total = rows.length;
+    const start = (pagination.page - 1) * pagination.limit;
+    rows = rows.slice(start, start + pagination.limit);
+    rows = rows
+      .map(attachDynamicEventTags)
+      .map((row) => sanitizePublicEventForViewer(row, viewerUser));
+    return {
+      ...data,
+      total,
+      rows,
+      page: pagination.page,
+      limit: pagination.limit
+    };
+  }
+
+  rows = rows
     .map(attachDynamicEventTags)
     .map((row) => sanitizePublicEventForViewer(row, viewerUser));
+
   return {
     ...data,
     rows,
@@ -219,23 +374,25 @@ async function fetchEvents(query, viewerUser) {
   };
 }
 
-async function fetchEventById(eventId, viewerUser) {
-  const event = await findPublicEventById(eventId);
+async function fetchEventById(slugOrId, viewerUser) {
+  const event = await findPublicEventBySlugOrId(slugOrId);
   if (!event) {
     throw new ApiError(404, "Event not found");
   }
+  const [withGaPopularity] = await applyGaPopularityMetrics([event]);
   const enriched = attachDynamicEventTags({
-    ...event,
-    display_date: getPrimaryEventDate(event)
+    ...withGaPopularity,
+    display_date: getPrimaryEventDate(withGaPopularity)
   });
-  return sanitizePublicEventForViewer(enriched, viewerUser);
+  const withSeats = await attachEventSeatAvailability(enriched);
+  return sanitizePublicEventForViewer(withSeats, viewerUser);
 }
 
 async function fetchMySubmissions(userId) {
   return listEventsByOrganizer(userId);
 }
 
-async function editOwnEvent(eventId, organizerId, payload) {
+async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
   const existing = await findEventById(eventId);
   if (!existing) {
     throw new ApiError(404, "Event not found");
@@ -246,6 +403,20 @@ async function editOwnEvent(eventId, organizerId, payload) {
 
   const normalizedPayload = normalizeEventSchedulePayload(payload);
   if (
+    Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_sales_mode") ||
+    Object.prototype.hasOwnProperty.call(normalizedPayload, "ticketSalesMode")
+  ) {
+    const requested = normalizedPayload.ticket_sales_mode ?? normalizedPayload.ticketSalesMode;
+    normalizedPayload.ticket_sales_mode = await resolveOrganizerTicketSalesMode(
+      organizerId,
+      requested,
+      existing.ticket_sales_mode,
+      { role }
+    );
+    delete normalizedPayload.ticketSalesMode;
+  }
+
+  if (
     Object.prototype.hasOwnProperty.call(normalizedPayload, "is_yay_deal_event") &&
     !(
       normalizedPayload.is_yay_deal_event === true ||
@@ -254,6 +425,32 @@ async function editOwnEvent(eventId, organizerId, payload) {
     )
   ) {
     normalizedPayload.deal_event_discount_code = null;
+  }
+
+  const nextTicketMode = Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_sales_mode")
+    ? normalizedPayload.ticket_sales_mode
+    : existing.ticket_sales_mode;
+  const nextTotalSeats = Object.prototype.hasOwnProperty.call(normalizedPayload, "total_seats")
+    ? parseTotalSeats(normalizedPayload.total_seats)
+    : parseTotalSeats(existing.total_seats);
+  if (requiresTotalSeats(nextTicketMode) && !nextTotalSeats) {
+    throw new ApiError(400, "Total seats is required for on-site ticket booking (at least 1).");
+  }
+  if (normalizedPayload.ticket_sales_mode === "external") {
+    normalizedPayload.total_seats = null;
+  }
+
+  const ticketModeForLevels = nextTicketMode || "external";
+  if (
+    Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_levels") ||
+    Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_levels_json")
+  ) {
+    const withLevels = applyTicketLevelsToPayload(normalizedPayload, ticketModeForLevels);
+    normalizedPayload.ticket_levels_json = withLevels.ticket_levels_json;
+    if (withLevels.price != null) {
+      normalizedPayload.price = withLevels.price;
+    }
+    delete normalizedPayload.ticket_levels;
   }
 
   const updated = await updateEventByOrganizer({
@@ -286,19 +483,32 @@ async function deleteOwnEvent(eventId, organizerId) {
 
 async function fetchFeaturedEvents({ city, limit }, viewerUser) {
   const cityId = city ? Number(city) : null;
-  const rows = await listFeaturedEvents({ cityId, limit: Number(limit) || 6 });
+  let rows = await listFeaturedEvents({ cityId, limit: Number(limit) || 6 });
+  rows = await applyGaPopularityMetrics(rows);
+  rows = sortRowsByPopularity(rows);
   return rows
     .map(attachDynamicEventTags)
     .map((row) => sanitizePublicEventForViewer(row, viewerUser));
 }
 
-async function trackEventClick(eventId) {
-  // Store clicks/views into popularity_score as a lightweight analytics store.
-  return incrementEventPopularity({ eventId, delta: 1, clickDelta: 1, viewDelta: 0 });
+function resolveEventIdFromParam(param) {
+  const { id } = require("../utils/listingSlug").resolveListingIdFromParam(param);
+  if (!id) {
+    throw new ApiError(404, "Event not found");
+  }
+  return id;
 }
 
-async function trackEventView(eventId) {
-  return incrementEventPopularity({ eventId, delta: 2, clickDelta: 0, viewDelta: 1 });
+async function trackEventClick(slugOrId) {
+  const eventId = resolveEventIdFromParam(slugOrId);
+  const result = await incrementEventPopularity({ eventId, delta: 1, clickDelta: 1, viewDelta: 0 });
+  return result;
+}
+
+async function trackEventView(slugOrId) {
+  const eventId = resolveEventIdFromParam(slugOrId);
+  const result = await incrementEventPopularity({ eventId, delta: 2, clickDelta: 0, viewDelta: 1 });
+  return result;
 }
 
 module.exports = {

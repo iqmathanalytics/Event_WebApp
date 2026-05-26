@@ -5,7 +5,7 @@ const {
   createDeal,
   listDealsByCreator,
   findDealById,
-  findPublicDealById,
+  findPublicDealBySlugOrId,
   updateDealByCreator,
   incrementDealPopularity
 } = require("../models/dealModel");
@@ -195,8 +195,8 @@ async function fetchMyDealSubmissions(userId) {
   return listDealsByCreator(userId);
 }
 
-async function fetchDealById(id) {
-  const deal = await findPublicDealById(id);
+async function fetchDealById(slugOrId) {
+  const deal = await findPublicDealBySlugOrId(slugOrId);
   if (!deal) {
     throw new ApiError(404, "Deal not found");
   }
@@ -249,11 +249,21 @@ async function editOwnDealSubmission(id, payload, userId) {
   });
 }
 
-async function trackDealClick(dealId) {
+function resolveDealIdFromParam(param) {
+  const { id } = require("../utils/listingSlug").resolveListingIdFromParam(param);
+  if (!id) {
+    throw new ApiError(404, "Deal not found");
+  }
+  return id;
+}
+
+async function trackDealClick(slugOrId) {
+  const dealId = resolveDealIdFromParam(slugOrId);
   return incrementDealPopularity({ dealId, delta: 1, clickDelta: 1, viewDelta: 0 });
 }
 
-async function trackDealView(dealId) {
+async function trackDealView(slugOrId) {
+  const dealId = resolveDealIdFromParam(slugOrId);
   return incrementDealPopularity({ dealId, delta: 2, clickDelta: 0, viewDelta: 1 });
 }
 

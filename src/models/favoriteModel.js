@@ -56,6 +56,7 @@ async function getFavoritesByUser({ userId, listingType }) {
       f.listing_id,
       f.created_at,
       COALESCE(e.title, d.title, i.name, s.title) AS title,
+      COALESCE(e.public_slug, d.public_slug, i.public_slug) AS public_slug,
       COALESCE(e.image_url, d.image_url, i.profile_image_url, s.image_url) AS image_url,
       COALESCE(ec.name, dc.name, ic.name, sc.name) AS city_name,
       COALESCE(ecat.name, dcat.name, icat.name, scat.name) AS category_name,

@@ -8,7 +8,9 @@ function AdminSidebar({ activeSection, onSectionChange }) {
     { key: "bookings", label: "Bookings" },
     { key: "communications", label: "Communications" },
     { key: "users", label: "User Management" },
-    { key: "team", label: "Team Management" }
+    { key: "team", label: "Team Management" },
+    { key: "ticket-access", label: "Ticket access" },
+    { key: "cities", label: "Cities" }
   ];
 
   return (

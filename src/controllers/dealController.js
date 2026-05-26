@@ -10,7 +10,7 @@ const fetchDeals = asyncHandler(async (req, res) => {
 });
 
 const fetchDealById = asyncHandler(async (req, res) => {
-  const row = await dealService.fetchDealById(Number(req.params.id));
+  const row = await dealService.fetchDealById(req.params.id);
   res.status(200).json({
     success: true,
     data: row
@@ -43,12 +43,12 @@ const editOwnDealSubmission = asyncHandler(async (req, res) => {
 });
 
 const trackDealClick = asyncHandler(async (req, res) => {
-  const ok = await dealService.trackDealClick(Number(req.params.id));
+  const ok = await dealService.trackDealClick(req.params.id);
   res.status(200).json({ success: true, data: { updated: ok } });
 });
 
 const trackDealView = asyncHandler(async (req, res) => {
-  const ok = await dealService.trackDealView(Number(req.params.id));
+  const ok = await dealService.trackDealView(req.params.id);
   res.status(200).json({ success: true, data: { updated: ok } });
 });
 

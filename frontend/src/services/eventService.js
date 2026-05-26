@@ -1,4 +1,5 @@
-import api from "./api";
+import api, { postKeepalive } from "./api";
+import { encodePublicListingParam } from "../utils/listingPaths";
 
 export async function fetchEvents(params = {}) {
   const response = await api.get("/events", { params });
@@ -10,8 +11,8 @@ export async function fetchFeaturedEvents(params = {}) {
   return response.data;
 }
 
-export async function fetchEventById(id) {
-  const response = await api.get(`/events/${id}`);
+export async function fetchEventById(slugOrId) {
+  const response = await api.get(`/events/${encodePublicListingParam(slugOrId)}`);
   return response.data;
 }
 
@@ -35,12 +36,12 @@ export async function deleteEvent(id) {
   return response.data;
 }
 
-export async function trackEventClick(eventId) {
-  const response = await api.post(`/events/${eventId}/track-click`);
-  return response.data;
+export function trackEventClick(slugOrId, payload = {}) {
+  const path = `/events/${encodePublicListingParam(slugOrId)}/track-click`;
+  return postKeepalive(path, payload).catch(() => ({ success: false }));
 }
 
-export async function trackEventView(eventId) {
-  const response = await api.post(`/events/${eventId}/track-view`);
-  return response.data;
+export function trackEventView(slugOrId, payload = {}) {
+  const path = `/events/${encodePublicListingParam(slugOrId)}/track-view`;
+  return postKeepalive(path, payload).catch(() => ({ success: false }));
 }

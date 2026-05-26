@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FiCalendar, FiChevronDown } from "react-icons/fi";
@@ -178,7 +178,7 @@ function FilterPopupField({
       {usePortal ? (
         canPortal ? createPortal(panelNode, document.body) : null
       ) : (
-        <AnimatePresence mode="wait">{isActive ? panelNode : null}</AnimatePresence>
+        isActive ? panelNode : null
       )}
     </div>
   );

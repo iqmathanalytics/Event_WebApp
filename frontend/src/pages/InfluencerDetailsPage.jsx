@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { absoluteListingUrl, influencerDetailPath } from "../utils/listingPaths";
+import ShareListingButton from "../components/ShareListingButton";
+import ListingFavoriteButton from "../components/ListingFavoriteButton";
+import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Camera,
@@ -202,8 +206,7 @@ function PageSkeleton() {
 }
 
 export default function InfluencerDetailsPage() {
-  const { id } = useParams();
-  const influencerId = Number(id);
+  const { slug } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
@@ -220,6 +223,10 @@ export default function InfluencerDetailsPage() {
   const [galleryError, setGalleryError] = useState("");
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
+
+  const influencerId = influencer?.id != null ? Number(influencer.id) : null;
+
+  useCanonicalListingUrl(influencer, influencerDetailPath);
 
   const social = useMemo(() => {
     if (!influencer) return { instagram: "", facebook: "", youtube: "" };
@@ -252,8 +259,8 @@ export default function InfluencerDetailsPage() {
         setLoading(true);
         setErrMsg("");
         const [detailsRes, mediaRes] = await Promise.all([
-          fetchInfluencerDetails(influencerId),
-          fetchInfluencerMedia(influencerId)
+          fetchInfluencerDetails(slug),
+          fetchInfluencerMedia(slug)
         ]);
         if (!active) return;
         setInfluencer(detailsRes?.data || null);
@@ -272,12 +279,12 @@ export default function InfluencerDetailsPage() {
     return () => {
       active = false;
     };
-  }, [influencerId]);
+  }, [slug]);
 
   useEffect(() => {
-    if (!influencerId || !influencer) return;
-    trackInfluencerView(influencerId).catch(() => {});
-  }, [influencerId, influencer]);
+    if (!slug || !influencer) return;
+    trackInfluencerView(influencer.public_slug || slug).catch(() => {});
+  }, [slug, influencer]);
 
   useEffect(() => {
     let active = true;
@@ -501,10 +508,24 @@ export default function InfluencerDetailsPage() {
           {...fadeUp}
           className="relative min-w-0 max-w-full overflow-x-clip rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft sm:p-5 md:p-6 lg:rounded-3xl lg:p-8"
         >
+          {influencer ? (
+            <>
+              <ListingFavoriteButton
+                listingType="influencer"
+                listingId={influencer.id}
+                className="right-[5.5rem] sm:right-[6.25rem] lg:right-[7rem]"
+              />
+              <ShareListingButton
+                url={absoluteListingUrl(influencerDetailPath(influencer))}
+                title={influencer.name}
+                listingType="influencer"
+              />
+            </>
+          ) : null}
           <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 overflow-hidden rounded-tr-3xl">
             <div className="absolute right-0 top-0 h-32 w-32 rounded-bl-full bg-gradient-to-bl from-brand-50 to-transparent opacity-80" />
           </div>
-          <div className="relative flex min-w-0 items-start gap-2.5 sm:gap-3 lg:gap-4">
+          <div className="relative flex min-w-0 items-start gap-2.5 pr-24 sm:gap-3 sm:pr-28 lg:gap-4 lg:pr-32">
             <div className="mt-0.5 grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-gradient-to-br from-brand-500 to-rose-600 text-white shadow-md shadow-brand-500/25 lg:h-10 lg:w-10 lg:rounded-2xl">
               <FiInfo className="h-4 w-4 lg:h-5 lg:w-5" />
             </div>

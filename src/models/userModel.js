@@ -46,7 +46,7 @@ async function createUser({
 async function findUserById(id) {
   const [rows] = await pool.query(
     `SELECT id, name, email, mobile_number, auth_provider, google_id, profile_image_url, role, organizer_enabled,
-            can_post_events, can_create_influencer_profile, can_post_deals, is_active, created_at
+            can_post_events, can_create_influencer_profile, can_post_deals, can_sell_platform_tickets, is_active, created_at
      FROM users
      WHERE id = ? LIMIT 1`,
     [id]
@@ -73,7 +73,7 @@ async function updateUserAfterGoogleSignIn({ id, googleId, profileImageUrl, disp
 async function listUsersByRole(role) {
   const [rows] = await pool.query(
     `SELECT id, name, email, mobile_number, role, organizer_enabled, can_post_events, can_create_influencer_profile,
-            can_post_deals, is_active, created_at
+            can_post_deals, can_sell_platform_tickets, is_active, created_at
      FROM users
      WHERE role = ?
      ORDER BY created_at DESC`,
@@ -85,7 +85,7 @@ async function listUsersByRole(role) {
 async function listUsersByOrganizerEnabled() {
   const [rows] = await pool.query(
     `SELECT id, name, email, mobile_number, role, organizer_enabled, can_post_events, can_create_influencer_profile,
-            can_post_deals, is_active, created_at
+            can_post_deals, can_sell_platform_tickets, is_active, created_at
      FROM users
      WHERE organizer_enabled = 1
      ORDER BY created_at DESC`
@@ -127,13 +127,21 @@ async function updateUserCapabilitiesById({
   id,
   can_post_events,
   can_create_influencer_profile,
-  can_post_deals
+  can_post_deals,
+  can_sell_platform_tickets
 }) {
   const [result] = await pool.query(
     `UPDATE users
-     SET can_post_events = ?, can_create_influencer_profile = ?, can_post_deals = ?, updated_at = NOW()
+     SET can_post_events = ?, can_create_influencer_profile = ?, can_post_deals = ?,
+         can_sell_platform_tickets = ?, updated_at = NOW()
      WHERE id = ?`,
-    [can_post_events ? 1 : 0, can_create_influencer_profile ? 1 : 0, can_post_deals ? 1 : 0, id]
+    [
+      can_post_events ? 1 : 0,
+      can_create_influencer_profile ? 1 : 0,
+      can_post_deals ? 1 : 0,
+      can_sell_platform_tickets ? 1 : 0,
+      id
+    ]
   );
   return result.affectedRows > 0;
 }
@@ -161,7 +169,7 @@ async function updatePasswordHashByUserId({ id, passwordHash }) {
 async function listAllUsers() {
   const [rows] = await pool.query(
     `SELECT id, name, email, mobile_number, role, organizer_enabled, can_post_events, can_create_influencer_profile,
-            can_post_deals, is_active, created_at
+            can_post_deals, can_sell_platform_tickets, is_active, created_at
      FROM users
      ORDER BY created_at DESC`
   );

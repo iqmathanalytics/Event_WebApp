@@ -1,6 +1,8 @@
 const asyncHandler = require("../utils/asyncHandler");
 const adminService = require("../services/adminService");
 const bookingService = require("../services/bookingService");
+const eventAnalyticsService = require("../services/eventAnalyticsService");
+const platformTicketRequestService = require("../services/platformTicketRequestService");
 const XLSX = require("xlsx");
 
 const getModerationQueue = asyncHandler(async (_req, res) => {
@@ -24,6 +26,23 @@ const listListings = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: rows
+  });
+});
+
+const getListingById = asyncHandler(async (req, res) => {
+  const row = await adminService.getListingById({
+    type: req.validated.params.type,
+    id: Number(req.validated.params.id)
+  });
+  if (!row) {
+    return res.status(404).json({
+      success: false,
+      message: "Listing not found"
+    });
+  }
+  return res.status(200).json({
+    success: true,
+    data: row
   });
 });
 
@@ -412,10 +431,63 @@ const deleteNewsletterSubscriber = asyncHandler(async (req, res) => {
   });
 });
 
+const listDropdownCities = asyncHandler(async (_req, res) => {
+  const cityService = require("../services/cityService");
+  const data = await cityService.listAdminDropdownCities();
+  res.status(200).json({ success: true, data });
+});
+
+const addDropdownCity = asyncHandler(async (req, res) => {
+  const cityService = require("../services/cityService");
+  const { name, state } = req.body || {};
+  const data = await cityService.addAdminDropdownCity({ name, state });
+  res.status(201).json({ success: true, data, message: "City added to dropdown" });
+});
+
+const removeDropdownCity = asyncHandler(async (req, res) => {
+  const cityService = require("../services/cityService");
+  const data = await cityService.removeAdminDropdownCity(Number(req.params.id));
+  res.status(200).json({ success: true, data, message: "City removed from dropdown" });
+});
+
+const listPlatformTicketAccessRequests = asyncHandler(async (req, res) => {
+  const rows = await platformTicketRequestService.listRequestsForAdmin(req.validated?.query || {});
+  res.status(200).json({ success: true, data: rows });
+});
+
+const approvePlatformTicketAccessRequest = asyncHandler(async (req, res) => {
+  await platformTicketRequestService.approvePlatformTicketAccessRequest({
+    requestId: Number(req.params.id),
+    adminId: req.user.id,
+    note: req.validated?.body?.note
+  });
+  res.status(200).json({ success: true, message: "Request approved and on-site ticket sales enabled." });
+});
+
+const rejectPlatformTicketAccessRequest = asyncHandler(async (req, res) => {
+  await platformTicketRequestService.rejectPlatformTicketAccessRequest({
+    requestId: Number(req.params.id),
+    adminId: req.user.id,
+    note: req.validated?.body?.note
+  });
+  res.status(200).json({ success: true, message: "Request rejected." });
+});
+
+const getAdminEventInsights = asyncHandler(async (req, res) => {
+  const hourlyDate = req.query.hourly_date || req.query.hourlyDate || null;
+  const data = await eventAnalyticsService.getAdminEventInsights(req.params.eventId, { hourlyDate });
+  res.status(200).json({ success: true, data });
+});
+
 module.exports = {
   getModerationQueue,
   getAnalytics,
+  getAdminEventInsights,
+  listPlatformTicketAccessRequests,
+  approvePlatformTicketAccessRequest,
+  rejectPlatformTicketAccessRequest,
   listListings,
+  getListingById,
   updateListingStatus,
   editListing,
   deleteListing,
@@ -436,5 +508,8 @@ module.exports = {
   deleteNewsletterSubscriber,
   listAdminNotifications,
   markAdminNotificationsRead,
-  deleteAdminNotification
+  deleteAdminNotification,
+  listDropdownCities,
+  addDropdownCity,
+  removeDropdownCity
 };

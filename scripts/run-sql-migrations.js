@@ -15,6 +15,8 @@ const withBootstrap =
 const FILES = [
   ...(withBootstrap ? ["bootstrap_schema.sql"] : []),
   "cities_categories_expansion.sql",
+  "cities_add_others.sql",
+  "cities_dropdown.sql",
   "user_capabilities_and_content_fields_migration.sql",
   "organizer_enabled_migration.sql",
   "event_click_view_counts.sql",
@@ -32,7 +34,24 @@ const FILES = [
   "event_gallery_image_urls.sql",
   "newsletter_guest_columns.sql",
   "newsletter_email_unique.sql",
-  "newsletter_user_id.sql"
+  "newsletter_user_id.sql",
+  "event_bookings.sql",
+  "multi_day_events_and_booking_amounts.sql",
+  "event_ticket_sales_mode.sql",
+  "event_duration_minutes.sql",
+  "user_can_sell_platform_tickets.sql",
+  "platform_ticket_access_requests.sql",
+  "event_ticket_levels.sql",
+  "event_coupons.sql",
+  "event_booking_coupon_backfill.sql",
+  "event_booking_stripe.sql",
+  "listing_public_slugs.sql",
+  "event_total_seats.sql",
+  "users_role_mobile_migration.sql",
+  "events_additional_fields.sql",
+  "events_location_fields.sql",
+  "favorites_table.sql",
+  "discovery_indexes.sql"
 ];
 
 function buildSsl() {

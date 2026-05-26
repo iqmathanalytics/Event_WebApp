@@ -92,10 +92,56 @@ async function listActiveCities({ q = "", limit = 5000 }) {
   return rows;
 }
 
+async function listDropdownCities({ q = "", limit = 500 } = {}) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 1000));
+  const query = String(q || "").trim();
+  if (query) {
+    const [rows] = await pool.query(
+      `SELECT id, name, state, slug
+       FROM cities
+       WHERE is_active = 1 AND show_in_dropdown = 1
+         AND (name LIKE ? OR state LIKE ? OR CONCAT(name, ', ', state) LIKE ?)
+       ORDER BY name ASC, state ASC
+       LIMIT ?`,
+      [`%${query}%`, `%${query}%`, `%${query}%`, safeLimit]
+    );
+    return rows;
+  }
+  const [rows] = await pool.query(
+    `SELECT id, name, state, slug
+     FROM cities
+     WHERE is_active = 1 AND show_in_dropdown = 1
+     ORDER BY name ASC, state ASC
+     LIMIT ?`,
+    [safeLimit]
+  );
+  return rows;
+}
+
+async function findCityById(id) {
+  const [rows] = await pool.query(
+    `SELECT id, name, state, slug, show_in_dropdown, is_active
+     FROM cities WHERE id = ? LIMIT 1`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+async function setCityDropdownFlag(id, enabled) {
+  const [result] = await pool.query(
+    `UPDATE cities SET show_in_dropdown = ?, is_active = 1 WHERE id = ?`,
+    [enabled ? 1 : 0, id]
+  );
+  return result.affectedRows > 0;
+}
+
 module.exports = {
   getCitySyncMeta,
   updateCitySyncMeta,
   upsertCities,
   listActiveCities,
-  listCitiesBySlugs
+  listCitiesBySlugs,
+  listDropdownCities,
+  findCityById,
+  setCityDropdownFlag
 };

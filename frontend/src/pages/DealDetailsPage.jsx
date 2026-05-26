@@ -1,4 +1,8 @@
 import { Link, useParams } from "react-router-dom";
+import { absoluteListingUrl, dealDetailPath } from "../utils/listingPaths";
+import ShareListingButton from "../components/ShareListingButton";
+import ListingFavoriteButton from "../components/ListingFavoriteButton";
+import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { FiCalendar, FiExternalLink, FiImage, FiMapPin, FiTag } from "react-icons/fi";
@@ -8,11 +12,13 @@ import { formatCurrency, formatDateUS } from "../utils/format";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function DealDetailsPage() {
-  const { id } = useParams();
+  const { slug } = useParams();
   const { isAuthenticated } = useAuth();
   const [deal, setDeal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useCanonicalListingUrl(deal, dealDetailPath);
 
   useEffect(() => {
     let active = true;
@@ -20,10 +26,10 @@ function DealDetailsPage() {
       try {
         setLoading(true);
         setError("");
-        const response = await fetchDealById(id);
+        const response = await fetchDealById(slug);
         if (active) {
           setDeal(response?.data || null);
-          void trackDealView?.(id);
+          void trackDealView?.(slug);
         }
       } catch (_err) {
         if (active) {
@@ -40,7 +46,7 @@ function DealDetailsPage() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [slug]);
 
   const isPremium = deal?.is_premium === 1 || deal?.is_premium === true;
   const lockedPremium = isPremium && !isAuthenticated;
@@ -74,6 +80,7 @@ function DealDetailsPage() {
 
   const metaCard =
     "rounded-xl border border-slate-100 bg-gradient-to-b from-slate-50/95 to-white p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
+  const metaValue = "font-semibold text-slate-900";
 
   return (
     <motion.div
@@ -82,12 +89,12 @@ function DealDetailsPage() {
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-4 lg:space-y-6"
     >
-      <div className="overflow-hidden rounded-2xl ring-1 ring-slate-900/10 lg:h-[75vh] lg:max-h-[920px] lg:min-h-[280px] lg:rounded-3xl lg:ring-0">
+      <div className="relative aspect-[16/9] overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-slate-900/10 sm:aspect-[16/8] lg:aspect-auto lg:h-[75vh] lg:max-h-[920px] lg:min-h-[280px] lg:rounded-3xl lg:ring-0">
         {deal.image_url ? (
           <img
             src={deal.image_url}
             alt={deal.title}
-            className={`aspect-[16/9] w-full object-cover object-center sm:aspect-[16/8] lg:aspect-auto lg:h-full ${lockedPremium ? "blur-sm" : ""}`}
+            className={`h-full w-full object-fill object-center ${lockedPremium ? "blur-sm" : ""}`}
           />
         ) : (
           <div className="relative flex aspect-[16/9] h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 sm:aspect-[16/8] lg:aspect-auto">
@@ -103,11 +110,21 @@ function DealDetailsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:gap-5">
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-soft ring-1 ring-slate-900/[0.04] sm:p-5 lg:rounded-3xl lg:border-slate-200 lg:p-6 lg:shadow-sm lg:ring-0">
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:mb-2 lg:text-sm lg:font-normal lg:tracking-normal">
+        <div className="relative rounded-2xl border border-slate-200/90 bg-white p-4 shadow-soft ring-1 ring-slate-900/[0.04] sm:p-5 lg:rounded-3xl lg:border-slate-200 lg:p-6 lg:shadow-sm lg:ring-0">
+          <ListingFavoriteButton
+            listingType="deal"
+            listingId={deal.id}
+            className="right-[5.5rem] sm:right-[6.25rem] lg:right-[7rem]"
+          />
+          <ShareListingButton
+            url={absoluteListingUrl(dealDetailPath(deal))}
+            title={deal.title}
+            listingType="deal"
+          />
+          <p className="mb-1 pr-24 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 sm:pr-28 lg:mb-2 lg:pr-32 lg:text-sm lg:font-normal lg:tracking-normal">
             {deal.city_name || "City"}
           </p>
-          <h1 className="text-[1.35rem] font-bold leading-[1.2] tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+          <h1 className="pr-4 text-[1.35rem] font-bold leading-[1.2] tracking-tight text-slate-900 sm:pr-6 sm:text-2xl lg:pr-8 lg:text-3xl">
             {deal.title}
           </h1>
 
@@ -124,23 +141,25 @@ function DealDetailsPage() {
             </div>
           ) : null}
 
-          <div className="mt-4 grid grid-cols-2 gap-2 text-[13px] leading-snug text-slate-700 lg:grid-cols-2 lg:gap-3 lg:text-sm lg:text-slate-600">
+          <div className="mt-4 grid grid-cols-2 gap-2 text-[13px] leading-snug lg:grid-cols-2 lg:gap-3 lg:text-sm">
             <div className={metaCard}>
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 text-slate-600">
                 <FiMapPin className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span className="line-clamp-3 lg:line-clamp-none">{deal.provider_name || "Provider"}</span>
+                <span className={`line-clamp-3 lg:line-clamp-none ${metaValue}`}>{deal.provider_name || "Provider"}</span>
               </p>
             </div>
             <div className={metaCard}>
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 text-slate-600">
                 <FiTag className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span>{deal.category_name || "Category"}</span>
+                <span className={metaValue}>{deal.category_name || "Category"}</span>
               </p>
             </div>
             <div className={`col-span-2 ${metaCard} lg:col-span-1`}>
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 text-slate-600">
                 <FiCalendar className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span>Valid until {deal.expiry_date ? formatDateUS(deal.expiry_date) : "Not specified"}</span>
+                <span className={metaValue}>
+                  Valid until {deal.expiry_date ? formatDateUS(deal.expiry_date) : "Not specified"}
+                </span>
               </p>
             </div>
             <div className={`col-span-2 flex flex-wrap items-center gap-2 ${metaCard} lg:col-span-1 lg:flex-nowrap`}>
@@ -165,7 +184,7 @@ function DealDetailsPage() {
             <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 lg:text-base lg:font-semibold lg:normal-case lg:tracking-normal lg:text-slate-900">
               About this deal
             </h2>
-            <p className="mt-2 text-[15px] leading-relaxed text-slate-700 lg:text-sm lg:leading-6">
+            <p className="mt-2 text-[15px] font-medium leading-relaxed text-slate-800 lg:text-sm lg:leading-6">
               {lockedPremium
                 ? "Login to unlock full premium deal details, link access, and complete offer terms."
                 : deal.description || "No deal description provided yet."}

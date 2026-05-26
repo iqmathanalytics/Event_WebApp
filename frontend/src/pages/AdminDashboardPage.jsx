@@ -4,12 +4,19 @@ import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
 import { FiBell, FiCalendar, FiInfo, FiMapPin, FiTrash2, FiUsers } from "react-icons/fi";
 import AdminSidebar from "../components/AdminSidebar";
+import AdminCitiesPanel from "../components/AdminCitiesPanel";
 import AdminCommunicationsSection from "../components/AdminCommunicationsSection";
 import AnalyticsCards from "../components/AnalyticsCards";
 import AdminFilters from "../components/AdminFilters";
 import AdminListingsTable from "../components/AdminListingsTable";
 import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
 import FilterPopupField from "../components/FilterPopupField";
+import BookingPaymentSummary from "../components/BookingPaymentSummary";
+import {
+  AdminBookingAmountPaidCell,
+  AdminBookingPaymentStatusCell,
+  AdminBookingStripeRefCell
+} from "../components/BookingPaymentTableCells";
 import { categories } from "../utils/filterOptions";
 import {
   activateTeamUser,
@@ -19,6 +26,7 @@ import {
   editAdminListing,
   fetchAdminAnalytics,
   fetchAdminListings,
+  fetchAdminListingById,
   fetchAdminBookings,
   fetchAdminUsers,
   exportAdminBookings,
@@ -34,12 +42,25 @@ import {
   deleteAdminUser,
   markAdminNotificationsRead,
   updateTeamUserCapabilities,
-  updateAdminListingStatus
+  updateAdminListingStatus,
+  fetchAdminEventInsights
 } from "../services/adminService";
+import OrganizerInsightsPanel from "../components/OrganizerInsightsPanel";
+import AdminPlatformTicketRequestsPanel from "../components/AdminPlatformTicketRequestsPanel";
 import { downloadBlob } from "../utils/fileDownload";
 import { formatCurrency, formatDateUS } from "../utils/format";
+import { normalizeEventTicketSalesMode, resolveEventTicketSalesMode } from "../utils/eventTicketSalesMode";
+import EventTicketLevelsEditor from "../components/EventTicketLevelsEditor";
+import AdminTicketLevelsSummary from "../components/AdminTicketLevelsSummary";
+import {
+  parseTicketLevelsFromEvent,
+  serializeTicketLevelsForApi,
+  ticketLevelsToFormRows
+} from "../utils/eventTicketLevels";
 import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
+import { formatEventDuration } from "../utils/format";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
 
 const eventHighlightOptions = [
@@ -386,7 +407,7 @@ function AdminDashboardPage() {
   }, [reviewListing, editingListing, viewListing]);
 
   const listingType = useMemo(() => {
-    if (["overview", "team", "communications", "bookings", "users"].includes(activeSection)) {
+    if (["overview", "team", "ticket-access", "communications", "bookings", "users", "cities"].includes(activeSection)) {
       return "events";
     }
     return activeSection;
@@ -590,11 +611,14 @@ function AdminDashboardPage() {
     venue: item.venue || item.venue_name || "",
     venue_address: item.venue_address || "",
     google_maps_link: item.google_maps_link || "",
+    ticket_sales_mode: resolveEventTicketSalesMode(item),
+    total_seats: item.total_seats != null && item.total_seats !== "" ? String(item.total_seats) : "",
     ticket_link: item.ticket_link || "",
     image_url: item.image_url || "",
     gallery_image_urls: Array.isArray(item.gallery_image_urls) ? [...item.gallery_image_urls] : [],
     price: item.price ?? "",
     duration_hours: item.duration_hours ?? "",
+    duration_minutes: item.duration_minutes ?? "",
     age_limit: item.age_limit || "All Ages",
     languages: item.languages || "",
     genres: item.genres || "",
@@ -604,7 +628,9 @@ function AdminDashboardPage() {
       item.is_yay_deal_event === 1 ||
       item.is_yay_deal_event === true ||
       String(item.is_yay_deal_event || "") === "1",
-    deal_event_discount_code: item.deal_event_discount_code || ""
+    deal_event_discount_code: item.deal_event_discount_code || "",
+    ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(item)),
+    ticket_levels_json: item.ticket_levels_json
   });
 
   const buildEventPayloadFromForm = (formValues) => {
@@ -617,7 +643,7 @@ function AdminDashboardPage() {
       if (value === "" || value === null || value === undefined) {
         return;
       }
-      if (["city_id", "category_id", "price", "duration_hours"].includes(key)) {
+      if (["city_id", "category_id", "price", "duration_hours", "duration_minutes", "total_seats"].includes(key)) {
         payload[key] = Number(value);
         return;
       }
@@ -631,6 +657,14 @@ function AdminDashboardPage() {
       }
       if (key === "gallery_image_urls" && Array.isArray(value)) {
         payload[key] = value.map((u) => String(u || "").trim()).filter(Boolean);
+        return;
+      }
+      if (key === "ticket_levels" && Array.isArray(value)) {
+        const levels = serializeTicketLevelsForApi(value);
+        if (levels.length) {
+          payload.ticket_levels = levels;
+          payload.price = Math.min(...levels.map((l) => l.price));
+        }
         return;
       }
       payload[key] = typeof value === "string" ? value.trim() : value;
@@ -693,11 +727,23 @@ function AdminDashboardPage() {
     pushText("Category", categories.find((cat) => cat.value === reviewForm.category_id)?.label);
     pushText("Venue", reviewForm.venue_name);
     pushText("Venue Address", reviewForm.venue_address);
-    if (hasDisplayValue(reviewForm.price)) {
+    const ticketMode = normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode);
+    if (ticketMode === "platform") {
+      const levels = parseTicketLevelsFromEvent(reviewForm);
+      if (levels.length) {
+        pushText(
+          "Ticket levels",
+          levels.map((l) => `${l.name}: ${formatCurrency(l.price)}`).join(" · ")
+        );
+      } else if (hasDisplayValue(reviewForm.price)) {
+        pushText("Starting price", formatCurrency(Number(reviewForm.price || 0)));
+      }
+    } else if (hasDisplayValue(reviewForm.price)) {
       pushText("Price", formatCurrency(Number(reviewForm.price || 0)));
     }
-    if (hasDisplayValue(reviewForm.duration_hours)) {
-      pushText("Duration", `${reviewForm.duration_hours} hour(s)`);
+    const durationLabel = formatEventDuration(reviewForm.duration_hours, reviewForm.duration_minutes);
+    if (durationLabel) {
+      pushText("Duration", durationLabel);
     }
     pushText("Age Limit", reviewForm.age_limit);
     pushText("Languages", reviewForm.languages);
@@ -714,7 +760,31 @@ function AdminDashboardPage() {
       pushText("Discount code", hasDisplayValue(reviewForm.deal_event_discount_code) ? reviewForm.deal_event_discount_code : "—");
     }
     pushLink("Google Maps", reviewForm.google_maps_link, "Open Map");
-    pushLink("Ticket Link", reviewForm.ticket_link, "Open Ticket Page");
+    if (ticketMode === "platform") {
+      pushText(
+        "Ticket checkout",
+        "On this site — logged-in guests book through the platform after approval (no external checkout)."
+      );
+      pushText(
+        "Total seats",
+        hasDisplayValue(reviewForm.total_seats) ? String(reviewForm.total_seats) : "Not set — required for on-site sales"
+      );
+      if (reviewListing?.booked_seats != null && reviewForm.total_seats) {
+        pushText("Seats booked (live)", `${reviewListing.booked_seats} of ${reviewForm.total_seats}`);
+      }
+      if (hasDisplayValue(reviewForm.ticket_link)) {
+        pushLink("Optional reference URL", reviewForm.ticket_link, "Open link");
+      } else {
+        pushText("External ticket URL", "None (not used for guest checkout)");
+      }
+    } else {
+      pushText("Ticket checkout", "External site — guests use the organizer’s ticketing page.");
+      if (hasDisplayValue(reviewForm.ticket_link)) {
+        pushLink("Ticket link", reviewForm.ticket_link, "Open ticket page");
+      } else {
+        pushText("Ticket link", "Not provided — add before approving external-ticket events.");
+      }
+    }
     pushLink("Image", reviewForm.image_url, "View Image");
     if (Array.isArray(reviewForm.gallery_image_urls)) {
       reviewForm.gallery_image_urls.forEach((url, idx) => {
@@ -725,11 +795,31 @@ function AdminDashboardPage() {
     return items;
   }, [reviewListing, reviewForm]);
 
+  const fetchHydratedEventRow = async (item) => {
+    if (listingType !== "events") {
+      return item;
+    }
+    const base = item && typeof item === "object" ? { ...item } : item;
+    try {
+      const res = await fetchAdminListingById("events", item.id);
+      const h = res?.data;
+      if (h && String(h.id) === String(item.id)) {
+        const merged = { ...base, ...h };
+        const ticket_levels = parseTicketLevelsFromEvent(merged);
+        return ticket_levels.length ? { ...merged, ticket_levels } : merged;
+      }
+    } catch (_err) {
+      /* fall back to table row */
+    }
+    return base;
+  };
+
   const handleApprove = async (item) => {
     if (listingType === "events") {
       setReviewListingType("events");
-      setReviewListing(item);
-      setReviewForm(buildEventReviewForm(item));
+      const row = await fetchHydratedEventRow(item);
+      setReviewListing(row);
+      setReviewForm(buildEventReviewForm(row));
       setReviewEditing(false);
       setReviewError("");
       return;
@@ -745,9 +835,10 @@ function AdminDashboardPage() {
     setRejectError("");
   };
 
-  const handleView = (item) => {
+  const handleView = async (item) => {
     setViewListingType(listingType);
-    setViewListing(item);
+    const row = await fetchHydratedEventRow(item);
+    setViewListing(row);
   };
 
   const handleDelete = async (item) => {
@@ -760,14 +851,16 @@ function AdminDashboardPage() {
     await loadAnalytics();
   };
 
-  const openEditModal = (item) => {
+  const openEditModal = async (item) => {
     setEditError("");
     setEditingListingType(listingType);
-    setEditingListing(item);
     if (listingType === "events") {
-      setEditForm(buildEventReviewForm(item));
+      const row = await fetchHydratedEventRow(item);
+      setEditingListing(row);
+      setEditForm(buildEventReviewForm(row));
       return;
     }
+    setEditingListing(item);
     if (listingType === "deals") {
       setEditForm({
         title: item.title || "",
@@ -802,7 +895,7 @@ function AdminDashboardPage() {
         business_email: item.business_email || "",
         business_mobile: item.business_mobile || "",
         location_text: item.location_text || "",
-        description: item.bio || "",
+        bio: item.bio || "",
         city_id: item.city_id ? String(item.city_id) : "",
         category_id: item.category_id ? String(item.category_id) : "",
         website_or_social_link: item.website_or_social_link || "",
@@ -903,6 +996,41 @@ function AdminDashboardPage() {
       let payload = {};
       if (editingListingType === "events") {
         payload = buildEventPayloadFromForm(editForm);
+      } else if (editingListingType === "influencers") {
+        payload = {
+          name: String(editForm.name || "").trim(),
+          bio: String(editForm.description || "").trim(),
+          contact_email: String(editForm.contact_email || "").trim(),
+          profile_image_url: String(editForm.profile_image_url || "").trim(),
+          instagram: String(editForm.instagram || "").trim(),
+          facebook: String(editForm.facebook || "").trim(),
+          youtube: String(editForm.youtube || "").trim()
+        };
+        if (editForm.city_id) {
+          payload.city_id = Number(editForm.city_id);
+        }
+        if (editForm.category_id) {
+          payload.category_id = Number(editForm.category_id);
+        }
+        if (editForm.youtube_subscribers_count !== "" && editForm.youtube_subscribers_count != null) {
+          payload.youtube_subscribers_count = Number(editForm.youtube_subscribers_count);
+        }
+      } else if (editingListingType === "dealers") {
+        payload = {
+          name: String(editForm.name || "").trim(),
+          business_email: String(editForm.business_email || "").trim(),
+          business_mobile: String(editForm.business_mobile || "").trim(),
+          location_text: String(editForm.location_text || "").trim(),
+          bio: String(editForm.bio || editForm.description || "").trim(),
+          website_or_social_link: String(editForm.website_or_social_link || "").trim(),
+          profile_image_url: String(editForm.profile_image_url || "").trim()
+        };
+        if (editForm.city_id) {
+          payload.city_id = Number(editForm.city_id);
+        }
+        if (editForm.category_id) {
+          payload.category_id = Number(editForm.category_id);
+        }
       } else {
         Object.entries(editForm).forEach(([key, value]) => {
           if (value === "" || value === null || value === undefined) {
@@ -936,6 +1064,20 @@ function AdminDashboardPage() {
   const handleApproveEventFromReview = async () => {
     if (!reviewListing) {
       return;
+    }
+    const ticketMode = normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode);
+    if (ticketMode === "external" && !String(reviewForm.ticket_link || "").trim()) {
+      setReviewError(
+        "This listing uses external ticketing but has no ticket URL. Add a valid link (use Edit) or change checkout to “On this site” before approving."
+      );
+      return;
+    }
+    if (ticketMode === "platform") {
+      const seats = Number(reviewForm.total_seats);
+      if (!Number.isFinite(seats) || seats < 1) {
+        setReviewError("Total seats is required for on-site ticket events before approval.");
+        return;
+      }
     }
     setReviewError("");
     try {
@@ -1042,7 +1184,8 @@ function AdminDashboardPage() {
       await updateTeamUserCapabilities(user.id, {
         can_post_events: Boolean(user.can_post_events),
         can_create_influencer_profile: Boolean(user.can_create_influencer_profile),
-        can_post_deals: Boolean(user.can_post_deals)
+        can_post_deals: Boolean(user.can_post_deals),
+        can_sell_platform_tickets: Boolean(user.can_sell_platform_tickets)
       });
       setTeamMessage("Capabilities updated successfully.");
       setTeamError("");
@@ -1241,7 +1384,9 @@ function AdminDashboardPage() {
                 { key: "bookings", label: "Bookings" },
                 { key: "users", label: "Users" },
                 { key: "team", label: "Team" },
-                { key: "communications", label: "Comms" }
+                { key: "ticket-access", label: "Tickets" },
+                { key: "communications", label: "Comms" },
+                { key: "cities", label: "Cities" }
               ].map((item) => {
                 const selected = activeSection === item.key;
                 return (
@@ -1517,7 +1662,14 @@ function AdminDashboardPage() {
             )
           : null}
 
-        {activeSection !== "team" && activeSection !== "bookings" && activeSection !== "communications" && activeSection !== "users" ? (
+        {activeSection === "cities" ? <AdminCitiesPanel /> : null}
+
+        {activeSection !== "team" &&
+        activeSection !== "bookings" &&
+        activeSection !== "communications" &&
+        activeSection !== "users" &&
+        activeSection !== "cities" &&
+        activeSection !== "ticket-access" ? (
           <AdminFilters
             filters={filters}
             onChange={onFilterChange}
@@ -1729,7 +1881,12 @@ function AdminDashboardPage() {
           />
         ) : null}
 
-        {activeSection !== "team" && activeSection !== "bookings" && activeSection !== "communications" && activeSection !== "users" ? (
+        {activeSection !== "team" &&
+        activeSection !== "bookings" &&
+        activeSection !== "communications" &&
+        activeSection !== "users" &&
+        activeSection !== "cities" &&
+        activeSection !== "ticket-access" ? (
           <div className={activeSection === "overview" ? "hidden lg:block" : ""}>
             <h2 className="mb-2 text-lg font-semibold capitalize text-slate-900">
               {listingType} Management
@@ -1995,6 +2152,9 @@ function AdminDashboardPage() {
                       </p>
                       <p><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
                       <p><span className="font-semibold">Booked:</span> {formatDateUS(item.booking_date)}</p>
+                      <div className="col-span-2 mt-1">
+                        <BookingPaymentSummary booking={item} />
+                      </div>
                     </div>
                   </article>
                 ))
@@ -2035,21 +2195,24 @@ function AdminDashboardPage() {
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Attendee Count</th>
                     <th className="px-4 py-3">Selected Dates</th>
-                    <th className="px-4 py-3 text-right">Total Amount</th>
+                    <th className="px-4 py-3 text-right">Order Total</th>
+                    <th className="px-4 py-3">Payment</th>
+                    <th className="px-4 py-3 text-right">Charged</th>
+                    <th className="px-4 py-3">Stripe</th>
                     <th className="px-4 py-3">Booking Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingBookings ? (
                     <tr>
-                      <td className="px-4 py-3 text-slate-500" colSpan={8}>
+                      <td className="px-4 py-3 text-slate-500" colSpan={11}>
                         Loading bookings...
                       </td>
                     </tr>
                   ) : null}
                   {!loadingBookings && bookingRows.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-3 text-slate-500" colSpan={8}>
+                      <td className="px-4 py-3 text-slate-500" colSpan={11}>
                         No bookings match the selected filters.
                       </td>
                     </tr>
@@ -2068,6 +2231,9 @@ function AdminDashboardPage() {
                               : "-"}
                           </td>
                           <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
+                          <AdminBookingPaymentStatusCell booking={item} />
+                          <AdminBookingAmountPaidCell booking={item} />
+                          <AdminBookingStripeRefCell booking={item} />
                           <td className="px-4 py-3 text-slate-600">{formatDateUS(item.booking_date)}</td>
                         </tr>
                       ))
@@ -2207,7 +2373,9 @@ function AdminDashboardPage() {
               </table>
             </div>
           </section>
-        ) : activeSection === "communications" ? null : (
+        ) : activeSection === "communications" ? null : activeSection === "ticket-access" ? (
+          <AdminPlatformTicketRequestsPanel />
+        ) : activeSection === "team" ? (
           <section className="space-y-4">
             <h2 className="text-lg font-semibold text-slate-900">Team Management</h2>
             <form
@@ -2345,6 +2513,17 @@ function AdminDashboardPage() {
                           onChange={(e) => handleCapabilityToggle(user.id, "can_post_deals", e.target.checked)}
                         />
                         Post Deals
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(user.can_sell_platform_tickets)}
+                          disabled={!user.is_active}
+                          onChange={(e) =>
+                            handleCapabilityToggle(user.id, "can_sell_platform_tickets", e.target.checked)
+                          }
+                        />
+                        On-site ticket sales
                       </label>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -2489,6 +2668,17 @@ function AdminDashboardPage() {
                                 />
                                 Post Deals
                               </label>
+                              <label className="flex items-center gap-2 text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(user.can_sell_platform_tickets)}
+                                  disabled={!user.is_active}
+                                  onChange={(e) =>
+                                    handleCapabilityToggle(user.id, "can_sell_platform_tickets", e.target.checked)
+                                  }
+                                />
+                                On-site ticket sales
+                              </label>
                             </div>
                           </td>
                           <td className="px-4 py-3">
@@ -2527,7 +2717,7 @@ function AdminDashboardPage() {
               </table>
             </div>
           </section>
-        )}
+        ) : null}
       </section>
 
       {editingListing
@@ -2557,6 +2747,15 @@ function AdminDashboardPage() {
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
+              ) : listingType === "dealers" ? (
+                <FormField label="Business Name" hint="Registered business or brand name." example="Glow City Deals" className="sm:col-span-2">
+                  <input
+                    required
+                    value={editForm.name || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                </FormField>
               ) : (
                 <FormField
                   label={listingType === "events" ? "Event Title" : "Deal Title"}
@@ -2573,18 +2772,72 @@ function AdminDashboardPage() {
                 </FormField>
               )}
 
-              <FormField
-                label={listingType === "influencers" ? "Bio" : "Description"}
-                hint={listingType === "influencers" ? "Add niche, audience, and content style." : "Provide key details and context."}
-                className="sm:col-span-2"
-              >
-                <textarea
-                  rows={3}
-                  value={editForm.description || ""}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                />
-              </FormField>
+              {listingType === "dealers" ? (
+                <>
+                  <FormField label="Business Email" hint="Primary business contact email.">
+                    <input
+                      type="email"
+                      required
+                      value={editForm.business_email || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, business_email: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField label="Business Mobile" hint="Business phone or WhatsApp number.">
+                    <input
+                      required
+                      value={editForm.business_mobile || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, business_mobile: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField label="Location" hint="City or Virtual / Online label." className="sm:col-span-2">
+                    <input
+                      required
+                      value={editForm.location_text || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, location_text: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField label="About / Bio" hint="Business summary shown on the dealer profile." className="sm:col-span-2">
+                    <textarea
+                      rows={4}
+                      required
+                      value={editForm.bio || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, bio: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField label="Website / Social Link" hint="Optional public link." className="sm:col-span-2">
+                    <input
+                      type="url"
+                      value={editForm.website_or_social_link || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, website_or_social_link: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                  <FormField label="Profile image / logo" hint="Business logo or profile image." className="sm:col-span-2">
+                    <CloudinaryImageInput
+                      value={editForm.profile_image_url || ""}
+                      onChange={(url) => setEditForm((prev) => ({ ...prev, profile_image_url: url }))}
+                      disabled={editSaving}
+                    />
+                  </FormField>
+                </>
+              ) : (
+                <FormField
+                  label={listingType === "influencers" ? "Bio" : "Description"}
+                  hint={listingType === "influencers" ? "Add niche, audience, and content style." : "Provide key details and context."}
+                  className="sm:col-span-2"
+                >
+                  <textarea
+                    rows={3}
+                    value={editForm.description || ""}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                </FormField>
+              )}
 
               {listingType === "influencers" ? (
                 <>
@@ -2663,23 +2916,46 @@ function AdminDashboardPage() {
                 </>
               ) : null}
 
-              <FormField label="City" hint="Choose the relevant city for this listing.">
-                <PopupSelect
-                  value={editForm.city_id || ""}
-                  onChange={(next) => setEditForm((prev) => ({ ...prev, city_id: next }))}
-                  placeholder="Select City"
-                  options={cities.map((city) => ({ value: city.value, label: city.label }))}
-                />
-              </FormField>
+              {listingType !== "dealers" ? (
+                <>
+                  <FormField label="City" hint="Choose the relevant city for this listing.">
+                    <PopupSelect
+                      value={editForm.city_id || ""}
+                      onChange={(next) => setEditForm((prev) => ({ ...prev, city_id: next }))}
+                      placeholder="Select City"
+                      options={cities.map((city) => ({ value: city.value, label: city.label }))}
+                    />
+                  </FormField>
 
-              <FormField label="Category" hint="Select the most accurate category.">
-                <PopupSelect
-                  value={editForm.category_id || ""}
-                  onChange={(next) => setEditForm((prev) => ({ ...prev, category_id: next }))}
-                  placeholder="Select Category"
-                  options={categories.map((category) => ({ value: category.value, label: category.label }))}
-                />
-              </FormField>
+                  <FormField label="Category" hint="Select the most accurate category.">
+                    <PopupSelect
+                      value={editForm.category_id || ""}
+                      onChange={(next) => setEditForm((prev) => ({ ...prev, category_id: next }))}
+                      placeholder="Select Category"
+                      options={categories.map((category) => ({ value: category.value, label: category.label }))}
+                    />
+                  </FormField>
+                </>
+              ) : (
+                <>
+                  <FormField label="City" hint="Linked city when not virtual.">
+                    <PopupSelect
+                      value={editForm.city_id || ""}
+                      onChange={(next) => setEditForm((prev) => ({ ...prev, city_id: next }))}
+                      placeholder="Select City (optional)"
+                      options={cities.map((city) => ({ value: city.value, label: city.label }))}
+                    />
+                  </FormField>
+                  <FormField label="Category" hint="Business category.">
+                    <PopupSelect
+                      value={editForm.category_id || ""}
+                      onChange={(next) => setEditForm((prev) => ({ ...prev, category_id: next }))}
+                      placeholder="Select Category"
+                      options={categories.map((category) => ({ value: category.value, label: category.label }))}
+                    />
+                  </FormField>
+                </>
+              )}
 
               {listingType === "events" ? (
                 <>
@@ -2794,25 +3070,27 @@ function AdminDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
-                  <FormField label="Price (USD)" hint="Ticket price per attendee." example="29.99">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editForm.price || ""}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                    />
-                  </FormField>
-                  <FormField label="Duration (Hours)" hint="Total event length in hours." example="4">
-                    <input
-                      type="number"
-                      min="1"
-                      max="168"
-                      value={editForm.duration_hours || ""}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                    />
+                  <FormField label="Duration" hint="Hours and optional minutes (e.g. 2 hr 30 min)." example="2 h, 30 m">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="168"
+                        placeholder="Hours"
+                        value={editForm.duration_hours ?? ""}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        placeholder="Minutes"
+                        value={editForm.duration_minutes ?? ""}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      />
+                    </div>
                   </FormField>
                   <FormField label="Age Limit" hint="Audience age guidance for this event.">
                     <PopupSelect
@@ -2895,14 +3173,78 @@ function AdminDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
-                  <FormField label="Ticket Link" hint="Optional external ticketing page URL." example="https://tickets.example.com/event-123">
+                  <FormField
+                    label="Where tickets are sold"
+                    hint="External sends guests to the organizer’s page; on-site keeps reservations on this platform."
+                    className="sm:col-span-2"
+                  >
+                    <select
+                      value={normalizeEventTicketSalesMode(editForm.ticket_sales_mode)}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({ ...prev, ticket_sales_mode: e.target.value === "platform" ? "platform" : "external" }))
+                      }
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                    >
+                      <option value="external">External site (ticket link required)</option>
+                      <option value="platform">On this site (site booking after approval)</option>
+                    </select>
+                  </FormField>
+                  {normalizeEventTicketSalesMode(editForm.ticket_sales_mode) === "platform" ? (
+                    <>
+                      <FormField
+                        label="Total seats available"
+                        hint="Capacity for on-site bookings. Must be at least the number of seats already reserved."
+                        example="250"
+                      >
+                        <input
+                          type="number"
+                          min={1}
+                          max={50000}
+                          step={1}
+                          value={editForm.total_seats || ""}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, total_seats: e.target.value }))}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                        />
+                      </FormField>
+                    <EventTicketLevelsEditor
+                      levels={editForm.ticket_levels || []}
+                      onChange={(ticket_levels) => setEditForm((prev) => ({ ...prev, ticket_levels }))}
+                      disabled={editSaving}
+                    />
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
+                      Guest checkout uses the on-site flow. The optional URL below is not the main checkout path.
+                    </div>
+                  </>
+                ) : (
+                  <FormField label="Price (USD)" hint="Ticket price per attendee." example="29.99">
                     <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editForm.price || ""}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                )}
+                <FormField
+                  label={normalizeEventTicketSalesMode(editForm.ticket_sales_mode) === "platform" ? "Optional reference URL" : "Ticket link"}
+                    hint={
+                      normalizeEventTicketSalesMode(editForm.ticket_sales_mode) === "platform"
+                        ? "Optional; not used as the main checkout for guests."
+                        : "Required for external sales — full URL to the organizer’s ticketing page."
+                    }
+                    example="https://tickets.example.com/event-123"
+                    className="sm:col-span-2"
+                  >
+                    <input
+                      type="url"
                       value={editForm.ticket_link || ""}
                       onChange={(e) => setEditForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                     />
                   </FormField>
-                  <FormField label="Cover image" hint="Primary banner; detail page shows this first.">
+                  <FormField label="Cover image" hint={`Primary banner; detail page shows this first. ${LISTING_BANNER_IMAGE_HINT}`}>
                     <CloudinaryImageInput
                       value={editForm.image_url || ""}
                       onChange={(url) => setEditForm((prev) => ({ ...prev, image_url: url }))}
@@ -3051,6 +3393,17 @@ function AdminDashboardPage() {
               ) : null}
 
               </div>
+              {listingType === "events" &&
+              editingListing &&
+              normalizeEventTicketSalesMode(editForm.ticket_sales_mode) === "platform" ? (
+                <div className="mt-5 border-t border-slate-200 pt-5">
+                  <OrganizerInsightsPanel
+                    fixedEventId={String(editingListing.id)}
+                    embedded
+                    fetchEventInsightsFn={fetchAdminEventInsights}
+                  />
+                </div>
+              ) : null}
             </div>
             <div className="shrink-0 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/90">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -3088,7 +3441,9 @@ function AdminDashboardPage() {
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Review Event Submission</h3>
                 <p className="text-sm text-slate-500">
-                  Review details, optionally edit, then approve this event listing.
+                  {normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode) === "platform"
+                    ? "Tickets: on this site — guests book here after approval; confirm dates and pricing."
+                    : "Tickets: external link — confirm the organizer’s ticket URL before approving."}
                 </p>
               </div>
               <button type="button" onClick={closeReviewModal} className="text-sm font-semibold text-slate-500">
@@ -3099,6 +3454,27 @@ function AdminDashboardPage() {
 
             <div className="hide-scrollbar flex-1 overflow-y-auto overscroll-contain scroll-smooth px-5 py-4 pb-6">
               {!reviewEditing ? (
+                <>
+                  {normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode) === "platform" ? (
+                    <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-950">
+                      <p className="font-semibold">On-site ticket checkout</p>
+                      <p className="mt-1 text-emerald-900/90">
+                        This event does not send guests to an external box office. After approval, logged-in users can
+                        reserve on the public event page using the site booking flow.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                      <p className="font-semibold">External ticket checkout</p>
+                      <p className="mt-1 text-slate-600">
+                        Guests should use the organizer’s ticket link on the event page. Ensure the link is valid and
+                        reachable before approving.
+                      </p>
+                    </div>
+                  )}
+                {normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode) === "platform" ? (
+                  <AdminTicketLevelsSummary event={reviewForm} className="mb-4 sm:col-span-2" />
+                ) : null}
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   {reviewDisplayItems.length ? (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -3124,6 +3500,7 @@ function AdminDashboardPage() {
                     <p className="text-sm text-slate-600">No event details were provided by the organizer.</p>
                   )}
                 </div>
+                </>
               ) : (
                 <form className="popup-modal grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <FormField label="Event Title" hint="Use a clear title attendees can understand." example="Summer Startup Mixer" className="sm:col-span-2">
@@ -3289,14 +3666,73 @@ function AdminDashboardPage() {
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
-                <FormField label="Ticket Link" hint="Optional external ticketing page URL." example="https://tickets.example.com/event-123">
+                <FormField
+                  label="Where tickets are sold"
+                  hint="External sends guests to the organizer’s page; on-site keeps reservations on this platform."
+                  className="sm:col-span-2"
+                >
+                  <select
+                    value={normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode)}
+                    onChange={(e) =>
+                      setReviewForm((prev) => ({ ...prev, ticket_sales_mode: e.target.value === "platform" ? "platform" : "external" }))
+                    }
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                  >
+                    <option value="external">External site (ticket link required)</option>
+                    <option value="platform">On this site (site booking after approval)</option>
+                  </select>
+                </FormField>
+                {normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode) === "platform" ? (
+                  <>
+                    <FormField label="Total seats available" hint="On-site booking capacity for this event.">
+                      <input
+                        type="number"
+                        min={1}
+                        max={50000}
+                        step={1}
+                        value={reviewForm.total_seats || ""}
+                        onChange={(e) => setReviewForm((prev) => ({ ...prev, total_seats: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      />
+                    </FormField>
+                    <EventTicketLevelsEditor
+                      levels={reviewForm.ticket_levels || []}
+                      onChange={(ticket_levels) => setReviewForm((prev) => ({ ...prev, ticket_levels }))}
+                    />
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
+                      Guest checkout uses the on-site flow. The optional URL below is not the primary buy action.
+                    </div>
+                  </>
+                ) : (
+                  <FormField label="Price (USD)" hint="Ticket price per attendee." example="29.99">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={reviewForm.price || ""}
+                      onChange={(e) => setReviewForm((prev) => ({ ...prev, price: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </FormField>
+                )}
+                <FormField
+                  label={normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode) === "platform" ? "Optional reference URL" : "Ticket link"}
+                  hint={
+                    normalizeEventTicketSalesMode(reviewForm.ticket_sales_mode) === "platform"
+                      ? "Optional; not used as the main checkout for guests."
+                      : "Required for external sales — full URL to the organizer’s ticketing page."
+                  }
+                  example="https://tickets.example.com/event-123"
+                  className="sm:col-span-2"
+                >
                   <input
+                    type="url"
                     value={reviewForm.ticket_link || ""}
                     onChange={(e) => setReviewForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
-                <FormField label="Cover image" hint="Primary banner image.">
+                <FormField label="Cover image" hint={`Primary banner image. ${LISTING_BANNER_IMAGE_HINT}`}>
                   <CloudinaryImageInput
                     value={reviewForm.image_url || ""}
                     onChange={(url) => setReviewForm((prev) => ({ ...prev, image_url: url }))}
@@ -3350,24 +3786,27 @@ function AdminDashboardPage() {
                     </button>
                   </div>
                 </div>
-                <FormField label="Price (USD)" hint="Ticket price per attendee." example="29.99">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={reviewForm.price || ""}
-                    onChange={(e) => setReviewForm((prev) => ({ ...prev, price: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                  />
-                </FormField>
-                <FormField label="Duration (Hours)" hint="Total event length in hours." example="4">
-                  <input
-                    type="number"
-                    min="1"
-                    value={reviewForm.duration_hours || ""}
-                    onChange={(e) => setReviewForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                  />
+                <FormField label="Duration" hint="Hours and optional minutes." example="2 h, 30 m">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="168"
+                      placeholder="Hours"
+                      value={reviewForm.duration_hours ?? ""}
+                      onChange={(e) => setReviewForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      placeholder="Minutes"
+                      value={reviewForm.duration_minutes ?? ""}
+                      onChange={(e) => setReviewForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                  </div>
                 </FormField>
                 <FormField label="Age Limit" hint="Audience age guidance for this event.">
                   <PopupSelect
@@ -3504,7 +3943,13 @@ function AdminDashboardPage() {
       {viewListing
         ? createPortal(
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-3 sm:p-6">
-          <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[min(88dvh,760px)]">
+          <div
+            className={`flex w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[min(92dvh,900px)] ${
+              viewListingType === "events" && resolveEventTicketSalesMode(viewListing) === "platform"
+                ? "max-w-6xl"
+                : "max-w-2xl"
+            }`}
+          >
             <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4">
               <div className="flex items-start justify-between">
                 <div>
@@ -3591,6 +4036,68 @@ function AdminDashboardPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</p>
                     <p className="mt-1 text-sm text-slate-700 uppercase">{viewListing.status || "-"}</p>
                   </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ticket checkout</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">
+                      {resolveEventTicketSalesMode(viewListing) === "platform"
+                        ? "On this site"
+                        : "External ticketing"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {resolveEventTicketSalesMode(viewListing) === "platform"
+                        ? "Guests book through the site after this event is approved. No external box office link is required."
+                        : "Guests should use the organizer’s external ticket page from the public event listing."}
+                    </p>
+                    {resolveEventTicketSalesMode(viewListing) === "platform" ? (
+                      <>
+                        <p className="mt-2 text-sm text-slate-700">
+                          <span className="font-semibold text-slate-900">Total seats: </span>
+                          {viewListing.total_seats != null ? viewListing.total_seats : "Not set"}
+                          {viewListing.booked_seats != null ? (
+                            <span className="text-slate-600">
+                              {" "}
+                              · {viewListing.booked_seats} booked
+                              {viewListing.seats_remaining != null
+                                ? ` · ${viewListing.seats_remaining} remaining`
+                                : ""}
+                            </span>
+                          ) : null}
+                        </p>
+                        {hasDisplayValue(viewListing.ticket_link) ? (
+                        <a
+                          href={viewListing.ticket_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                        >
+                          Open optional reference URL
+                        </a>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-500">No optional reference URL.</p>
+                      )}
+                      </>
+                    ) : hasDisplayValue(viewListing.ticket_link) ? (
+                      <a
+                        href={viewListing.ticket_link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                      >
+                        Open ticket page
+                      </a>
+                    ) : (
+                      <p className="mt-2 text-sm font-medium text-amber-800">No ticket link on file.</p>
+                    )}
+                  </div>
+                  {resolveEventTicketSalesMode(viewListing) === "platform" ? (
+                    <div className="sm:col-span-2">
+                      <OrganizerInsightsPanel
+                        fixedEventId={String(viewListing.id)}
+                        embedded
+                        fetchEventInsightsFn={fetchAdminEventInsights}
+                      />
+                    </div>
+                  ) : null}
                   {hasDisplayValue(viewListing.image_url) ? (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cover image</p>
@@ -3925,8 +4432,9 @@ function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    const row = viewListing;
                     closeViewModal();
-                    openEditModal(viewListing);
+                    void openEditModal(row);
                   }}
                   className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
                 >

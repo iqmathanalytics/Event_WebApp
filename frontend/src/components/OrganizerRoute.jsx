@@ -4,7 +4,7 @@ import useAuth from "../hooks/useAuth";
 function OrganizerRoute({ children }) {
   const { isAuthenticated, isOrganizer } = useAuth();
   if (!isAuthenticated) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/login" replace state={{ from: "/dashboard/organizer" }} />;
   }
   if (!isOrganizer) {
     return <Navigate to="/dashboard/user" replace />;

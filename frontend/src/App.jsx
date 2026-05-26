@@ -13,6 +13,7 @@ import StaffLoginPage from "./pages/StaffLoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import UserDashboardPage from "./pages/UserDashboardPage";
 import UserSubmissionsPage from "./pages/UserSubmissionsPage";
+import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ContactPage from "./pages/ContactPage";
 import NewsletterPage from "./pages/NewsletterPage";
@@ -37,11 +38,11 @@ function App() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/events" element={<EventsPage />} />
-            <Route path="/events/:id" element={<EventDetailsPage />} />
+            <Route path="/events/:slug" element={<EventDetailsPage />} />
             <Route path="/influencers" element={<InfluencersPage />} />
-            <Route path="/influencers/:id" element={<InfluencerDetailsPage />} />
+            <Route path="/influencers/:slug" element={<InfluencerDetailsPage />} />
             <Route path="/deals" element={<DealsPage />} />
-            <Route path="/deals/:id" element={<DealDetailsPage />} />
+            <Route path="/deals/:slug" element={<DealDetailsPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/newsletter" element={<NewsletterPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -72,10 +73,12 @@ function App() {
             path="/dashboard/organizer"
             element={
               <OrganizerRoute>
-                <Navigate to={{ pathname: "/dashboard/user", hash: "host-events" }} replace />
+                <DashboardLayout />
               </OrganizerRoute>
             }
-          />
+          >
+            <Route index element={<OrganizerDashboardPage />} />
+          </Route>
 
           <Route
             element={

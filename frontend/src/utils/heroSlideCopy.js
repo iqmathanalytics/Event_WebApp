@@ -3,38 +3,33 @@
 export const DEFAULT_HERO_NARRATIVE = {
   headline: "Discover events, deals, and creators around you.",
   subline:
-    "Explore trusted local experiences with Book My Tickets — one platform built for city life."
+    "Explore trusted local experiences with Book My Tickets — one platform built for city life.",
+  detailPath: null
 };
 
-function truncateTitle(raw, max = 46) {
-  const t = String(raw || "").trim();
-  if (!t) return "this handpicked moment";
-  if (t.length <= max) return t;
-  return `${t.slice(0, max - 1).trim()}…`;
+function trimDescription(raw, max = 720) {
+  const text = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "";
+  }
+  if (text.length <= max) {
+    return text;
+  }
+  return `${text.slice(0, max - 1).trim()}…`;
 }
 
 /**
- * @param {{ title?: string, variant?: string, countdownLabel?: string | null }} slide
+ * @param {{ title?: string, description?: string, variant?: string, countdownLabel?: string | null, detailPath?: string | null }} slide
  */
 export function buildHeroNarrativeFromSlide(slide) {
-  const title = slide?.title || "Featured experience";
-  const short = truncateTitle(title);
-  const countdown = slide?.countdownLabel ? String(slide.countdownLabel) : "";
-  const isYay = slide?.variant === "yay";
-
-  if (isYay) {
-    return {
-      headline: `Book My Tickets members get the glow-up on ${short}`,
-      subline: countdown
-        ? `${countdown} until go-time — early access, add-ons, and perks that turn a ticket into a flex.`
-        : "Insider access locked this one early — unlock perks, skip FOMO, and feel like part of the crowd."
-    };
-  }
+  const title = String(slide?.title || "").trim() || DEFAULT_HERO_NARRATIVE.headline;
+  const description =
+    trimDescription(slide?.description) ||
+    "See dates, venue, and ticket options on the event page.";
 
   return {
-    headline: `Tonight’s energy: ${short}`,
-    subline: countdown
-      ? `Clock says ${countdown} — grab seats while the group chat is still hyping it.`
-      : "Handpicked for your city: the rooms, stages, and tables where stories actually happen."
+    headline: title,
+    subline: description,
+    detailPath: slide?.detailPath || null
   };
 }

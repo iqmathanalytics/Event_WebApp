@@ -1,0 +1,4 @@
+SET NAMES utf8mb4;
+
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS duration_minutes INT UNSIGNED NULL DEFAULT NULL AFTER duration_hours;

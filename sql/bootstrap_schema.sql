@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   can_post_events TINYINT(1) NOT NULL DEFAULT 1,
   can_create_influencer_profile TINYINT(1) NOT NULL DEFAULT 1,
   can_post_deals TINYINT(1) NOT NULL DEFAULT 1,
+  can_sell_platform_tickets TINYINT(1) NOT NULL DEFAULT 0,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -80,9 +81,12 @@ CREATE TABLE IF NOT EXISTS events (
   category_id BIGINT UNSIGNED NOT NULL,
   organizer_id BIGINT UNSIGNED NOT NULL,
   ticket_link VARCHAR(500) NULL,
+  ticket_sales_mode ENUM('external','platform') NOT NULL DEFAULT 'external',
+  total_seats INT UNSIGNED NULL,
   image_url VARCHAR(500) NULL,
   gallery_image_urls JSON NULL,
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  ticket_levels_json TEXT NULL,
   duration_hours INT NULL,
   age_limit VARCHAR(50) NULL,
   languages VARCHAR(255) NULL,
@@ -93,6 +97,8 @@ CREATE TABLE IF NOT EXISTS events (
   deal_event_discount_code VARCHAR(80) NULL,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   popularity_score INT NOT NULL DEFAULT 0,
+  click_count INT NOT NULL DEFAULT 0,
+  view_count INT NOT NULL DEFAULT 0,
   reviewed_by BIGINT UNSIGNED NULL,
   reviewed_at TIMESTAMP NULL DEFAULT NULL,
   review_note VARCHAR(500) NULL,
@@ -282,7 +288,8 @@ INSERT IGNORE INTO cities (id, name, state, slug, is_active) VALUES
   (17, 'Phoenix', 'AZ', 'phoenix-az', 1),
   (18, 'Nashville', 'TN', 'nashville-tn', 1),
   (19, 'San Jose', 'CA', 'san-jose-ca', 1),
-  (20, 'Portland', 'OR', 'portland-or', 1);
+  (20, 'Portland', 'OR', 'portland-or', 1),
+  (21, 'Others', 'US', 'others-us', 1);
 
 INSERT IGNORE INTO categories (id, name, slug, module_type, is_active) VALUES
   (1, 'Music', 'music', 'event', 1),

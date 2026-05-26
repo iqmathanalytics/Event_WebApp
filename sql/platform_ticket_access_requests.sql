@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS platform_ticket_access_requests (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  mobile_number VARCHAR(20) NULL,
+  organization_name VARCHAR(200) NULL,
+  message TEXT NOT NULL,
+  status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+  admin_note TEXT NULL,
+  reviewed_by BIGINT UNSIGNED NULL,
+  reviewed_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_ptar_user (user_id),
+  KEY idx_ptar_status (status),
+  KEY idx_ptar_created (created_at),
+  CONSTRAINT fk_ptar_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

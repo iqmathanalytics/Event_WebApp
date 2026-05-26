@@ -1,9 +1,12 @@
 const { z } = require("zod");
+const { coerceTicketSalesModeBodyInput } = require("../utils/eventTicketSalesMode");
 
 const listListingsSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({
     type: z.enum(["events", "deals", "influencers", "dealers"]),
+    /** When set, return a single listing by primary key (works on older API deploys without GET /listings/:type/:id). */
+    id: z.string().regex(/^\d+$/).optional(),
     status: z.enum(["pending", "approved", "rejected"]).optional(),
     city: z.string().regex(/^\d+$/).optional(),
     category: z.string().regex(/^\d+$/).optional(),
@@ -79,10 +82,16 @@ const editListingSchema = z.object({
     venue_name: z.string().max(255).optional(),
     venue_address: z.string().max(400).optional(),
     google_maps_link: z.string().url().max(500).optional(),
-    ticket_link: z.string().url().max(500).optional(),
+    ticket_sales_mode: z.preprocess(coerceTicketSalesModeBodyInput, z.enum(["external", "platform"]).optional()),
+    total_seats: z.coerce.number().int().min(1).max(50000).optional(),
+    ticket_link: z.preprocess(
+      (v) => (v === null || v === "" ? undefined : v),
+      z.string().url().max(500).optional()
+    ),
     image_url: z.string().url().max(500).optional(),
     gallery_image_urls: z.array(z.string().url().max(1000)).max(12).optional(),
-    duration_hours: z.coerce.number().int().positive().max(168).optional(),
+    duration_hours: z.coerce.number().int().min(0).max(168).optional(),
+    duration_minutes: z.coerce.number().int().min(0).max(59).optional(),
     age_limit: z.string().max(50).optional(),
     languages: z.string().max(255).optional(),
     genres: z.string().max(255).optional(),
@@ -103,6 +112,15 @@ const editListingSchema = z.object({
 });
 
 const deleteListingSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    type: z.enum(["events", "deals", "influencers", "dealers"]),
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
+const getListingByIdSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
   params: z.object({
@@ -170,7 +188,8 @@ const updateTeamCapabilitiesSchema = z.object({
   body: z.object({
     can_post_events: z.boolean(),
     can_create_influencer_profile: z.boolean(),
-    can_post_deals: z.boolean()
+    can_post_deals: z.boolean(),
+    can_sell_platform_tickets: z.boolean()
   }),
   query: z.object({}).passthrough(),
   params: z.object({
@@ -238,6 +257,14 @@ const adminNotificationsReadSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const adminPlatformTicketRequestIdSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
 const adminNotificationsDeleteSchema = z.object({
   body: z.object({}).passthrough(),
   query: z.object({}).passthrough(),
@@ -263,6 +290,7 @@ const adminNewsletterDeleteSchema = z.object({
 module.exports = {
   analyticsSchema,
   listListingsSchema,
+  getListingByIdSchema,
   updateListingStatusSchema,
   editListingSchema,
   deleteListingSchema,
@@ -282,5 +310,6 @@ module.exports = {
   adminNewsletterDeleteSchema,
   adminNotificationsListSchema,
   adminNotificationsReadSchema,
-  adminNotificationsDeleteSchema
+  adminNotificationsDeleteSchema,
+  adminPlatformTicketRequestIdSchema
 };

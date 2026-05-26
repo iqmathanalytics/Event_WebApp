@@ -1,28 +1,14 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link } from "react-router-dom";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from "recharts";
+import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
-import { FiCalendar, FiClipboard, FiInfo, FiMapPin, FiTrendingUp, FiUsers } from "react-icons/fi";
+import { FiCalendar, FiInfo, FiMapPin } from "react-icons/fi";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
 import { categories } from "../utils/filterOptions";
 import { formatCurrency, formatDateUS } from "../utils/format";
+import { normalizeEventTicketSalesMode, resolveEventTicketSalesMode } from "../utils/eventTicketSalesMode";
 import { downloadBlob } from "../utils/fileDownload";
 import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
 import FilterPopupField from "../components/FilterPopupField";
@@ -31,6 +17,22 @@ import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
+import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
+import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
+import BookingPaymentSummary from "../components/BookingPaymentSummary";
+import {
+  BookingAmountPaidCell,
+  BookingPaymentStatusCell,
+  BookingStripeRefCell
+} from "../components/BookingPaymentTableCells";
+import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
+import OrganizerInsightsPanel from "../components/OrganizerInsightsPanel";
+import EventTicketLevelsEditor from "../components/EventTicketLevelsEditor";
+import {
+  parseTicketLevelsFromEvent,
+  serializeTicketLevelsForApi,
+  ticketLevelsToFormRows
+} from "../utils/eventTicketLevels";
 
 const initialForm = {
   title: "",
@@ -46,18 +48,38 @@ const initialForm = {
   google_maps_link: "",
   city_id: "",
   category_id: "",
+  ticket_sales_mode: "external",
+  total_seats: "",
   ticket_link: "",
   price: "",
   image_url: "",
   gallery_image_urls: [],
   duration_hours: "",
+  duration_minutes: "",
   age_limit: "All Ages",
   languages: "",
   genres: "",
   event_highlights: [],
   is_yay_deal_event: false,
-  deal_event_discount_code: ""
+  deal_event_discount_code: "",
+  ticket_levels: []
 };
+
+/**
+ * Use the checked `ticket_sales_mode` radio in the DOM when present, so we never POST stale React state
+ * (can otherwise default to `external` while the user selected "On this site").
+ */
+function resolveTicketSalesModeForSubmit(submitEvent, formTicketMode) {
+  let mode = normalizeEventTicketSalesMode(formTicketMode);
+  const root = submitEvent?.currentTarget;
+  if (root && typeof root.querySelector === "function") {
+    const checked = root.querySelector('input[name="ticket_sales_mode"]:checked');
+    if (checked && (checked.value === "platform" || checked.value === "external")) {
+      mode = checked.value;
+    }
+  }
+  return mode;
+}
 
 const eventHighlightOptions = [
   "Free Parking",
@@ -163,14 +185,25 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     suppressChrome = false,
     suppressRouteContentReadySignal = false,
     onEmbeddedWorkspaceInitialReady,
-    embeddedSectionMode = "full"
+    embeddedSectionMode = "full",
+    onRequestPlatformTickets = null
   },
   ref
 ) {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, canSellPlatformTickets, refreshSession } = useAuth();
+
+  const openPlatformTicketRequest = () => {
+    if (typeof onRequestPlatformTickets === "function") {
+      onRequestPlatformTickets();
+      return;
+    }
+    navigate("/dashboard/user", { state: { openPlatformTicketRequest: true } });
+  };
   const { cities } = useCityFilter();
   const myEventsOnly = embedded && embeddedSectionMode === "my-events-only";
   const [activeSection, setActiveSection] = useState(myEventsOnly ? "my-events" : "overview");
+  const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -179,6 +212,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
+  const editingPlatformEvent =
+    Boolean(editingEvent) && resolveEventTicketSalesMode(editingEvent) === "platform";
+  const showPlatformTicketOptions = canSellPlatformTickets || editingPlatformEvent;
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [overviewBookings, setOverviewBookings] = useState([]);
@@ -191,6 +227,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [activeBookingPanel, setActiveBookingPanel] = useState(null);
   const formPanelRef = useRef(null);
   const [activeFormPanel, setActiveFormPanel] = useState(null);
+  const [postSubmitFeedback, setPostSubmitFeedback] = useState(null);
   const didKickOffLoadsRef = useRef(false);
   const embeddedWorkspaceReadySentRef = useRef(false);
   const sawEmbeddedLoadCycleRef = useRef(false);
@@ -212,77 +249,16 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     return () => window.removeEventListener("click", onDocClick);
   }, []);
 
-  const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().slice(0, 10);
-    const totalEventsCreated = rows.length;
-    const totalBookingsReceived = overviewBookings.length;
-
-    const isUpcomingEvent = (item) => {
-      const scheduleType = item.schedule_type || "single";
-      if (scheduleType === "range") {
-        const end = String(item.event_end_date || "").slice(0, 10);
-        return Boolean(end) && end >= todayStr;
-      }
-      if (scheduleType === "multiple") {
-        const dates = Array.isArray(item.event_dates) ? item.event_dates : [];
-        if (dates.length) {
-          return dates.some((d) => String(d).slice(0, 10) >= todayStr);
-        }
-        // Fallback: if dates are missing, use the primary event_date.
-      }
-      const start = String(item.event_date || "").slice(0, 10);
-      return Boolean(start) && start >= todayStr;
-    };
-
-    const upcomingEvents = rows.filter(isUpcomingEvent).length;
-    const totalAttendees = overviewBookings.reduce(
-      (sum, item) => sum + Number(item.attendee_count || 0),
-      0
-    );
-    return {
-      totalEventsCreated,
-      totalBookingsReceived,
-      upcomingEvents,
-      totalAttendees
-    };
-  }, [rows, overviewBookings]);
-
-  const bookingsOverTimeData = useMemo(() => {
-    const grouped = overviewBookings.reduce((acc, item) => {
-      const key = String(item.booking_date).slice(0, 10);
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(grouped)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, count]) => ({ date: formatDateUS(date), count }));
-  }, [overviewBookings]);
-
-  const bookingsPerEventData = useMemo(() => {
-    const grouped = overviewBookings.reduce((acc, item) => {
-      const key = item.event_title || `Event #${item.event_id}`;
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(grouped)
-      .map(([event, bookings]) => ({ event, bookings }))
-      .sort((a, b) => b.bookings - a.bookings)
-      .slice(0, 8);
-  }, [overviewBookings]);
-
-  const attendeeDistributionData = useMemo(() => {
-    const grouped = overviewBookings.reduce((acc, item) => {
-      const key = item.event_title || `Event #${item.event_id}`;
-      acc[key] = (acc[key] || 0) + Number(item.attendee_count || 0);
-      return acc;
-    }, {});
-    return Object.entries(grouped)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-  }, [overviewBookings]);
+  useEffect(() => {
+    if (!isFormOpen || canSellPlatformTickets) {
+      return undefined;
+    }
+    void refreshSession();
+    const timer = window.setInterval(() => {
+      void refreshSession();
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [isFormOpen, canSellPlatformTickets, refreshSession]);
 
   const resetForm = () => {
     setForm(initialForm);
@@ -313,6 +289,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       google_maps_link: event.google_maps_link || "",
       city_id: event.city_id ? String(event.city_id) : "",
       category_id: event.category_id ? String(event.category_id) : "",
+      ticket_sales_mode: resolveEventTicketSalesMode(event),
+      total_seats: event.total_seats != null && event.total_seats !== "" ? String(event.total_seats) : "",
       ticket_link: event.ticket_link || "",
       price: event.price ?? "",
       image_url: event.image_url || "",
@@ -320,6 +298,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         ? [...event.gallery_image_urls]
         : [],
       duration_hours: event.duration_hours ?? "",
+      duration_minutes: event.duration_minutes ?? "",
       age_limit: event.age_limit || "All Ages",
       languages: event.languages || "",
       genres: event.genres || "",
@@ -328,7 +307,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         event.is_yay_deal_event === 1 ||
         event.is_yay_deal_event === true ||
         String(event.is_yay_deal_event || "") === "1",
-      deal_event_discount_code: event.deal_event_discount_code || ""
+      deal_event_discount_code: event.deal_event_discount_code || "",
+      ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event))
     });
     setIsFormOpen(true);
   };
@@ -468,12 +448,42 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       if (!form.category_id) {
         throw new Error("Please select a category.");
       }
+      let resolvedTicketMode = resolveTicketSalesModeForSubmit(e, form.ticket_sales_mode);
+      if (!canSellPlatformTickets) {
+        if (editingPlatformEvent) {
+          resolvedTicketMode = "platform";
+        } else {
+          resolvedTicketMode = "external";
+        }
+      }
+      if (resolvedTicketMode === "external" && !String(form.ticket_link || "").trim()) {
+        throw new Error("Please enter your external ticket page URL.");
+      }
+      if (resolvedTicketMode === "platform") {
+        const seats = Number(form.total_seats);
+        if (!Number.isFinite(seats) || seats < 1) {
+          throw new Error("Enter total seats available for on-site ticket booking (at least 1).");
+        }
+        if (seats > 50000) {
+          throw new Error("Total seats cannot exceed 50,000.");
+        }
+        const levels = serializeTicketLevelsForApi(form.ticket_levels);
+        if (!levels.length) {
+          throw new Error("Add at least one ticket level for on-site sales (name and price).");
+        }
+      }
       if (form.is_yay_deal_event && !String(form.deal_event_discount_code || "").trim()) {
         throw new Error("Please enter a discount code for exclusive deal events.");
       }
 
       const venueMapsUrl = normalizeOptionalUrl(form.google_maps_link, "Google Maps");
-      const ticketUrl = normalizeOptionalUrl(form.ticket_link, "ticket");
+      const rawTicket = String(form.ticket_link || "").trim();
+      const ticketUrl =
+        resolvedTicketMode === "platform"
+          ? rawTicket
+            ? normalizeOptionalUrl(form.ticket_link, "ticket")
+            : null
+          : normalizeOptionalUrl(form.ticket_link, "ticket");
       const imageUrl = normalizeOptionalUrl(form.image_url, "image");
       const galleryRaw = Array.isArray(form.gallery_image_urls) ? form.gallery_image_urls : [];
       const galleryUrls = [];
@@ -503,11 +513,20 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         google_maps_link: venueMapsUrl,
         city_id: Number(form.city_id),
         category_id: Number(form.category_id),
-        ticket_link: ticketUrl,
+        ticket_sales_mode: resolvedTicketMode,
+        total_seats: resolvedTicketMode === "platform" ? Number(form.total_seats) : undefined,
         image_url: imageUrl,
         gallery_image_urls: galleryUrls,
-        price: form.price === "" ? 0 : Number(form.price),
+        ticket_levels:
+          resolvedTicketMode === "platform" ? serializeTicketLevelsForApi(form.ticket_levels) : undefined,
+        price:
+          resolvedTicketMode === "platform"
+            ? Math.min(...serializeTicketLevelsForApi(form.ticket_levels).map((l) => l.price))
+            : form.price === ""
+              ? 0
+              : Number(form.price),
         duration_hours: form.duration_hours === "" ? undefined : Number(form.duration_hours),
+        duration_minutes: form.duration_minutes === "" ? undefined : Number(form.duration_minutes),
         age_limit: form.age_limit || undefined,
         languages: form.languages.trim() || undefined,
         genres: form.genres.trim() || undefined,
@@ -518,15 +537,25 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           : undefined
       };
 
-      if (editingEvent) {
+      if (resolvedTicketMode === "external") {
+        payload.ticket_link = ticketUrl;
+      } else if (ticketUrl) {
+        payload.ticket_link = ticketUrl;
+      }
+
+      const wasEditing = Boolean(editingEvent);
+      if (wasEditing) {
         await updateEvent(editingEvent.id, payload);
-        setSuccess("Event updated and submitted for admin approval.");
       } else {
         await createEvent(payload);
-        setSuccess("Event submitted for admin approval.");
       }
       closeForm();
-      await refreshData();
+      setPostSubmitFeedback({
+        title: wasEditing ? "Event updated" : "Event submitted",
+        description: wasEditing
+          ? "Your changes were saved and sent for admin approval."
+          : "Your event was submitted successfully and is pending admin approval."
+      });
     } catch (err) {
       const apiMessage = err?.response?.data?.message;
       const apiDetails = err?.response?.data?.details;
@@ -676,6 +705,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </button>
             <button
               type="button"
+              onClick={() => setActiveSection("coupons")}
+              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
+                activeSection === "coupons"
+                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
+                  : "bg-white/10 hover:bg-white/15"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Coupons</p>
+              <p className="mt-1 text-sm font-semibold">Promo codes</p>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveSection("bookings")}
               className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
                 activeSection === "bookings"
@@ -721,72 +762,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="space-y-4"
             >
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total events</p>
-                  <p className="mt-1 text-2xl font-bold text-slate-900">{stats.totalEventsCreated}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upcoming</p>
-                  <p className="mt-1 text-2xl font-bold text-amber-700">{stats.upcomingEvents}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bookings</p>
-                  <p className="mt-1 text-2xl font-bold text-emerald-700">{stats.totalBookingsReceived}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendees</p>
-                  <p className="mt-1 text-2xl font-bold text-brand-700">{stats.totalAttendees}</p>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900">Bookings trend</h3>
-                    <p className="mt-1 text-sm text-slate-600">A quick look at momentum.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={refreshData}
-                    className="rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Refresh
-                  </button>
-                </div>
-                {loadingOverviewBookings ? (
-                  <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
-                ) : bookingsOverTimeData.length === 0 ? (
-                  <p className="mt-3 text-sm text-slate-500">No booking data available yet.</p>
-                ) : (
-                  <div className="mt-3 h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={bookingsOverTimeData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 10, fill: "#64748b" }}
-                          interval="preserveStartEnd"
-                          tickMargin={8}
-                        />
-                        <YAxis allowDecimals={false} width={28} />
-                        <Tooltip
-                          formatter={(value) => [`${value}`, "Bookings"]}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="count"
-                          stroke="#e11d48"
-                          strokeWidth={2}
-                          dot={{ r: 3, strokeWidth: 2, fill: "#ffffff", stroke: "#e11d48" }}
-                          activeDot={{ r: 5, strokeWidth: 2, fill: "#ffffff", stroke: "#0f172a" }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
+              <OrganizerInsightsPanel
+                events={rows}
+                refreshKey={analyticsRefreshKey}
+                organizerBookings={overviewBookings}
+              />
             </motion.section>
           ) : null}
 
@@ -855,6 +835,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </div>
               ) : null}
             </motion.section>
+          ) : null}
+
+          {!myEventsOnly && activeSection === "coupons" ? (
+            <OrganizerCouponsPanel key="coupons-mobile" />
           ) : null}
 
           {!myEventsOnly && activeSection === "bookings" ? (
@@ -1005,6 +989,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             : "-"}
                         </p>
                         <p className="col-span-2"><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
+                        <div className="col-span-2 mt-1">
+                          <BookingPaymentSummary booking={item} />
+                        </div>
                       </div>
                     </article>
                   ))
@@ -1074,121 +1061,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="space-y-4"
             >
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <motion.div whileHover={{ y: -3 }} className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="inline-flex items-center gap-2 text-sm text-slate-500">
-                    <FiClipboard /> Total Events Created
-                  </p>
-                  <p className="mt-1 text-2xl font-bold text-slate-900">{stats.totalEventsCreated}</p>
-                </motion.div>
-                <motion.div whileHover={{ y: -3 }} className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="inline-flex items-center gap-2 text-sm text-slate-500">
-                    <FiTrendingUp /> Total Bookings Received
-                  </p>
-                  <p className="mt-1 text-2xl font-bold text-emerald-700">{stats.totalBookingsReceived}</p>
-                </motion.div>
-                <motion.div whileHover={{ y: -3 }} className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="inline-flex items-center gap-2 text-sm text-slate-500">
-                    <FiCalendar /> Upcoming Events
-                  </p>
-                  <p className="mt-1 text-2xl font-bold text-amber-700">{stats.upcomingEvents}</p>
-                </motion.div>
-                <motion.div whileHover={{ y: -3 }} className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <p className="inline-flex items-center gap-2 text-sm text-slate-500">
-                    <FiUsers /> Total Attendees
-                  </p>
-                  <p className="mt-1 text-2xl font-bold text-brand-700">{stats.totalAttendees}</p>
-                </motion.div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <h3 className="text-sm font-semibold text-slate-900">Bookings Over Time</h3>
-                  {loadingOverviewBookings ? (
-                    <div className="mt-3 h-64 animate-pulse rounded-xl bg-slate-100" />
-                  ) : bookingsOverTimeData.length === 0 ? (
-                    <p className="mt-4 text-sm text-slate-500">No booking data available yet.</p>
-                  ) : (
-                    <div className="mt-3 h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={bookingsOverTimeData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="date" />
-                          <YAxis allowDecimals={false} />
-                          <Tooltip />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="count"
-                            name="Bookings"
-                            stroke="#e11d48"
-                            strokeWidth={2}
-                            isAnimationActive
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <h3 className="text-sm font-semibold text-slate-900">Bookings Per Event</h3>
-                  {loadingOverviewBookings ? (
-                    <div className="mt-3 h-64 animate-pulse rounded-xl bg-slate-100" />
-                  ) : bookingsPerEventData.length === 0 ? (
-                    <p className="mt-4 text-sm text-slate-500">No booking data available yet.</p>
-                  ) : (
-                    <div className="mt-3 h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={bookingsPerEventData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="event" />
-                          <YAxis allowDecimals={false} />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="bookings" fill="#0f172a" isAnimationActive />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                <h3 className="text-sm font-semibold text-slate-900">Attendee Distribution</h3>
-                {loadingOverviewBookings ? (
-                  <div className="mt-3 h-72 animate-pulse rounded-xl bg-slate-100" />
-                ) : attendeeDistributionData.length === 0 ? (
-                  <p className="mt-4 text-sm text-slate-500">No attendee data available yet.</p>
-                ) : (
-                  <div className="mt-3 h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Tooltip />
-                        <Legend />
-                        <Pie
-                          data={attendeeDistributionData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={110}
-                          label
-                          isAnimationActive
-                        >
-                          {attendeeDistributionData.map((entry, index) => (
-                            <Cell
-                              // eslint-disable-next-line react/no-array-index-key
-                              key={`${entry.name}-${index}`}
-                              fill={["#e11d48", "#0f172a", "#0284c7", "#16a34a", "#7c3aed", "#f59e0b"][index % 6]}
-                            />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
+              <OrganizerInsightsPanel
+                events={rows}
+                refreshKey={analyticsRefreshKey}
+                organizerBookings={overviewBookings}
+              />
             </motion.section>
           ) : null}
 
@@ -1309,6 +1186,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </>
               ) : null}
             </motion.section>
+          ) : null}
+
+          {!myEventsOnly && activeSection === "coupons" ? (
+            <OrganizerCouponsPanel key="coupons-desktop" />
           ) : null}
 
           {!myEventsOnly && activeSection === "bookings" ? (
@@ -1444,6 +1325,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         </p>
                         <p><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
                         <p><span className="font-semibold">Booked:</span> {formatDateUS(item.booking_date)}</p>
+                        <div className="col-span-2 mt-1">
+                          <BookingPaymentSummary booking={item} />
+                        </div>
                       </div>
                     </article>
                   ))
@@ -1459,21 +1343,24 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       <th className="px-2 py-2">Phone</th>
                       <th className="px-2 py-2">Guests</th>
                       <th className="px-2 py-2">Selected Dates</th>
-                      <th className="px-2 py-2 text-right">Total Amount</th>
+                      <th className="px-2 py-2 text-right">Order Total</th>
+                      <th className="px-2 py-2">Payment</th>
+                      <th className="px-2 py-2 text-right">Charged</th>
+                      <th className="px-2 py-2">Stripe</th>
                       <th className="px-2 py-2">Booking Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loadingBookingRows ? (
                       <tr>
-                        <td className="px-2 py-2 text-slate-500" colSpan={8}>
+                        <td className="px-2 py-2 text-slate-500" colSpan={11}>
                           Loading bookings...
                         </td>
                       </tr>
                     ) : null}
                     {!loadingBookingRows && bookingRows.length === 0 ? (
                       <tr>
-                        <td className="px-2 py-2 text-slate-500" colSpan={8}>
+                        <td className="px-2 py-2 text-slate-500" colSpan={11}>
                           No bookings match the selected filters.
                         </td>
                       </tr>
@@ -1492,6 +1379,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                                 : "-"}
                             </td>
                             <td className="px-2 py-2 text-right text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
+                            <BookingPaymentStatusCell booking={item} />
+                            <BookingAmountPaidCell booking={item} />
+                            <BookingStripeRefCell booking={item} />
                             <td className="px-2 py-2 text-slate-600">{formatDateUS(item.booking_date)}</td>
                           </tr>
                         ))
@@ -1805,14 +1695,143 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   }
                 />
               </FormField>
-              <FormField label="Ticket Link" hint="Optional URL to your external ticketing page." example="https://tickets.example.com/event-123">
-                <input
-                  type="url"
-                  value={form.ticket_link}
-                  onChange={(e) => setForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                />
+              <FormField
+                label="Where tickets are sold"
+                hint={
+                  showPlatformTicketOptions
+                    ? "Choose whether guests buy on an external ticketing page or book directly on this site."
+                    : "List an external ticket link, or request on-site sales through Book My Tickets."
+                }
+                className="sm:col-span-2"
+              >
+                {showPlatformTicketOptions ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 ring-1 ring-slate-900/[0.04]">
+                      <input
+                        type="radio"
+                        name="ticket_sales_mode"
+                        value="external"
+                        checked={(form.ticket_sales_mode || "external") === "external"}
+                        disabled={editingPlatformEvent && !canSellPlatformTickets}
+                        onChange={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            ticket_sales_mode: "external"
+                          }))
+                        }
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-900">External site</span>
+                        <span className="mt-0.5 block text-xs text-slate-600">
+                          Link out to Eventbrite, Ticketmaster, your own checkout, etc.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 ring-1 ring-slate-900/[0.04]">
+                      <input
+                        type="radio"
+                        name="ticket_sales_mode"
+                        value="platform"
+                        checked={(form.ticket_sales_mode || "external") === "platform"}
+                        onChange={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            ticket_sales_mode: "platform",
+                            ticket_link: ""
+                          }))
+                        }
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-900">On this site</span>
+                        <span className="mt-0.5 block text-xs text-slate-600">
+                          Guests book through checkout on the public event page after approval.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 ring-1 ring-slate-900/[0.04]">
+                      <input type="radio" name="ticket_sales_mode" value="external" checked readOnly className="mt-1" />
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-900">External site</span>
+                        <span className="mt-0.5 block text-xs text-slate-600">
+                          Link out to your ticketing provider (default for new events).
+                        </span>
+                      </span>
+                    </label>
+                    <div className="rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-3 text-sm text-slate-800">
+                      <p className="font-semibold text-slate-900">Do you want to host your event on Book My Tickets?</p>
+                      <p className="mt-1 text-slate-700">
+                        Sell tickets on our site with checkout, seat counts, and analytics. Submit a short request — we
+                        review and enable on-site sales for your account.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openPlatformTicketRequest}
+                        className="mt-3 inline-flex rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                      >
+                        Send hosting request
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {editingPlatformEvent && !canSellPlatformTickets ? (
+                  <p className="mt-2 text-xs text-slate-600">
+                    This event uses on-site checkout. Use{" "}
+                    <button
+                      type="button"
+                      onClick={openPlatformTicketRequest}
+                      className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+                    >
+                      Send hosting request
+                    </button>{" "}
+                    if you need to change ticket settings.
+                  </p>
+                ) : null}
               </FormField>
+              {(form.ticket_sales_mode || "external") === "external" ? (
+                <FormField
+                  label="Ticket link"
+                  hint="Required for external sales. Paste the full URL to your ticketing page."
+                  example="https://tickets.example.com/event-123"
+                  className="sm:col-span-2"
+                >
+                  <input
+                    type="url"
+                    value={form.ticket_link}
+                    onChange={(e) => setForm((prev) => ({ ...prev, ticket_link: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                </FormField>
+              ) : (
+                <>
+                  <FormField
+                    label="Total seats available"
+                    hint="Maximum tickets guests can book on this site across all reservations. Booked seats update automatically."
+                    example="250"
+                    className="sm:col-span-2"
+                  >
+                    <input
+                      type="number"
+                      min={1}
+                      max={50000}
+                      step={1}
+                      required
+                      value={form.total_seats}
+                      onChange={(e) => setForm((prev) => ({ ...prev, total_seats: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                      placeholder="e.g. 200"
+                    />
+                  </FormField>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
+                    Guests book through checkout on the public event page once approved. Seat count includes confirmed
+                    bookings and short-term coupon holds.
+                  </div>
+                </>
+              )}
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:col-span-2">
                 <label className="flex cursor-pointer items-start gap-3">
                   <input
@@ -1855,25 +1874,48 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   </div>
                 ) : null}
               </div>
-              <FormField label="Price (USD)" hint="Enter ticket price per person." example="29.99">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+              {(form.ticket_sales_mode || "external") === "platform" ? (
+                <EventTicketLevelsEditor
+                  levels={form.ticket_levels}
+                  onChange={(ticket_levels) => setForm((prev) => ({ ...prev, ticket_levels }))}
                 />
-              </FormField>
-              <FormField label="Duration (Hours)" hint="Total event duration in hours." example="4">
-                <input
-                  type="number"
-                  min="1"
-                  max="168"
-                  value={form.duration_hours}
-                  onChange={(e) => setForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                />
+              ) : (
+                <FormField label="Price (USD)" hint="Enter ticket price per person." example="29.99">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.price}
+                    onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                </FormField>
+              )}
+              <FormField
+                label="Duration"
+                hint="How long the event runs. Use hours and optional minutes (e.g. 2 hr 30 min)."
+                example="2 hours, 30 minutes"
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="168"
+                    placeholder="Hours"
+                    value={form.duration_hours}
+                    onChange={(e) => setForm((prev) => ({ ...prev, duration_hours: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    placeholder="Minutes"
+                    value={form.duration_minutes}
+                    onChange={(e) => setForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  />
+                </div>
               </FormField>
               <FormField label="Age Limit" hint="Set attendee age guidance for safety and clarity.">
                 <FilterPopupField
@@ -1921,7 +1963,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               </FormField>
               <FormField
                 label="Cover image"
-                hint="Upload the main banner (shown first). Optional gallery images below power the detail-page slideshow."
+                hint={`Upload the main banner (shown first). ${LISTING_BANNER_IMAGE_HINT} Optional gallery images below power the detail-page slideshow.`}
                 className="sm:col-span-2"
               >
                 <CloudinaryImageInput
@@ -2064,6 +2106,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             document.body
           )
         : null}
+
+      <PostSubmitFeedbackDialog
+        open={postSubmitFeedback != null}
+        title={postSubmitFeedback?.title ?? ""}
+        description={postSubmitFeedback?.description ?? ""}
+      />
     </>
   );
 });

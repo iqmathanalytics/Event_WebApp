@@ -31,6 +31,7 @@ function EventFilterControls({
   setSortBy,
   showDate = true,
   showPrice = true,
+  showSort = true,
   searchPlaceholder = "Search events"
 }) {
   const containerRef = useRef(null);
@@ -264,40 +265,51 @@ function EventFilterControls({
         />
       ) : null}
 
-      <FilterPopupField
-        label="Sort"
-        value={sortLabel}
-        isActive={activePanel === "sort"}
-        onToggle={(e) => {
-          e.stopPropagation();
-          setActivePanel((prev) => (prev === "sort" ? null : "sort"));
-        }}
-        panelClassName="w-full min-w-[220px]"
-        panelContent={
-          <div className="space-y-0.5">
-            {sortOptions.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => {
-                  setSortBy(item.value);
-                  setActivePanel(null);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
-              >
-                <FiSliders className="text-slate-400" /> {item.label}
-              </button>
-            ))}
-          </div>
-        }
-      />
+      {showSort ? (
+        <FilterPopupField
+          label="Sort"
+          value={sortLabel}
+          isActive={activePanel === "sort"}
+          onToggle={(e) => {
+            e.stopPropagation();
+            setActivePanel((prev) => (prev === "sort" ? null : "sort"));
+          }}
+          panelClassName="w-full min-w-[220px]"
+          panelContent={
+            <div className="space-y-0.5">
+              {sortOptions.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => {
+                    setSortBy(item.value);
+                    setActivePanel(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                >
+                  <FiSliders className="text-slate-400" /> {item.label}
+                </button>
+              ))}
+            </div>
+          }
+        />
+      ) : null}
     </div>
   );
 }
 
 function EventFilterBar(props) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const { onApply, onReset, canApply, mobileTitle = "Filter Events" } = props;
+  const {
+    onApply,
+    onReset,
+    canApply,
+    mobileTitle = "Filter Events",
+    compact = false,
+    showDate = true,
+    showPrice = true,
+    showSort = true
+  } = props;
 
   useEffect(() => {
     if (!isMobileOpen) {
@@ -316,43 +328,54 @@ function EventFilterBar(props) {
   return (
     <>
       <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="hidden items-center gap-2 lg:flex">
-          <EventFilterControls {...props} />
-          <button
-            type="button"
-            onClick={onReset}
-            className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            onClick={onApply}
-            disabled={!canApply}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Apply
-          </button>
+        <div className={`${compact ? "flex" : "hidden lg:flex"} items-center gap-2`}>
+          <EventFilterControls
+            {...props}
+            showDate={compact ? false : showDate}
+            showPrice={compact ? false : showPrice}
+            showSort={compact ? false : showSort}
+          />
+          {!compact ? (
+            <>
+              <button
+                type="button"
+                onClick={onReset}
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={onApply}
+                disabled={!canApply}
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </>
+          ) : null}
         </div>
 
-        <div className="flex items-center justify-between gap-2 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setIsMobileOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
-          >
-            <FiFilter />
-            Filters
-          </button>
-          <button
-            type="button"
-            onClick={onApply}
-            disabled={!canApply}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Search
-          </button>
-        </div>
+        {!compact ? (
+          <div className="flex items-center justify-between gap-2 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setIsMobileOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              <FiFilter />
+              Filters
+            </button>
+            <button
+              type="button"
+              onClick={onApply}
+              disabled={!canApply}
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Search
+            </button>
+          </div>
+        ) : null}
       </section>
 
       {isMobileOpen ? (

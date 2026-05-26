@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, EffectFade, Navigation, Pagination } from "swiper/modules";
 import { buildHeroNarrativeFromSlide } from "../utils/heroSlideCopy";
+import { eventDetailPath } from "../utils/listingPaths";
+import { trackEventClick } from "../services/eventService";
 import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/pagination";
@@ -22,9 +24,9 @@ function HeroSlideOverlay({ variant = "featured" }) {
       : "from-indigo-400/90 via-fuchsia-500/90 to-rose-500/90";
 
   return (
-    <div className="absolute right-1.5 top-1.5 z-20 flex flex-col items-end gap-1 sm:right-3 sm:top-3 sm:gap-1.5 lg:right-4 lg:top-4 lg:gap-2">
+    <div className="absolute right-1.5 bottom-12 z-20 flex flex-col items-end sm:right-3 sm:bottom-14 lg:right-4 lg:bottom-16">
       <motion.div
-        initial={{ opacity: 0, y: -10, scale: 0.92, rotate: -2 }}
+        initial={{ opacity: 0, y: 10, scale: 0.92, rotate: -2 }}
         animate={{
           opacity: 1,
           y: [0, -2.5, 0],
@@ -64,28 +66,6 @@ function HeroSlideOverlay({ variant = "featured" }) {
             {badgeSubLabel}
           </p>
         </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: -8, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.35, ease: "easeOut", delay: 0.06 }}
-      >
-        <Link
-          to="/login"
-          className="group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-white/10 px-2 py-1 text-[9px] font-semibold text-white shadow-[0_10px_22px_rgba(0,0,0,0.28)] ring-1 ring-white/15 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/15 hover:ring-white/25 sm:px-3 sm:py-2 sm:text-[11px] sm:shadow-[0_14px_32px_rgba(0,0,0,0.32)] lg:px-4 lg:py-2.5 lg:text-xs lg:shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
-        >
-          <span className="pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100">
-            <span className="absolute inset-0 bg-gradient-to-r from-white/10 via-white/0 to-white/10" />
-          </span>
-          <motion.span
-            className="relative"
-            animate={{ y: [0, -1, 0] }}
-            transition={{ duration: 1.9, ease: "easeInOut", repeat: Infinity }}
-          >
-            Continue to unlock
-          </motion.span>
-        </Link>
       </motion.div>
     </div>
   );
@@ -136,12 +116,29 @@ const slides = [
 
 const DEFAULT_NARRATIVE_HOLD_MS = 980;
 
+function HeroSlideFrame({ slide, onOpen, children }) {
+  if (slide.detailPath) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(slide)}
+        className="relative block w-full cursor-pointer text-left"
+        aria-label={`View ${slide.title}`}
+      >
+        {children}
+      </button>
+    );
+  }
+  return <article className="relative w-full">{children}</article>;
+}
+
 function HeroSlideshow({
   featuredEvents = [],
   onHeroNarrativeChange = null,
   gateReady = true,
   narrativeHoldMs = DEFAULT_NARRATIVE_HOLD_MS
 }) {
+  const navigate = useNavigate();
   const introHoldTimerRef = useRef(null);
   const featuredSlides = useMemo(
     () =>
@@ -151,7 +148,10 @@ function HeroSlideshow({
         .map((ev) => ({
           image: ev.image_url || slides[0].image,
           title: ev.title || "Featured Event",
+          description: ev.description || "",
           id: ev.id,
+          public_slug: ev.public_slug,
+          detailPath: eventDetailPath(ev),
           variant: isYayEvent(ev) ? "yay" : "featured",
           countdownLabel: ev.countdownLabel ?? null
         })),
@@ -159,7 +159,7 @@ function HeroSlideshow({
   );
 
   const fallbackSlides = useMemo(
-    () => slides.map((s) => ({ image: s.image, title: s.label, variant: "featured", countdownLabel: null })),
+    () => slides.map((s) => ({ image: s.image, title: s.label, variant: "featured", countdownLabel: null, detailPath: null })),
     []
   );
 
@@ -173,6 +173,19 @@ function HeroSlideshow({
   const slideCount = effectiveSlides.length;
   const canLoop = slideCount > 1;
   const swiperRemountKey = `${gateReady ? "1" : "0"}-${slideSignature}`;
+
+  const openSlide = useCallback(
+    (slide) => {
+      if (!slide?.detailPath) {
+        return;
+      }
+      if (slide.id) {
+        trackEventClick(slide.public_slug || slide.id).catch(() => {});
+      }
+      navigate(slide.detailPath);
+    },
+    [navigate]
+  );
 
   const emitSlide = useCallback(
     (swiper) => {
@@ -207,9 +220,19 @@ function HeroSlideshow({
     };
   }, [slideSignature, effectiveSlides, onHeroNarrativeChange, gateReady, narrativeHoldMs]);
 
+  const renderSlideBody = (slide) => (
+    <>
+      <HeroSlideOverlay variant={slide.variant} />
+      <img src={slide.image} alt={slide.title} loading="lazy" className="hero-slide-image h-full w-full object-cover" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 sm:p-4 lg:p-5">
+        <p className="text-xs font-semibold tracking-wide text-white drop-shadow sm:text-sm lg:text-base">{slide.title}</p>
+      </div>
+    </>
+  );
+
   return (
     <div className="hero-swiper overflow-hidden rounded-2xl border border-white/10 bg-slate-900/20 shadow-xl lg:rounded-3xl lg:shadow-2xl">
-      {/* Mobile/tablet: fade autoplay — remount when gate opens so Autoplay starts reliably */}
       <Swiper
         key={`hero-m-${swiperRemountKey}`}
         modules={[Autoplay, EffectFade]}
@@ -233,24 +256,13 @@ function HeroSlideshow({
       >
         {effectiveSlides.map((slide, idx) => (
           <SwiperSlide key={`${slide.title}-${idx}`}>
-            <article className="relative aspect-[16/10] w-full sm:aspect-[16/9]">
-              <HeroSlideOverlay variant={slide.variant} />
-              <img
-                src={slide.image}
-                alt={slide.title}
-                loading="lazy"
-                className="hero-slide-image h-full w-full object-cover"
-              />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 to-transparent" />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 sm:p-4">
-                <p className="text-xs font-semibold tracking-wide text-white drop-shadow sm:text-sm">{slide.title}</p>
-              </div>
-            </article>
+            <HeroSlideFrame slide={slide} onOpen={openSlide}>
+              <div className="relative aspect-[16/10] w-full sm:aspect-[16/9]">{renderSlideBody(slide)}</div>
+            </HeroSlideFrame>
           </SwiperSlide>
         ))}
       </Swiper>
 
-      {/* Desktop: swipe + autoplay — remount when gate opens so Autoplay starts reliably */}
       <Swiper
         key={`hero-d-${swiperRemountKey}`}
         modules={[Autoplay, Navigation, Pagination]}
@@ -274,21 +286,9 @@ function HeroSlideshow({
       >
         {effectiveSlides.map((slide, idx) => (
           <SwiperSlide key={`${slide.title}-${idx}`}>
-            <article className="relative aspect-[16/9] w-full lg:aspect-[16/9] xl:aspect-[2/1]">
-              <HeroSlideOverlay variant={slide.variant} />
-              <img
-                src={slide.image}
-                alt={slide.title}
-                loading="lazy"
-                className="hero-slide-image h-full w-full object-cover"
-              />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 to-transparent" />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4 lg:p-5">
-                <p className="text-sm font-semibold tracking-wide text-white drop-shadow lg:text-base">
-                  {slide.title}
-                </p>
-              </div>
-            </article>
+            <HeroSlideFrame slide={slide} onOpen={openSlide}>
+              <div className="relative aspect-[16/9] w-full lg:aspect-[16/9] xl:aspect-[2/1]">{renderSlideBody(slide)}</div>
+            </HeroSlideFrame>
           </SwiperSlide>
         ))}
       </Swiper>

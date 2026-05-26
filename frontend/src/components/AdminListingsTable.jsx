@@ -67,22 +67,16 @@ function AdminListingsTable({
   onReject,
   onDelete
 }) {
-  if (loading) {
-    return <p className="text-sm text-slate-500">Loading listing records...</p>;
-  }
-
-  if (!rows.length) {
-    return <p className="text-sm text-slate-500">No listings match the selected filters.</p>;
-  }
-
-  const labels = getColumnLabels(type);
+  const labels = useMemo(() => getColumnLabels(type), [type]);
   const perPage = 5;
   const [mobilePage, setMobilePage] = useState(1);
-  const mobileTotalPages = useMemo(() => Math.max(1, Math.ceil(rows.length / perPage)), [rows.length]);
+  const rowCount = Array.isArray(rows) ? rows.length : 0;
+  const mobileTotalPages = useMemo(() => Math.max(1, Math.ceil(rowCount / perPage)), [rowCount]);
   const mobileRows = useMemo(() => {
+    const list = Array.isArray(rows) ? rows : [];
     const start = (mobilePage - 1) * perPage;
-    return rows.slice(start, start + perPage);
-  }, [rows, mobilePage]);
+    return list.slice(start, start + perPage);
+  }, [rows, mobilePage, perPage]);
 
   useEffect(() => {
     if (mobilePage > mobileTotalPages) {
@@ -90,12 +84,20 @@ function AdminListingsTable({
     }
   }, [mobilePage, mobileTotalPages]);
 
+  if (loading) {
+    return <p className="text-sm text-slate-500">Loading listing records...</p>;
+  }
+
+  if (!rowCount) {
+    return <p className="text-sm text-slate-500">No listings match the selected filters.</p>;
+  }
+
   return (
     <>
       <div className="space-y-3 md:hidden">
         {mobileRows.map((item) => (
           <article
-            key={`card-${item.id}`}
+            key={`card-${String(item.id)}`}
             className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft"
           >
             <button
@@ -212,7 +214,7 @@ function AdminListingsTable({
         </thead>
         <tbody>
           {rows.map((item) => (
-            <tr key={item.id} className="border-b border-slate-100">
+            <tr key={String(item.id)} className="border-b border-slate-100">
               <td className="px-4 py-3 font-medium text-slate-900">{getListingTitle(item)}</td>
               <td className="px-4 py-3 text-slate-600">
                 {type === "dealers" ? item.location_text || item.city_name || "-" : item.city_name || "-"}
@@ -226,7 +228,7 @@ function AdminListingsTable({
               <td className="px-4 py-3 text-right text-slate-600">{getListingPrimaryMeta(item)}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-2">
-                  {item.status === "pending" ? (
+                  {String(item.status || "").toLowerCase() === "pending" ? (
                     <>
                       <button
                         type="button"

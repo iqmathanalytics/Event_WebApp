@@ -1,4 +1,6 @@
 const { pool } = require("../config/db");
+const { resolveListingIdFromParam } = require("../utils/listingSlug");
+const { setPublicSlug } = require("./listingSlugModel");
 
 async function listDeals({
   cityId,
@@ -145,7 +147,13 @@ async function createDeal({
         created_by
       ]
     );
-    return result.insertId;
+    const insertId = result.insertId;
+    try {
+      await setPublicSlug("deals", insertId, title);
+    } catch (_err) {
+      /* public_slug column may be missing before migration */
+    }
+    return insertId;
   } catch (err) {
     if (err?.code !== "ER_BAD_FIELD_ERROR") {
       throw err;
@@ -171,7 +179,13 @@ async function createDeal({
         created_by
       ]
     );
-    return result.insertId;
+    const insertId = result.insertId;
+    try {
+      await setPublicSlug("deals", insertId, title);
+    } catch (_err) {
+      /* ignore */
+    }
+    return insertId;
   }
 }
 
@@ -259,6 +273,39 @@ async function findDealById(id) {
   return rows[0] || null;
 }
 
+async function findPublicDealBySlugOrId(param) {
+  const { id, slug } = resolveListingIdFromParam(param);
+  if (id) {
+    const byId = await findPublicDealById(id);
+    if (byId) {
+      return byId;
+    }
+  }
+  if (slug) {
+    try {
+      const [rows] = await pool.query(
+        `SELECT d.*, c.name AS city_name, cat.name AS category_name,
+          (
+            CASE
+              WHEN d.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(d.click_count, 0) + (COALESCE(d.view_count, 0) * 2))
+              ELSE 0
+            END
+          ) AS recent_engagement_score
+         FROM deals d
+         LEFT JOIN cities c ON c.id = d.city_id
+         LEFT JOIN categories cat ON cat.id = d.category_id
+         WHERE d.public_slug = ? AND d.status = 'approved'
+         LIMIT 1`,
+        [slug]
+      );
+      return rows[0] || null;
+    } catch (_err) {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function findPublicDealById(id) {
   try {
     const [rows] = await pool.query(
@@ -337,6 +384,13 @@ async function updateDealByCreator({ id, createdBy, payload }) {
        WHERE id = ? AND created_by = ?`,
       [...values, id, createdBy]
     );
+    if (result.affectedRows > 0 && payload.title) {
+      try {
+        await setPublicSlug("deals", id, payload.title);
+      } catch (_err) {
+        /* ignore */
+      }
+    }
     return result.affectedRows > 0;
   } catch (err) {
     if (err?.code !== "ER_BAD_FIELD_ERROR") {
@@ -397,6 +451,7 @@ module.exports = {
   findAnyDealByCreator,
   findDealById,
   findPublicDealById,
+  findPublicDealBySlugOrId,
   updateDealByCreator,
   incrementDealPopularity
 };

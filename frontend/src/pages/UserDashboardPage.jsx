@@ -9,7 +9,6 @@ import BrandUserGreeting from "../components/BrandUserGreeting";
 import { fetchMyBookings } from "../services/bookingService";
 import { createDeal, fetchMyDealSubmissions, fetchMyInfluencerSubmissions } from "../services/listingService";
 import DealSubmissionModal, { emptyDealSubmitForm } from "../components/DealSubmissionModal";
-import { formatCurrency, formatDateUS } from "../utils/format";
 import { refreshAccessToken } from "../services/authService";
 import { changeMyPassword, enableOrganizer, fetchMyProfile, updateMyProfile } from "../services/userService";
 import { categories } from "../utils/filterOptions";
@@ -20,7 +19,10 @@ import AppLoadingOverlay from "../components/AppLoadingOverlay";
 import OrganizerDashboardPage from "./OrganizerDashboardPage";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
 import UserSubmissionsPanel from "../components/UserSubmissionsPanel";
+import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
 import { fetchMyEvents } from "../services/eventService";
+import UserDashboardBookingsAndFavorites from "../components/UserDashboardBookingsAndFavorites";
+import PlatformTicketAccessRequestModal from "../components/PlatformTicketAccessRequestModal";
 
 const interestOptions = [
   "Events",
@@ -51,55 +53,22 @@ function FormField({ label, hint, example, className = "", children }) {
   );
 }
 
-function getDisplayPrice(item) {
-  if (item.listing_type === "event") {
-    return item.event_price;
-  }
-  if (item.listing_type === "deal") {
-    return item.deal_price;
-  }
-  if (item.listing_type === "service") {
-    return item.service_price;
-  }
-  return null;
-}
-
-function formatReadableDate(value) {
-  if (!value) {
-    return "Date not available";
-  }
-  return formatDateUS(value);
-}
-
-function getLocationUrl(booking) {
-  if (booking.google_maps_link) {
-    return booking.google_maps_link;
-  }
-  if (booking.venue_address || booking.venue_name) {
-    const query = booking.venue_address || booking.venue_name;
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  }
-  return null;
-}
-
-function getFavoriteDetailsUrl(item) {
-  if (!item) return null;
-  const listingType = item.listing_type;
-  const listingId = item.listing_id;
-  if (!listingType || listingId == null) return null;
-
-  if (listingType === "event") return `/events/${listingId}`;
-  if (listingType === "deal") return `/deals/${listingId}`;
-  if (listingType === "influencer") return `/influencers/${listingId}`;
-  return null;
-}
-
 function UserDashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { cities } = useCityFilter();
-  const { user, accessToken, refreshToken, login, canPostDeals } = useAuth();
-  const { favorites, loading, toggleFavorite } = useFavorites();
+  const {
+    user,
+    accessToken,
+    refreshToken,
+    login,
+    canPostDeals,
+    isOrganizer,
+    canSellPlatformTickets,
+    refreshSession
+  } = useAuth();
+  const [platformTicketRequestOpen, setPlatformTicketRequestOpen] = useState(false);
+  const { favorites, loading: favoritesLoading, toggleFavorite } = useFavorites();
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [bookingsError, setBookingsError] = useState("");
@@ -118,6 +87,7 @@ function UserDashboardPage() {
   const [creatorModal, setCreatorModal] = useState(null);
   const [creatorHubOpen, setCreatorHubOpen] = useState(false);
   const [eventsWorkspaceOpen, setEventsWorkspaceOpen] = useState(false);
+  const [submissionSuccessDialog, setSubmissionSuccessDialog] = useState(null);
   const [organizerWorkspaceReady, setOrganizerWorkspaceReady] = useState(false);
   const organizerFormShellRef = useRef(null);
   const [profileEditorTab, setProfileEditorTab] = useState("basic");
@@ -255,7 +225,7 @@ function UserDashboardPage() {
   /** Google: no local password yet — “Set” copy; otherwise still no current-password field */
   const isGoogleFirstPassword = isGoogleUser && profile?.has_local_password !== true;
 
-  useRouteContentReady(loadingBookings || loadingSubmissions);
+  useRouteContentReady(loadingBookings || loadingSubmissions || favoritesLoading);
 
   useEffect(() => {
     if (showProfileEditor && profileTabs.every((t) => t.key !== profileEditorTab)) {
@@ -264,10 +234,20 @@ function UserDashboardPage() {
   }, [showProfileEditor, profileEditorTab]);
 
   useEffect(() => {
-    setProfile(user || null);
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+    setProfile((prev) => ({
+      ...(prev || {}),
+      ...user,
+      dealer_profile: user.dealer_profile ?? prev?.dealer_profile ?? null,
+      onboarding: user.onboarding ?? prev?.onboarding ?? null
+    }));
     const onboarding = user?.onboarding || {};
     const parts = String(user?.name || "").trim().split(/\s+/).filter(Boolean);
-    setProfileForm({
+    setProfileForm((prev) => ({
+      ...prev,
       first_name: onboarding.first_name || parts.slice(0, -1).join(" ") || parts[0] || "",
       last_name: onboarding.last_name || (parts.length > 1 ? parts[parts.length - 1] : ""),
       email: user?.email || "",
@@ -275,8 +255,8 @@ function UserDashboardPage() {
       city_id: onboarding.city_id ? String(onboarding.city_id) : "",
       interests: Array.isArray(onboarding.interests) ? onboarding.interests : [],
       wants_influencer: Boolean(onboarding.wants_influencer),
-      wants_deal: Boolean(onboarding.wants_deal)
-    });
+      wants_deal: Boolean(onboarding.wants_deal) || Boolean(user.dealer_profile)
+    }));
   }, [user]);
 
   useEffect(() => {
@@ -296,7 +276,7 @@ function UserDashboardPage() {
             city_id: onboarding.city_id ? String(onboarding.city_id) : "",
             interests: Array.isArray(onboarding.interests) ? onboarding.interests : [],
             wants_influencer: Boolean(onboarding.wants_influencer),
-            wants_deal: Boolean(onboarding.wants_deal)
+            wants_deal: Boolean(onboarding.wants_deal) || Boolean(response.data.dealer_profile)
           });
         }
       } catch (_err) {
@@ -478,6 +458,36 @@ function UserDashboardPage() {
     });
   }, [bookings, bookingFilter]);
 
+  const openPlatformTicketRequestModal = useCallback(() => {
+    setPlatformTicketRequestOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname !== "/dashboard/user") {
+      return;
+    }
+    if (location.state?.openPlatformTicketRequest || location.hash === "#platform-ticket-request") {
+      setPlatformTicketRequestOpen(true);
+      if (location.state?.openPlatformTicketRequest) {
+        navigate(location.pathname + location.hash, { replace: true, state: {} });
+      }
+    }
+  }, [location.hash, location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return undefined;
+    }
+    void refreshSession();
+    if (canSellPlatformTickets) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      void refreshSession();
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [accessToken, canSellPlatformTickets, refreshSession]);
+
   useEffect(() => {
     if (location.pathname !== "/dashboard/user" || location.hash !== "#host-events") {
       return undefined;
@@ -558,6 +568,11 @@ function UserDashboardPage() {
       navigate("/deals");
       return;
     }
+    if (isDealerPending) {
+      setProfileError("Your business profile is in review. You can submit deals after admin approval.");
+      openDealerOnboardingModal();
+      return;
+    }
     if (String(dealerStatus || "").toLowerCase() !== "approved") {
       openDealerOnboardingModal();
       return;
@@ -576,6 +591,20 @@ function UserDashboardPage() {
     setProfileForm((s) => ({ ...s, wants_influencer: true }));
     setCreatorModal("influencer");
   };
+
+  const handleListingResubmitSaved = useCallback((kind) => {
+    if (kind === "influencer") {
+      setSubmissionSuccessDialog({
+        title: "Influencer submission updated",
+        description: "Your changes were saved and sent for admin review."
+      });
+      return;
+    }
+    setSubmissionSuccessDialog({
+      title: "Deal submission updated",
+      description: "Your changes were saved and sent for admin review."
+    });
+  }, []);
 
   const toNumberOrUndefined = (value) => {
     if (value === "" || value === null || value === undefined) {
@@ -616,10 +645,11 @@ function UserDashboardPage() {
       if (latestProfile && accessToken) {
         login({ accessToken, refreshToken, user: latestProfile });
       }
-      setProfileMessage(response?.message || "Creator profile saved.");
       setCreatorModal(null);
-      const influencerResult = await fetchMyInfluencerSubmissions();
-      setMyInfluencerSubmissions(influencerResult?.data || []);
+      setSubmissionSuccessDialog({
+        title: "Creator spotlight saved",
+        description: "Your creator profile was submitted successfully. It will be visible after admin approval."
+      });
     } catch (err) {
       setProfileError(err?.response?.data?.message || "Could not save creator profile.");
     } finally {
@@ -760,6 +790,14 @@ function UserDashboardPage() {
             >
               {hasRegisteredDealer ? "Edit business profile" : "Business profile"}
             </button>
+            {isOrganizer ? (
+              <Link
+                to="/dashboard/organizer"
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-300/50 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-white ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30"
+              >
+                Organizer dashboard
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={openInfluencerSpotlightModal}
@@ -767,6 +805,17 @@ function UserDashboardPage() {
               className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
             >
               Edit creator spotlight
+            </button>
+            <button
+              type="button"
+              onClick={openPlatformTicketRequestModal}
+              className={`col-span-2 rounded-xl border px-3 py-2 text-xs font-semibold text-white ring-1 transition ${
+                canSellPlatformTickets
+                  ? "border-emerald-300/40 bg-emerald-500/25 ring-emerald-400/30 hover:bg-emerald-500/35"
+                  : "border-violet-300/40 bg-violet-500/25 ring-violet-400/30 hover:bg-violet-500/35"
+              }`}
+            >
+              {canSellPlatformTickets ? "On-site tickets · enabled" : "Host tickets on-site"}
             </button>
           </div>
         </section>
@@ -776,6 +825,18 @@ function UserDashboardPage() {
             {organizerEnableError}
           </p>
         ) : null}
+
+        <UserDashboardBookingsAndFavorites
+          filteredBookings={filteredBookings}
+          bookingsTotalCount={bookings.length}
+          loadingBookings={loadingBookings}
+          bookingsError={bookingsError}
+          bookingFilter={bookingFilter}
+          onBookingFilterChange={setBookingFilter}
+          favorites={favorites}
+          favoritesLoading={favoritesLoading}
+          toggleFavorite={toggleFavorite}
+        />
 
         <section
           data-host-workspace="mobile"
@@ -807,9 +868,13 @@ function UserDashboardPage() {
           </div>
           <div className="mt-3">
             {mobileWorkspaceTab === "events" ? (
-              <OrganizerDashboardPage embedded embeddedSectionMode="my-events-only" />
+              <OrganizerDashboardPage
+                embedded
+                embeddedSectionMode="my-events-only"
+                onRequestPlatformTickets={openPlatformTicketRequestModal}
+              />
             ) : (
-              <UserSubmissionsPanel variant="standalone" showBackToHub={false} />
+              <UserSubmissionsPanel variant="standalone" showBackToHub={false} onAfterResubmitSuccess={handleListingResubmitSaved} />
             )}
           </div>
         </section>
@@ -870,6 +935,18 @@ function UserDashboardPage() {
         </div>
       </div>
 
+      <UserDashboardBookingsAndFavorites
+        filteredBookings={filteredBookings}
+        bookingsTotalCount={bookings.length}
+        loadingBookings={loadingBookings}
+        bookingsError={bookingsError}
+        bookingFilter={bookingFilter}
+        onBookingFilterChange={setBookingFilter}
+        favorites={favorites}
+        favoritesLoading={favoritesLoading}
+        toggleFavorite={toggleFavorite}
+      />
+
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/80 to-cyan-50/30 p-5 shadow-sm">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Host &amp; promote</p>
         <h2 className="mt-1 text-lg font-bold text-slate-900">Posting &amp; management workspace</h2>
@@ -894,6 +971,17 @@ function UserDashboardPage() {
           </button>
           <button
             type="button"
+            onClick={openPlatformTicketRequestModal}
+            className={`inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+              canSellPlatformTickets
+                ? "border-emerald-300/80 bg-emerald-50 text-emerald-950 hover:bg-emerald-100/90"
+                : "border-violet-300/80 bg-violet-50 text-violet-950 hover:bg-violet-100/90"
+            }`}
+          >
+            {canSellPlatformTickets ? "On-site tickets · enabled" : "Host tickets on-site"}
+          </button>
+          <button
+            type="button"
             onClick={() => void openDealerOnboardingModal()}
             disabled={businessProfileCta.disabled}
             title={businessProfileCta.sub || undefined}
@@ -901,6 +989,14 @@ function UserDashboardPage() {
           >
             {businessProfileCta.label}
           </button>
+          {isOrganizer ? (
+            <Link
+              to="/dashboard/organizer"
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 shadow-sm transition hover:bg-emerald-100/90"
+            >
+              Organizer dashboard
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -941,9 +1037,13 @@ function UserDashboardPage() {
 
         <div className="mt-4">
           {desktopWorkspaceTab === "events" ? (
-            <OrganizerDashboardPage embedded embeddedSectionMode="my-events-only" />
+            <OrganizerDashboardPage
+              embedded
+              embeddedSectionMode="my-events-only"
+              onRequestPlatformTickets={openPlatformTicketRequestModal}
+            />
           ) : (
-            <UserSubmissionsPanel variant="standalone" showBackToHub={false} />
+            <UserSubmissionsPanel variant="standalone" showBackToHub={false} onAfterResubmitSuccess={handleListingResubmitSaved} />
           )}
         </div>
       </section>
@@ -1372,10 +1472,17 @@ function UserDashboardPage() {
                     {hasRegisteredDealer ? "Dealer profile" : "Register your business"}
                   </h3>
                   <p className="mb-4 text-sm text-slate-600">
-                    {hasRegisteredDealer
-                      ? "Keep your dealer profile updated for admin moderation."
-                      : "Tell us about your business. You can post offers after approval."}
+                    {isDealerPending
+                      ? "Your profile is awaiting admin review. You can review your details here but cannot change them until a decision is made."
+                      : hasRegisteredDealer
+                        ? "Keep your dealer profile updated for admin moderation."
+                        : "Tell us about your business. You can post offers after approval."}
                   </p>
+                  {isDealerPending ? (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                      Status: <span className="font-semibold uppercase">pending review</span>
+                    </div>
+                  ) : null}
                   <div className="grid grid-cols-1 gap-3 pb-16 sm:grid-cols-2">
                     <FormField label="Business Name" hint="Enter your store or brand name." example="Glow City Deals" className="sm:col-span-2">
                       <input value={dealProfile.name} onChange={(e) => setDealProfile((s) => ({ ...s, name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
@@ -1430,7 +1537,7 @@ function UserDashboardPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!hasDealerDetails) {
+                      if (!hasRegisteredDealer && !hasDealerDetails) {
                         setProfileForm((s) => ({ ...s, wants_deal: false }));
                       }
                       setCreatorModal(null);
@@ -1441,11 +1548,11 @@ function UserDashboardPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={savingProfile}
+                    disabled={savingProfile || isDealerPending}
                     onClick={() => void persistDealerFromModal()}
                     className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {savingProfile ? "Saving…" : "Save & sync profile"}
+                    {isDealerPending ? "Awaiting review" : savingProfile ? "Saving…" : "Save & sync profile"}
                   </button>
                 </div>
               </motion.div>
@@ -1636,7 +1743,11 @@ function UserDashboardPage() {
                 </button>
               </header>
               <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-                <OrganizerDashboardPage embedded onEmbeddedWorkspaceInitialReady={handleOrganizerWorkspaceInitialReady} />
+                <OrganizerDashboardPage
+                  embedded
+                  onEmbeddedWorkspaceInitialReady={handleOrganizerWorkspaceInitialReady}
+                  onRequestPlatformTickets={openPlatformTicketRequestModal}
+                />
               </div>
             </div>
           )
@@ -1648,6 +1759,7 @@ function UserDashboardPage() {
           embedded
           suppressChrome
           suppressRouteContentReadySignal
+          onRequestPlatformTickets={openPlatformTicketRequestModal}
         />
       </div>
 
@@ -1676,18 +1788,35 @@ function UserDashboardPage() {
             });
             setDealSubmitOpen(false);
             setDealSubmitForm({ ...emptyDealSubmitForm });
-            setProfileMessage("Deal submitted. It will be visible after admin approval.");
-            try {
-              const dealResult = await fetchMyDealSubmissions();
-              setMyDealSubmissions(dealResult?.data || []);
-            } catch (_err) {
-              /* ignore refresh failure */
-            }
+            setSubmissionSuccessDialog({
+              title: "Deal submitted",
+              description: "Your deal was submitted successfully. It will appear after admin approval."
+            });
           } catch (err) {
             setDealSubmitError(err?.response?.data?.message || "Could not submit deal.");
           } finally {
             setDealSubmitLoading(false);
           }
+        }}
+      />
+
+      <PostSubmitFeedbackDialog
+        open={submissionSuccessDialog != null}
+        title={submissionSuccessDialog?.title ?? ""}
+        description={submissionSuccessDialog?.description ?? ""}
+      />
+
+      <PlatformTicketAccessRequestModal
+        open={platformTicketRequestOpen}
+        onClose={() => setPlatformTicketRequestOpen(false)}
+        user={user}
+        onCapabilitiesUpdated={() => void refreshSession()}
+        onSubmitted={() => {
+          setSubmissionSuccessDialog({
+            title: "Request sent",
+            description:
+              "We emailed your request to our team. You will hear back after an admin reviews it — check your inbox for updates."
+          });
         }}
       />
 

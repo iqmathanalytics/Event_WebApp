@@ -50,6 +50,67 @@ textarea {
   padding-bottom: calc(6rem + env(safe-area-inset-bottom));
 }
 
+/* Listing grids: home sections + events / deals / influencers browse pages */
+.listing-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .listing-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .listing-cards-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .listing-cards-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.listing-card-cell {
+  min-width: 0;
+  height: 100%;
+}
+
+/* Home discovery carousel: card width per breakpoint (height = tallest card in row via flex stretch) */
+.landing-carousel-card {
+  width: min(82vw, 280px);
+  min-width: min(82vw, 280px);
+  max-width: min(82vw, 280px);
+}
+
+@media (min-width: 640px) {
+  .landing-carousel-card {
+    width: calc((100% - 1rem) / 2);
+    min-width: calc((100% - 1rem) / 2);
+    max-width: calc((100% - 1rem) / 2);
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-carousel-card {
+    width: calc((100% - 2rem) / 3);
+    min-width: calc((100% - 2rem) / 3);
+    max-width: calc((100% - 2rem) / 3);
+  }
+}
+
+@media (min-width: 1280px) {
+  .landing-carousel-card {
+    width: calc((100% - 3rem) / 4);
+    min-width: calc((100% - 3rem) / 4);
+    max-width: calc((100% - 3rem) / 4);
+  }
+}
+
 .mobile-bottom-nav {
   position: fixed;
   left: 0.75rem;
@@ -623,6 +684,128 @@ textarea {
 @keyframes premium-cta-gradient-shift {
   to {
     background-position: 240% center;
+  }
+}
+
+/* Ticket cart tier cards — shine, glow, golden badge */
+@keyframes ticket-tier-shine {
+  0% {
+    transform: translateX(-120%) skewX(-14deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  45% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(220%) skewX(-14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes ticket-tier-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes ticket-tier-sparkle {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(12deg) scale(1.15);
+  }
+}
+
+@keyframes ticket-cart-header-shimmer {
+  0% {
+    background-position: 0% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.ticket-tier-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ticket-tier-card--active {
+  transform: translateY(-1px);
+}
+
+.ticket-tier-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ticket-tier-shine::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 42%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.05) 65%,
+    transparent 100%
+  );
+  animation: ticket-tier-shine 3.8s ease-in-out infinite;
+}
+
+.ticket-tier-shine--fast::after {
+  animation-duration: 2.6s;
+}
+
+.ticket-tier-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(14px);
+  animation: ticket-tier-glow-pulse 2.8s ease-in-out infinite;
+}
+
+.ticket-tier-badge-gold {
+  animation: ticket-tier-sparkle 2.4s ease-in-out infinite;
+}
+
+.ticket-cart-header-shimmer {
+  background-size: 200% auto;
+  animation: ticket-cart-header-shimmer 5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-tier-shine::after,
+  .ticket-tier-glow,
+  .ticket-tier-badge-gold,
+  .ticket-cart-header-shimmer {
+    animation: none;
+  }
+
+  .ticket-tier-card--active {
+    transform: none;
   }
 }
 

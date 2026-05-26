@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import InfluencerCard from "../components/InfluencerCard";
+import Pagination from "../components/Pagination";
+import { LISTING_PAGE_SIZE } from "../constants/listingPagination";
 import {
   normalizeFacebookPageUrl,
   normalizeInstagramProfileUrl,
@@ -103,16 +105,9 @@ function InfluencersPage() {
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [sortBy, setSortBy] = useState("popularity");
-  const [appliedFilters, setAppliedFilters] = useState({
-    query: "",
-    city: selectedCity || "",
-    category: "",
-    date: "",
-    priceMin: "",
-    priceMax: "",
-    sortBy: "popularity"
-  });
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [list, setList] = useState([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -133,14 +128,14 @@ function InfluencersPage() {
   const [loadingMySubmissions, setLoadingMySubmissions] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
   useRouteContentReady(loading || loadingMySubmissions);
-  const canApply =
-    query !== appliedFilters.query ||
-    city !== appliedFilters.city ||
-    category !== appliedFilters.category ||
-    date !== appliedFilters.date ||
-    priceMin !== appliedFilters.priceMin ||
-    priceMax !== appliedFilters.priceMax ||
-    sortBy !== appliedFilters.sortBy;
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(query), 350);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, city, category]);
   const hasPendingInfluencer = mySubmissions.some((row) => row.status === "pending");
   const hasAnyInfluencerSubmission = mySubmissions.length > 0;
 
@@ -155,49 +150,26 @@ function InfluencersPage() {
     };
   }, [submitOpen]);
 
-  const applyFilters = () => {
-    setAppliedFilters({
-      query,
-      city,
-      category,
-      date,
-      priceMin,
-      priceMax,
-      sortBy
-    });
-  };
-
   const setCityWithGlobal = (value) => {
     setCity(value);
     setSelectedCity(value);
   };
 
-  const resetFilters = () => {
-    setQuery("");
-    setCityWithGlobal("");
-    setCategory("");
-    setDate("");
-    setPriceMin("");
-    setPriceMax("");
-    setSortBy("popularity");
-    setAppliedFilters({
-      query: "",
-      city: "",
-      category: "",
-      date: "",
-      priceMin: "",
-      priceMax: "",
-      sortBy: "popularity"
-    });
-  };
-
   useEffect(() => {
     setCity(selectedCity || "");
-    setAppliedFilters((prev) => ({
-      ...prev,
-      city: selectedCity || ""
-    }));
   }, [selectedCity]);
+
+  const totalPages = Math.max(1, Math.ceil(list.length / LISTING_PAGE_SIZE));
+  const paginatedList = useMemo(() => {
+    const start = (page - 1) * LISTING_PAGE_SIZE;
+    return list.slice(start, start + LISTING_PAGE_SIZE);
+  }, [list, page]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   useEffect(() => {
     let active = true;
@@ -206,11 +178,10 @@ function InfluencersPage() {
       try {
         setLoading(true);
         const response = await fetchInfluencers({
-          q: appliedFilters.query || undefined,
-          city: appliedFilters.city || undefined,
-          category: appliedFilters.category || undefined,
-          date: appliedFilters.date || undefined,
-          sort: appliedFilters.sortBy
+          q: debouncedQuery || undefined,
+          city: city || undefined,
+          category: category || undefined,
+          sort: sortBy || "popularity"
         });
 
         if (active) {
@@ -231,7 +202,7 @@ function InfluencersPage() {
     return () => {
       active = false;
     };
-  }, [appliedFilters]);
+  }, [debouncedQuery, city, category, sortBy]);
 
   useEffect(() => {
     let active = true;
@@ -334,6 +305,7 @@ function InfluencersPage() {
         )}
       </div>
       <EventFilterBar
+        compact
         query={query}
         setQuery={setQuery}
         city={city}
@@ -348,30 +320,27 @@ function InfluencersPage() {
         setPriceMax={setPriceMax}
         sortBy={sortBy}
         setSortBy={setSortBy}
-        showDate={false}
-        showPrice={false}
         searchPlaceholder="Search influencers"
         mobileTitle="Filter Influencers"
-        onApply={applyFilters}
-        onReset={resetFilters}
-        canApply={canApply}
       />
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="listing-cards-grid">
         {loading
-          ? Array.from({ length: 6 }).map((_, idx) => (
+          ? Array.from({ length: LISTING_PAGE_SIZE }).map((_, idx) => (
               <div
                 key={`influencer-skeleton-${idx}`}
-                className="h-[320px] animate-pulse rounded-3xl border border-slate-200 bg-white"
+                className="listing-card-cell h-[300px] animate-pulse rounded-3xl border border-slate-200 bg-white"
               />
             ))
           : null}
-        {!loading && list.length === 0 ? <p className="text-sm text-slate-500">No influencers match your current filters.</p> : null}
+        {!loading && list.length === 0 ? (
+          <p className="col-span-full text-sm text-slate-500">No influencers match your current filters.</p>
+        ) : null}
         {!loading
-          ? list.map((item) => {
+          ? paginatedList.map((item) => {
               const socialLinks = parseInfluencerSocialLinks(item.social_links);
               return (
+              <div key={item.id} className="listing-card-cell">
               <InfluencerCard
-                key={item.id}
                 item={{
                   id: item.id,
                   name: item.name,
@@ -395,10 +364,15 @@ function InfluencersPage() {
                   })
                 }
               />
+              </div>
               );
             })
           : null}
       </div>
+
+      {!loading && list.length > LISTING_PAGE_SIZE ? (
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      ) : null}
 
       {submitOpen ? (
         <SubmissionModal

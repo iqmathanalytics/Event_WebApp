@@ -1,13 +1,22 @@
 import { Link, useParams } from "react-router-dom";
+import { absoluteListingUrl, eventDetailPath } from "../utils/listingPaths";
+import ShareListingButton from "../components/ShareListingButton";
+import ListingFavoriteButton from "../components/ListingFavoriteButton";
+import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FiCalendar, FiClock, FiMapPin, FiUser } from "react-icons/fi";
-import { CheckCircle, Clock, Globe, Music, Users } from "lucide-react";
+import { CheckCircle, Clock, Globe, Mic, Users } from "lucide-react";
 import { fetchEventById, trackEventView } from "../services/eventService";
-import { formatCurrency, formatDateUS } from "../utils/format";
+import { trackEventPageView } from "../utils/googleAnalytics";
+import { formatCurrency, formatDateUS, formatEventDuration, formatTime12Hour } from "../utils/format";
+import { normalizeEventTicketSalesMode } from "../utils/eventTicketSalesMode";
 import useAuth from "../hooks/useAuth";
+import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import EventDetailBanner from "../components/EventDetailBanner";
+import EventTicketCheckoutPanel from "../components/EventTicketCheckoutPanel";
+import EventAirbnbBookingShell from "../components/EventAirbnbBookingShell";
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 
 function parseHighlights(value) {
@@ -49,32 +58,16 @@ function getEmbedMapUrl(googleMapsLink, venueName, venueAddress) {
   return `https://www.google.com/maps?q=${encodeURIComponent(fallback)}&output=embed`;
 }
 
-function formatTime12Hour(value) {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "Time not specified";
-  }
-  const match = raw.match(/^(\d{1,2}):(\d{2})/);
-  if (!match) {
-    return raw;
-  }
-  const hour24 = Number(match[1]);
-  const minute = match[2];
-  if (!Number.isFinite(hour24) || hour24 < 0 || hour24 > 23) {
-    return raw;
-  }
-  const suffix = hour24 >= 12 ? "PM" : "AM";
-  const hour12 = hour24 % 12 || 12;
-  return `${hour12}:${minute} ${suffix}`;
-}
-
 function EventDetailsPage() {
-  const { id } = useParams();
+  const { slug } = useParams();
   const { isAuthenticated } = useAuth();
+  const { selectedCity } = useCityFilter();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [trackedView, setTrackedView] = useState(false);
+
+  useCanonicalListingUrl(event, eventDetailPath);
 
   useEffect(() => {
     let active = true;
@@ -83,7 +76,7 @@ function EventDetailsPage() {
       try {
         setLoading(true);
         setError("");
-        const response = await fetchEventById(id);
+        const response = await fetchEventById(slug);
         if (active) {
           setEvent(response?.data || null);
         }
@@ -103,15 +96,31 @@ function EventDetailsPage() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [slug]);
 
   useEffect(() => {
-    if (!id || trackedView) {
+    if (!event?.id || trackedView) {
       return;
     }
-    // Fire-and-forget analytics. Backend will ignore unapproved events.
-    void trackEventView(id).finally(() => setTrackedView(true));
-  }, [id, trackedView]);
+    trackEventPageView({
+      eventId: event.id,
+      eventTitle: event.title,
+      ticketMode: event.ticket_sales_mode
+    });
+    trackEventView(event.public_slug || event.id).catch(() => {});
+    setTrackedView(true);
+  }, [event?.id, event?.title, event?.ticket_sales_mode, trackedView]);
+
+  useEffect(() => {
+    if (!event?.title) {
+      return undefined;
+    }
+    const previousTitle = document.title;
+    document.title = `${event.title} | Book My Tickets`;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [event?.title]);
 
   useRouteContentReady(loading);
 
@@ -141,6 +150,7 @@ function EventDetailsPage() {
     event.is_yay_deal_event === true ||
     String(event.is_yay_deal_event || "") === "1";
   const yayDealGuestLocked = isYayDealEvent && isGuest;
+  const ticketSalesMode = normalizeEventTicketSalesMode(event.ticket_sales_mode);
   const fullDescription = event.description || "No event description provided yet.";
   const partialDescription =
     fullDescription.length > 240 ? `${fullDescription.slice(0, 240).trim()}...` : fullDescription;
@@ -152,6 +162,8 @@ function EventDetailsPage() {
 
   const metaCard =
     "rounded-xl border border-slate-100 bg-gradient-to-b from-slate-50/95 to-white p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
+  const metaValue = "font-semibold text-slate-900";
+  const durationText = formatEventDuration(event.duration_hours, event.duration_minutes);
 
   return (
     <motion.div
@@ -162,12 +174,22 @@ function EventDetailsPage() {
     >
       <EventDetailBanner event={event} title={event.title} guestLocked={yayDealGuestLocked} />
 
-      <div className="grid grid-cols-1 gap-4 lg:gap-5">
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-soft ring-1 ring-slate-900/[0.04] sm:p-5 lg:rounded-3xl lg:border-slate-200 lg:p-6 lg:shadow-sm lg:ring-0">
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:mb-2 lg:text-sm lg:font-normal lg:tracking-normal">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] lg:items-start lg:gap-8">
+        <div className="relative rounded-2xl border border-slate-200/90 bg-white p-4 shadow-soft ring-1 ring-slate-900/[0.04] sm:p-5 lg:rounded-3xl lg:border-slate-200 lg:p-6 lg:shadow-sm lg:ring-0">
+          <ListingFavoriteButton
+            listingType="event"
+            listingId={event.id}
+            className="right-[5.5rem] sm:right-[6.25rem] lg:right-[7rem]"
+          />
+          <ShareListingButton
+            url={absoluteListingUrl(eventDetailPath(event))}
+            title={event.title}
+            listingType="event"
+          />
+          <p className="mb-1 pr-24 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 sm:pr-28 lg:mb-2 lg:pr-32 lg:text-sm lg:font-normal lg:tracking-normal">
             {event.city_name || "City"}
           </p>
-          <h1 className="text-[1.35rem] font-bold leading-[1.2] tracking-tight text-slate-900 sm:text-2xl lg:text-3xl">
+          <h1 className="pr-4 text-[1.35rem] font-bold leading-[1.2] tracking-tight text-slate-900 sm:pr-6 sm:text-2xl lg:pr-8 lg:text-3xl">
             {event.title}
           </h1>
 
@@ -184,34 +206,36 @@ function EventDetailsPage() {
             </div>
           ) : null}
 
-          <div className="mt-4 grid grid-cols-2 gap-2 text-[13px] leading-snug text-slate-700 lg:mt-4 lg:grid-cols-2 lg:gap-3 lg:text-sm lg:text-slate-600">
+          <div className="mt-4 grid grid-cols-2 gap-2 text-[13px] leading-snug lg:mt-4 lg:grid-cols-2 lg:gap-3 lg:text-sm">
             <div className={metaCard}>
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 text-slate-600">
                 <FiCalendar className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span>{formatEventScheduleLabel(event)}</span>
+                <span className={metaValue}>{formatEventScheduleLabel(event)}</span>
               </p>
             </div>
             <div className={metaCard}>
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 text-slate-600">
                 <FiClock className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span>{formatTime12Hour(event.event_time)}</span>
+                <span className={metaValue}>{formatTime12Hour(event.event_time)}</span>
               </p>
             </div>
             <div className={`col-span-2 ${metaCard} lg:col-span-1`}>
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 text-slate-600">
                 <FiMapPin className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span className="line-clamp-2 lg:line-clamp-none">
+                <span className={`line-clamp-2 lg:line-clamp-none ${metaValue}`}>
                   <span>{venueName}</span>
                   {event.venue_address ? (
-                    <span className="mt-0.5 block text-xs font-normal text-slate-500">{event.venue_address}</span>
+                    <span className="mt-0.5 block text-xs font-medium text-slate-500">{event.venue_address}</span>
                   ) : null}
                 </span>
               </p>
             </div>
             <div className={`col-span-2 ${metaCard} lg:col-span-1`}>
-              <p className="flex items-start gap-2">
+              <p className="flex items-start gap-2 text-slate-600">
                 <FiUser className="mt-0.5 shrink-0 text-brand-600 lg:text-slate-500" />
-                <span className="line-clamp-2 lg:line-clamp-none">{event.organizer_name || "Event Organizer"}</span>
+                <span className={`line-clamp-2 lg:line-clamp-none ${metaValue}`}>
+                  {event.organizer_name || "Event Organizer"}
+                </span>
               </p>
             </div>
           </div>
@@ -220,25 +244,37 @@ function EventDetailsPage() {
             <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 lg:text-base lg:font-semibold lg:normal-case lg:tracking-normal lg:text-slate-900">
               About this event
             </h2>
-            <p className="mt-2 text-[15px] leading-relaxed text-slate-700 lg:text-sm lg:leading-6">{aboutText}</p>
+            <p className="mt-2 text-[15px] font-medium leading-relaxed text-slate-800 lg:text-sm lg:leading-6">{aboutText}</p>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl border border-slate-200/90 bg-slate-50 p-3 text-[13px] text-slate-700 sm:grid-cols-2 sm:p-4 lg:gap-2 lg:p-4 lg:text-sm">
-            <p className="inline-flex items-center gap-2">
+          <div className="mt-5 grid grid-cols-1 gap-2.5 rounded-2xl border border-slate-200/90 bg-slate-50 p-3 sm:grid-cols-2 sm:p-4 lg:gap-3 lg:p-4">
+            <p className="inline-flex items-center gap-2 text-[13px] text-slate-600 lg:text-sm">
               <Clock size={16} className="shrink-0 text-slate-500" />
-              {event.duration_hours ? `${event.duration_hours} Hours` : "Duration not specified"}
+              <span>
+                <span className="font-bold text-slate-900">Duration · </span>
+                <span className="font-semibold text-slate-900">{durationText || "Not specified"}</span>
+              </span>
             </p>
-            <p className="inline-flex items-center gap-2">
+            <p className="inline-flex items-center gap-2 text-[13px] text-slate-600 lg:text-sm">
               <Users size={16} className="shrink-0 text-slate-500" />
-              Age Limit - {event.age_limit || "All Ages"}
+              <span>
+                <span className="font-bold text-slate-900">Age · </span>
+                <span className="font-semibold text-slate-900">{event.age_limit || "All Ages"}</span>
+              </span>
             </p>
-            <p className="inline-flex items-center gap-2">
+            <p className="inline-flex items-center gap-2 text-[13px] text-slate-600 lg:text-sm">
               <Globe size={16} className="shrink-0 text-slate-500" />
-              {event.languages || "Languages not specified"}
+              <span>
+                <span className="font-bold text-slate-900">Languages · </span>
+                <span className="font-semibold text-slate-900">{event.languages || "Not specified"}</span>
+              </span>
             </p>
-            <p className="inline-flex items-center gap-2">
-              <Music size={16} className="shrink-0 text-slate-500" />
-              {event.genres || "Genres not specified"}
+            <p className="inline-flex items-center gap-2 text-[13px] text-slate-600 lg:text-sm">
+              <Mic size={16} className="shrink-0 text-slate-500" />
+              <span>
+                <span className="font-bold text-slate-900">Genres · </span>
+                <span className="font-semibold text-slate-900">{event.genres || "Not specified"}</span>
+              </span>
             </p>
           </div>
 
@@ -341,47 +377,6 @@ function EventDetailsPage() {
             </div>
           ) : null}
 
-          <div className="mt-5 rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white p-4 lg:rounded-2xl lg:border-slate-200 lg:bg-slate-50 lg:from-slate-50 lg:to-slate-50">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">Reserve Tickets</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-slate-600 lg:text-sm">
-                  {isGuest
-                    ? "Login or register to continue with ticket reservation."
-                    : "Continue to the organizer ticket link to reserve your spot."}
-                </p>
-              </div>
-              {!isAuthenticated ? (
-                <Link
-                  to="/login"
-                  className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 lg:min-h-0 lg:w-auto lg:rounded-full lg:py-2"
-                >
-                  Reserve Tickets
-                </Link>
-              ) : event.ticket_link ? (
-                <a
-                  href={event.ticket_link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 lg:min-h-0 lg:w-auto lg:rounded-full lg:py-2"
-                >
-                  Reserve Tickets
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex min-h-[48px] w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-300 px-4 text-sm font-semibold text-slate-600 lg:min-h-0 lg:w-auto lg:rounded-full lg:py-2"
-                >
-                  Reserve Tickets
-                </button>
-              )}
-            </div>
-            <p className="mt-3 text-center text-[11px] text-slate-500 lg:mt-2 lg:text-left lg:text-xs">
-              Price from {formatCurrency(pricePerDay)}
-            </p>
-          </div>
-
           <Link
             to="/events"
             className="mt-5 flex w-full items-center justify-center rounded-xl border border-dashed border-brand-300/70 bg-brand-50/50 py-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 lg:mt-5 lg:inline-flex lg:w-auto lg:border-0 lg:bg-transparent lg:py-0 lg:text-brand-600"
@@ -389,6 +384,21 @@ function EventDetailsPage() {
             Browse more events
           </Link>
         </div>
+
+        <aside className="lg:sticky lg:top-24 lg:z-10 lg:self-start">
+          {ticketSalesMode === "platform" && isAuthenticated ? (
+            <EventTicketCheckoutPanel event={event} />
+          ) : (
+            <EventAirbnbBookingShell
+              event={event}
+              ticketSalesMode={ticketSalesMode}
+              isGuest={isGuest}
+              scheduleLabel={formatEventScheduleLabel(event)}
+              timeLabel={formatTime12Hour(event.event_time)}
+              pricePerDay={pricePerDay}
+            />
+          )}
+        </aside>
       </div>
     </motion.div>
   );

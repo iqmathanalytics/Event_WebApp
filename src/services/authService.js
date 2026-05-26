@@ -16,8 +16,18 @@ const {
   alignNewsletterRowsToCanonicalEmail,
   linkNewsletterSubscriberToUser
 } = require("../models/newsletterModel");
-const { sendSendGridEmail } = require("../utils/emailIntegrations");
+const { sendTransactionalEmail } = require("../utils/emailIntegrations");
 const { buildWelcomeEmail } = require("../utils/transactionalEmailTemplates");
+
+async function sendWelcomeEmail({ email, firstName, signedUpWithGoogle = false }) {
+  const welcome = buildWelcomeEmail({ firstName, signedUpWithGoogle });
+  await sendTransactionalEmail({
+    to: email,
+    subject: welcome.subject,
+    text: welcome.text,
+    html: welcome.html
+  }).catch(() => {});
+}
 
 function splitDisplayName(full) {
   const t = String(full || "User").trim() || "User";
@@ -42,6 +52,7 @@ function buildAuthUser(user) {
     can_post_events: user.can_post_events === 1 ? 1 : 0,
     can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
     can_post_deals: user.can_post_deals === 1 ? 1 : 0,
+    can_sell_platform_tickets: user.can_sell_platform_tickets === 1 ? 1 : 0,
     profile_image_url: user.profile_image_url || null,
     auth_provider: user.auth_provider || "local"
   };
@@ -56,7 +67,8 @@ function tokensForUser(user) {
     organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
     can_post_events: user.can_post_events === 1 ? 1 : 0,
     can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
-    can_post_deals: user.can_post_deals === 1 ? 1 : 0
+    can_post_deals: user.can_post_deals === 1 ? 1 : 0,
+    can_sell_platform_tickets: user.can_sell_platform_tickets === 1 ? 1 : 0
   };
   return {
     accessToken: generateAccessToken(tokenPayload),
@@ -157,13 +169,7 @@ async function register(payload) {
     });
   }
 
-  const welcome = buildWelcomeEmail({ firstName: payload.first_name });
-  await sendSendGridEmail({
-    to: email,
-    subject: welcome.subject,
-    text: welcome.text,
-    html: welcome.html
-  }).catch(() => {});
+  await sendWelcomeEmail({ email, firstName: payload.first_name, signedUpWithGoogle: false });
 
   return {
     userId,
@@ -332,6 +338,9 @@ async function registerWithGoogleIdToken(idToken) {
       throw err;
     }
   }
+
+  const { first } = splitDisplayName(name);
+  await sendWelcomeEmail({ email, firstName: first, signedUpWithGoogle: true });
 
   return finalizeGoogleUserSession(userId);
 }

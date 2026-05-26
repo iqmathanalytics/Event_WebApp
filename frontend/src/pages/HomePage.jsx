@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import InfluencerCard from "../components/InfluencerCard";
@@ -11,32 +11,27 @@ import {
 } from "../utils/influencerSocial";
 import DealCard from "../components/DealCard";
 import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
+import LandingCarouselSlot from "../components/LandingCarouselSlot";
 import HeroSlideshow from "../components/HeroSlideshow";
-import BrandHeroLogo from "../components/BrandHeroLogo";
 import LandingSplash from "../components/LandingSplash";
 import { fetchFeaturedEvents } from "../services/eventService";
 import { fetchDeals, fetchInfluencers, trackInfluencerClick } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
 import { formatDateUS } from "../utils/format";
+import { trackEventClick } from "../services/eventService";
 import { pickHomeCarouselSix, pickLandingSectionCards } from "../utils/homeCarouselCuration";
+import {
+  enrichEventWithCountdown,
+  isUpcomingEvent,
+  sortEventsByPopularity
+} from "../utils/eventPopularity";
 import { DEFAULT_HERO_NARRATIVE } from "../utils/heroSlideCopy";
 import { markHomeSplashConsumed, shouldShowHomeSplash } from "../utils/homeSplashPolicy";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
-function isYayDealEventRow(item) {
-  return (
-    item?.is_yay_deal_event === 1 ||
-    item?.is_yay_deal_event === true ||
-    String(item?.is_yay_deal_event || "") === "1"
-  );
-}
-
-function isPremiumDealRow(item) {
-  return item?.is_premium === 1 || item?.is_premium === true;
-}
-
 function HomePage() {
+  const navigate = useNavigate();
   const { setBrandLogoPhase, headerLogoRef, startLogoFlight, onSplashExitComplete } = useOutletContext() || {};
   const { selectedCity, selectedCityLabel } = useCityFilter();
   const [trendingEvents, setTrendingEvents] = useState([]);
@@ -119,44 +114,17 @@ function HomePage() {
           }
         }
         if (active) {
-          const now = Date.now();
           const rawRows = response?.data || [];
 
-          const enriched = rawRows
-            .map((ev) => {
-              const dateStr = String(ev.event_date || "").slice(0, 10);
-              const timeStr = ev.event_time ? String(ev.event_time).slice(0, 5) : "00:00";
-              const start = new Date(`${dateStr}T${timeStr}:00`);
-              const diffMs = start.getTime() - now;
-
-              let countdownLabel = null;
-              if (diffMs > 0) {
-                const totalMinutes = Math.floor(diffMs / (1000 * 60));
-                const days = Math.floor(totalMinutes / (60 * 24));
-                const hours = Math.floor((totalMinutes - days * 60 * 24) / 60);
-                const minutes = totalMinutes - days * 60 * 24 - hours * 60;
-
-                if (days > 0) countdownLabel = `${days}d ${hours}h`;
-                else if (hours > 0) countdownLabel = `${hours}h ${minutes}m`;
-                else countdownLabel = `${minutes}m`;
-              }
-
-              return {
-                ...ev,
-                countdownLabel
-              };
-            })
-            .filter((ev) => ev.countdownLabel !== null);
-
-          const curated = pickHomeCarouselSix(enriched, { isPremium: isYayDealEventRow });
-          setTrendingEvents(curated);
-          setLandingEvents(
-            pickLandingSectionCards(enriched, {
-              isPremium: isYayDealEventRow,
-              maxStandard: 3,
-              maxPremium: 2
-            })
+          const enriched = sortEventsByPopularity(
+            rawRows
+              .filter(isUpcomingEvent)
+              .map(enrichEventWithCountdown)
           );
+
+          const curated = pickHomeCarouselSix(enriched);
+          setTrendingEvents(curated);
+          setLandingEvents(pickLandingSectionCards(enriched, { limit: 8 }));
         }
       } catch (_err) {
         if (active) {
@@ -213,15 +181,9 @@ function HomePage() {
         }
         setLiveInfluencers((influencerResponse?.data || []).slice(0, 12));
         const dealPool = (dealsResponse?.data || []).slice(0, 120);
-        const curatedDeals = pickHomeCarouselSix(dealPool, { isPremium: isPremiumDealRow });
+        const curatedDeals = pickHomeCarouselSix(dealPool);
         setLiveDeals(curatedDeals);
-        setLandingDeals(
-          pickLandingSectionCards(dealPool, {
-            isPremium: isPremiumDealRow,
-            maxStandard: 3,
-            maxPremium: 2
-          })
-        );
+        setLandingDeals(pickLandingSectionCards(dealPool, { limit: 8 }));
       } catch (_err) {
         if (active) {
           setLiveInfluencers([]);
@@ -267,10 +229,9 @@ function HomePage() {
         style={{ pointerEvents: landingRevealed ? "auto" : "none" }}
       >
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-700 px-4 py-6 text-white sm:px-8 sm:py-7 lg:px-10 lg:py-7">
-        <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-[0.72fr_1.28fr] lg:gap-8">
-          <div className="space-y-4 lg:pr-2">
-            <BrandHeroLogo className="hero-brand-logo-mobile-only" entranceActive={landingRevealed} />
-            <div className="min-h-[3.25rem] sm:min-h-[4rem] lg:min-h-[4.75rem] overflow-hidden">
+        <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-[0.72fr_1.28fr] lg:items-stretch lg:gap-8">
+          <div className="flex min-h-0 flex-col lg:h-full lg:pr-2">
+            <div className="shrink-0 overflow-hidden">
               <AnimatePresence mode="wait">
                 <motion.h1
                   key={heroNarrative.headline}
@@ -306,35 +267,66 @@ function HomePage() {
                 />
               ) : null}
             </div>
-            <div className="min-h-[2.75rem] sm:min-h-[3rem] lg:min-h-[3.25rem] overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={heroNarrative.subline}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={
-                    landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }
-                  }
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{
-                    delay:
-                      landingRevealed && !heroCopyStaggerDone ? 0.4 : heroCopyStaggerDone ? 0.04 : 0,
-                    duration: heroCopyStaggerDone ? 0.34 : 0.62,
-                    ease: sleek
-                  }}
-                  style={{ willChange: "transform, opacity" }}
-                  className="mt-0 max-w-xl text-xs text-slate-200/95 sm:text-sm lg:text-[14px] lg:leading-relaxed"
+
+            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3 sm:mt-4 lg:mt-4">
+              <div className="relative min-h-0 flex-1 overflow-hidden overscroll-none">
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={heroNarrative.subline}
+                    initial={
+                      heroCopyStaggerDone ? { opacity: 0 } : { opacity: 0, y: 12 }
+                    }
+                    animate={
+                      landingRevealed
+                        ? heroCopyStaggerDone
+                          ? { opacity: 1 }
+                          : { opacity: 1, y: 0 }
+                        : heroCopyStaggerDone
+                          ? { opacity: 0 }
+                          : { opacity: 0, y: 12 }
+                    }
+                    exit={heroCopyStaggerDone ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                    transition={{
+                      delay:
+                        landingRevealed && !heroCopyStaggerDone ? 0.4 : heroCopyStaggerDone ? 0.04 : 0,
+                      duration: heroCopyStaggerDone ? 0.34 : 0.62,
+                      ease: sleek
+                    }}
+                    style={{ willChange: "opacity" }}
+                    className="max-w-xl text-xs leading-relaxed text-slate-200/95 sm:text-sm lg:text-[14px] lg:leading-[1.65]"
+                  >
+                    {heroNarrative.subline}
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+              {heroNarrative.detailPath ? (
+                <motion.div
+                  className="shrink-0"
+                  initial={false}
+                  animate={landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+                  transition={{ duration: 0.45, delay: landingRevealed ? 0.48 : 0, ease: sleek }}
                 >
-                  {heroNarrative.subline}
-                </motion.p>
-              </AnimatePresence>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      trackEventClick(heroNarrative.detailPath.replace(/^\/events\//, "")).catch(() => {});
+                      navigate(heroNarrative.detailPath);
+                    }}
+                    className="inline-flex rounded-full border border-white/35 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/20 sm:text-sm"
+                  >
+                    View details
+                  </button>
+                </motion.div>
+              ) : null}
             </div>
+
             <motion.div
               initial={false}
               animate={
                 landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }
               }
               transition={{ duration: 0.65, delay: landingRevealed ? 0.55 : 0, ease: sleek }}
-              className="mt-4 flex flex-wrap items-center gap-2.5 sm:gap-3"
+              className="mt-6 flex shrink-0 flex-wrap items-center gap-2.5 sm:mt-8 sm:gap-3 lg:mt-4 lg:pt-2"
             >
               <Link
                 to="/events"
@@ -365,25 +357,25 @@ function HomePage() {
         </div>
       </section>
 
-      <DiscoverySectionCarousel title={`Trending Events ${citySuffix}`} actionHref="/events" variant="landing-grid3">
+      <DiscoverySectionCarousel title={`Trending Events ${citySuffix}`} actionHref="/events" variant="landing-grid8">
         {loadingEvents
-          ? Array.from({ length: 5 }).map((_, idx) => (
-              <div
-                key={`event-skeleton-${idx}`}
-                className="h-[290px] min-w-[260px] max-w-[260px] snap-start animate-pulse rounded-3xl border border-slate-200 bg-white lg:min-w-[calc((100%-2rem)/3)] lg:max-w-[calc((100%-2rem)/3)]"
-              />
+          ? Array.from({ length: 8 }).map((_, idx) => (
+              <LandingCarouselSlot key={`event-skeleton-${idx}`} grid>
+                <div className="min-h-[20rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
+              </LandingCarouselSlot>
             ))
           : landingEvents.map((item) => (
-              <div
-                key={item.id}
-                className="min-w-[260px] max-w-[260px] snap-start lg:min-w-[calc((100%-2rem)/3)] lg:max-w-[calc((100%-2rem)/3)]"
-              >
+              <LandingCarouselSlot key={item.id} grid>
                 <EventCard
+                  variant="landing"
                   item={{
                     id: item.id,
+                    public_slug: item.public_slug,
                     title: item.title,
                     category: item.category_name || "General",
                     city: item.city_name || "City",
+                    event_date: item.event_date,
+                    event_time: item.event_time,
                     date: formatDateUS(item.event_date),
                     time: item.event_time ? String(item.event_time).slice(0, 5) : "",
                     price: item.price,
@@ -406,27 +398,24 @@ function HomePage() {
                     })
                   }
                 />
-              </div>
+              </LandingCarouselSlot>
             ))}
       </DiscoverySectionCarousel>
 
-      <DiscoverySectionCarousel title={`Popular Influencers ${citySuffix}`} actionHref="/influencers" variant="landing-grid3">
+      <DiscoverySectionCarousel title={`Popular Influencers ${citySuffix}`} actionHref="/influencers" variant="landing-grid8">
         {loadingInfluencers
-          ? Array.from({ length: 3 }).map((_, idx) => (
-              <div
-                key={`influencer-skeleton-${idx}`}
-                className="h-[290px] min-w-[260px] max-w-[260px] snap-start animate-pulse rounded-3xl border border-slate-200 bg-white lg:min-w-[calc((100%-2rem)/3)] lg:max-w-[calc((100%-2rem)/3)]"
-              />
+          ? Array.from({ length: 8 }).map((_, idx) => (
+              <LandingCarouselSlot key={`influencer-skeleton-${idx}`} grid>
+                <div className="min-h-[20rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
+              </LandingCarouselSlot>
             ))
           : liveInfluencers.length > 0
-            ? liveInfluencers.slice(0, 9).map((item) => {
+            ? liveInfluencers.slice(0, 8).map((item) => {
                 const socialLinks = parseInfluencerSocialLinks(item.social_links);
                 return (
-                <div
-                  key={item.id}
-                  className="min-w-[260px] max-w-[260px] snap-start lg:min-w-[calc((100%-2rem)/3)] lg:max-w-[calc((100%-2rem)/3)]"
-                >
+                <LandingCarouselSlot key={item.id} grid>
                   <InfluencerCard
+                    variant="landing"
                     item={{
                       id: item.id,
                       name: item.name,
@@ -441,31 +430,35 @@ function HomePage() {
                       tags: item.tags || [],
                       image: item.profile_image_url
                     }}
+                    isFavorite={isFavorite("influencer", item.id)}
                     onViewDetails={(id) => trackInfluencerClick(id).catch(() => {})}
+                    onToggleFavorite={() =>
+                      toggleFavorite({
+                        listingType: "influencer",
+                        listingId: item.id
+                      })
+                    }
                   />
-                </div>
+                </LandingCarouselSlot>
                 );
               })
             : (
-              <p className="min-w-[260px] text-sm text-slate-500">No influencers available right now.</p>
+              <p className="min-w-full text-sm text-slate-500">No influencers available right now.</p>
             )}
       </DiscoverySectionCarousel>
 
-      <DiscoverySectionCarousel title={`Top Deals ${citySuffix}`} actionHref="/deals" variant="landing-grid3">
+      <DiscoverySectionCarousel title={`Top Deals ${citySuffix}`} actionHref="/deals" variant="landing-grid8">
         {loadingDeals
-          ? Array.from({ length: 5 }).map((_, idx) => (
-              <div
-                key={`deal-skeleton-${idx}`}
-                className="h-[290px] min-w-[260px] max-w-[260px] snap-start animate-pulse rounded-3xl border border-slate-200 bg-white lg:min-w-[calc((100%-2rem)/3)] lg:max-w-[calc((100%-2rem)/3)]"
-              />
+          ? Array.from({ length: 8 }).map((_, idx) => (
+              <LandingCarouselSlot key={`deal-skeleton-${idx}`} grid>
+                <div className="min-h-[20rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
+              </LandingCarouselSlot>
             ))
-          : liveDeals.length > 0
+          : landingDeals.length > 0
             ? landingDeals.map((item) => (
-                <div
-                  key={item.id}
-                  className="min-w-[260px] max-w-[260px] snap-start lg:min-w-[calc((100%-2rem)/3)] lg:max-w-[calc((100%-2rem)/3)]"
-                >
+                <LandingCarouselSlot key={item.id} grid>
                   <DealCard
+                    variant="landing"
                     item={{
                       id: item.id,
                       title: item.title,
@@ -484,11 +477,18 @@ function HomePage() {
                     tags={item.tags || []}
                     isPremium={item.is_premium === 1 || item.is_premium === true}
                     showPremiumBadge
+                    isFavorite={isFavorite("deal", item.id)}
+                    onToggleFavorite={() =>
+                      toggleFavorite({
+                        listingType: "deal",
+                        listingId: item.id
+                      })
+                    }
                   />
-                </div>
+                </LandingCarouselSlot>
               ))
             : (
-              <p className="min-w-[260px] text-sm text-slate-500">No deals available right now.</p>
+              <p className="min-w-full text-sm text-slate-500">No deals available right now.</p>
             )}
       </DiscoverySectionCarousel>
 

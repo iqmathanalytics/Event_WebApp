@@ -1,5 +1,10 @@
 const { pool } = require("../config/db");
+const { resolveListingIdFromParam } = require("../utils/listingSlug");
+const { setPublicSlug } = require("./listingSlugModel");
 const { normalizeDateList } = require("../utils/eventSchedule");
+const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
+const { parseTotalSeats } = require("../utils/eventSeats");
+const { parseTicketLevelsFromEvent, normalizeTicketLevelsInput } = require("../utils/eventTicketLevels");
 
 function parseHighlights(value) {
   if (!value) {
@@ -45,6 +50,8 @@ function normalizeEventRow(row) {
   }
   return {
     ...row,
+    ticket_sales_mode: normalizeTicketSalesMode(readTicketSalesModeRaw(row)),
+    ticket_levels: parseTicketLevelsFromEvent(row),
     event_highlights: parseHighlights(row.event_highlights),
     gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
     event_dates: normalizeDateList(
@@ -84,17 +91,22 @@ async function createEvent(payload) {
     category_id,
     organizer_id,
     ticket_link,
+    ticket_sales_mode,
+    total_seats,
     image_url,
     gallery_image_urls,
     price,
     duration_hours,
+    duration_minutes,
     age_limit,
     languages,
     genres,
     event_highlights,
     price_per_day,
     is_yay_deal_event,
-    deal_event_discount_code
+    deal_event_discount_code,
+    ticket_levels,
+    ticket_levels_json
   } = payload;
 
   const highlightsValue = Array.isArray(event_highlights)
@@ -114,14 +126,24 @@ async function createEvent(payload) {
   const galleryUrls = parseGalleryImageUrls(gallery_image_urls);
   const galleryJson = galleryUrls.length ? JSON.stringify(galleryUrls) : null;
 
+  const ticketSalesMode = normalizeTicketSalesMode(ticket_sales_mode ?? payload.ticketSalesMode);
+  const seatsTotal =
+    ticketSalesMode === "platform" ? parseTotalSeats(total_seats ?? payload.totalSeats) : null;
+  const levelsNormalized = normalizeTicketLevelsInput(ticket_levels ?? ticket_levels_json);
+  const levelsJson = levelsNormalized.length ? JSON.stringify(levelsNormalized) : null;
+  const listPrice =
+    levelsNormalized.length > 0
+      ? Math.min(...levelsNormalized.map((l) => l.price))
+      : perDayPrice || 0;
+
   const [result] = await pool.query(
     `INSERT INTO events
       (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
-       venue_name, venue_address, google_maps_link, organizer_id, ticket_link,
-       image_url, gallery_image_urls, price, duration_hours, age_limit, languages, genres, event_highlights,
+       venue_name, venue_address, google_maps_link, organizer_id, ticket_link, ticket_sales_mode, total_seats,
+       image_url, gallery_image_urls, price, ticket_levels_json, duration_hours, duration_minutes, age_limit, languages, genres, event_highlights,
        is_yay_deal_event, deal_event_discount_code,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
     [
       title,
       description || null,
@@ -139,10 +161,14 @@ async function createEvent(payload) {
       google_maps_link || null,
       organizer_id,
       ticket_link || null,
+      ticketSalesMode,
+      seatsTotal,
       image_url || null,
       galleryJson,
-      perDayPrice || 0,
-      duration_hours || null,
+      listPrice,
+      levelsJson,
+      duration_hours ?? null,
+      duration_minutes ?? null,
       age_limit || null,
       languages || null,
       genres || null,
@@ -152,7 +178,20 @@ async function createEvent(payload) {
     ]
   );
 
-  return result.insertId;
+  const insertId = result.insertId;
+  try {
+    await pool.query(`UPDATE events SET ticket_sales_mode = ? WHERE id = ?`, [ticketSalesMode, insertId]);
+  } catch (_err) {
+    /* ignore if column missing on legacy DB */
+  }
+
+  try {
+    await setPublicSlug("events", insertId, title);
+  } catch (_err) {
+    /* public_slug column may be missing before migration */
+  }
+
+  return insertId;
 }
 
 async function updateEventStatus({ eventId, status, adminId, reviewNote }) {
@@ -168,6 +207,52 @@ async function updateEventStatus({ eventId, status, adminId, reviewNote }) {
 async function findEventById(id) {
   const [rows] = await pool.query("SELECT * FROM events WHERE id = ? LIMIT 1", [id]);
   return normalizeEventRow(rows[0] || null);
+}
+
+async function findPublicEventBySlugOrId(param) {
+  const { id, slug } = resolveListingIdFromParam(param);
+  if (id) {
+    const byId = await findPublicEventById(id);
+    if (byId) {
+      return byId;
+    }
+  }
+  if (slug) {
+    try {
+      const [rows] = await pool.query(
+        `SELECT
+           e.*,
+           c.name AS city_name,
+           cat.name AS category_name,
+           u.name AS organizer_name,
+           (SELECT COUNT(*) FROM event_bookings eb WHERE eb.event_id = e.id) AS booking_count,
+           (
+             SELECT COUNT(*)
+             FROM events e2
+             WHERE e2.status = 'approved'
+               AND e2.city_id = e.city_id
+               AND e2.category_id = e.category_id
+           ) AS category_event_count,
+           (
+             CASE
+               WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
+               ELSE 0
+             END
+           ) AS recent_engagement_score
+         FROM events e
+         LEFT JOIN cities c ON c.id = e.city_id
+         LEFT JOIN categories cat ON cat.id = e.category_id
+         LEFT JOIN users u ON u.id = e.organizer_id
+         WHERE e.public_slug = ? AND e.status = 'approved'
+         LIMIT 1`,
+        [slug]
+      );
+      return normalizeEventRow(rows[0] || null);
+    } catch (_err) {
+      return null;
+    }
+  }
+  return null;
 }
 
 async function findPublicEventById(id) {
@@ -232,17 +317,22 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "city_id",
     "category_id",
     "ticket_link",
+    "ticket_sales_mode",
+    "total_seats",
     "image_url",
     "gallery_image_urls",
     "price",
     "price_per_day",
     "duration_hours",
+    "duration_minutes",
     "age_limit",
     "languages",
     "genres",
     "event_highlights",
     "is_yay_deal_event",
-    "deal_event_discount_code"
+    "deal_event_discount_code",
+    "ticket_levels",
+    "ticket_levels_json"
   ];
 
   const entries = Object.entries(updates)
@@ -271,6 +361,24 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         const urls = parseGalleryImageUrls(value);
         return [key, urls.length ? JSON.stringify(urls) : null];
       }
+      if (key === "ticket_sales_mode") {
+        return [key, normalizeTicketSalesMode(value)];
+      }
+      if (key === "total_seats") {
+        const mode = updates.ticket_sales_mode
+          ? normalizeTicketSalesMode(updates.ticket_sales_mode)
+          : null;
+        const parsed = parseTotalSeats(value);
+        if (mode === "external") {
+          return [key, null];
+        }
+        return [key, parsed];
+      }
+      if (key === "ticket_levels" || key === "ticket_levels_json") {
+        const levels = normalizeTicketLevelsInput(value);
+        const json = levels.length ? JSON.stringify(levels) : null;
+        return ["ticket_levels_json", json];
+      }
       return [key, value];
     });
 
@@ -286,6 +394,13 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
      WHERE id = ? AND organizer_id = ?`,
     [...values, eventId, organizerId]
   );
+  if (result.affectedRows > 0 && updates.title) {
+    try {
+      await setPublicSlug("events", eventId, updates.title);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
   return result.affectedRows > 0;
 }
 
@@ -460,7 +575,7 @@ async function listFeaturedEvents({ cityId, limit = 6 }) {
      WHERE e.status = 'approved'
        AND e.event_date >= CURDATE()
        ${cityClause}
-     ORDER BY e.popularity_score DESC
+     ORDER BY e.event_date ASC, e.created_at DESC
      LIMIT ?`,
     values
   );
@@ -474,14 +589,33 @@ async function incrementEventPopularity({ eventId, delta, clickDelta = 0, viewDe
   const safeView = Number(viewDelta) || 0;
   const [result] = await pool.query(
     `UPDATE events
-     SET popularity_score = popularity_score + ?,
-         click_count = click_count + ?,
+     SET click_count = click_count + ?,
          view_count = view_count + ?,
+         popularity_score = popularity_score + CASE WHEN status = 'approved' THEN ? ELSE 0 END,
          updated_at = NOW()
-     WHERE id = ? AND status = 'approved'`,
-    [safeDelta, safeClick, safeView, eventId]
+     WHERE id = ?`,
+    [safeClick, safeView, safeDelta, eventId]
   );
-  return result.affectedRows > 0;
+  if (result.affectedRows <= 0) {
+    return { updated: false, click_count: 0, view_count: 0 };
+  }
+  const [rows] = await pool.query(
+    "SELECT COALESCE(click_count, 0) AS click_count, COALESCE(view_count, 0) AS view_count FROM events WHERE id = ? LIMIT 1",
+    [eventId]
+  );
+  return {
+    updated: true,
+    click_count: Number(rows[0]?.click_count) || 0,
+    view_count: Number(rows[0]?.view_count) || 0
+  };
+}
+
+async function getEventClickCount(eventId) {
+  const [rows] = await pool.query(
+    "SELECT COALESCE(click_count, 0) AS click_count FROM events WHERE id = ? LIMIT 1",
+    [eventId]
+  );
+  return Number(rows[0]?.click_count) || 0;
 }
 
 module.exports = {
@@ -489,10 +623,12 @@ module.exports = {
   updateEventStatus,
   findEventById,
   findPublicEventById,
+  findPublicEventBySlugOrId,
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
   deleteEventByOrganizer,
   listFeaturedEvents,
-  incrementEventPopularity
+  incrementEventPopularity,
+  getEventClickCount
 };

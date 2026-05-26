@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { fetchFeaturedEvents } from "../services/eventService";
 import { fetchDeals, fetchInfluencers } from "../services/listingService";
+import { dealDetailPath, eventDetailPath, influencerDetailPath } from "../utils/listingPaths";
 
 const ROTATE_MS = 5200;
 
@@ -99,7 +100,7 @@ function buildPoolFromApi(eventRows, dealRows, inflRows) {
       typeLabel: "Event",
       title: row.title || "Event",
       image: img,
-      href: `/events/${row.id}`
+      href: eventDetailPath(row)
     });
   });
 
@@ -114,7 +115,7 @@ function buildPoolFromApi(eventRows, dealRows, inflRows) {
       typeLabel: "Deal",
       title: row.title || "Deal",
       image: img,
-      href: `/deals/${row.id}`
+      href: dealDetailPath(row)
     });
   });
 
@@ -129,7 +130,7 @@ function buildPoolFromApi(eventRows, dealRows, inflRows) {
       typeLabel: "Creator",
       title: row.name || row.display_name || "Creator",
       image: img,
-      href: `/influencers/${row.id}`
+      href: influencerDetailPath(row)
     });
   });
 

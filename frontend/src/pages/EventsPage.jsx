@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import EventFilterBar from "../components/EventFilterBar";
 import Pagination from "../components/Pagination";
+import { LISTING_PAGE_SIZE } from "../constants/listingPagination";
 import { fetchEvents } from "../services/eventService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
@@ -121,9 +122,7 @@ function EventsPage() {
   const [priceMin, setPriceMin] = useState(initialFilters.priceMin);
   const [priceMax, setPriceMax] = useState(initialFilters.priceMax);
   const [sortBy, setSortBy] = useState(initialFilters.sortBy);
-  const [appliedFilters, setAppliedFilters] = useState({
-    ...initialFilters
-  });
+  const [debouncedQuery, setDebouncedQuery] = useState(initialFilters.query);
   const [page, setPage] = useState(1);
   const [events, setEvents] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -143,64 +142,22 @@ function EventsPage() {
     }
     setPage(nextPage);
   };
-  const canApply =
-    query !== appliedFilters.query ||
-    city !== appliedFilters.city ||
-    category !== appliedFilters.category ||
-    date !== appliedFilters.date ||
-    time !== appliedFilters.time ||
-    priceMin !== appliedFilters.priceMin ||
-    priceMax !== appliedFilters.priceMax ||
-    sortBy !== appliedFilters.sortBy;
-
-  const applyFilters = () => {
-    setAppliedFilters({
-      query,
-      city,
-      category,
-      date,
-      time,
-      priceMin,
-      priceMax,
-      sortBy
-    });
-    setPage(1);
-  };
-
   const setCityWithGlobal = (value) => {
     setCity(value);
     setSelectedCity(value);
   };
 
-  const resetFilters = () => {
-    setQuery("");
-    setCityWithGlobal("");
-    setCategory("");
-    setDate("");
-    setTime("");
-    setPriceMin("");
-    setPriceMax("");
-    setSortBy("popularity");
-    setAppliedFilters({
-      query: "",
-      city: "",
-      category: "",
-      date: "",
-      time: "",
-      priceMin: "",
-      priceMax: "",
-      sortBy: "popularity"
-    });
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(query), 350);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
     setPage(1);
-  };
+  }, [debouncedQuery, city, category]);
 
   useEffect(() => {
     setCity(selectedCity || "");
-    setAppliedFilters((prev) => ({
-      ...prev,
-      city: selectedCity || ""
-    }));
-    setPage(1);
   }, [selectedCity]);
 
   useEffect(() => {
@@ -210,16 +167,12 @@ function EventsPage() {
       try {
         setLoading(true);
         const requestParams = {
-          q: appliedFilters.query || undefined,
-          city: appliedFilters.city || undefined,
-          category: appliedFilters.category || undefined,
-          date: appliedFilters.date || undefined,
-          time: appliedFilters.time || undefined,
-          price_min: appliedFilters.priceMin || undefined,
-          price_max: appliedFilters.priceMax || undefined,
-          sort: appliedFilters.sortBy,
+          q: debouncedQuery || undefined,
+          city: city || undefined,
+          category: category || undefined,
+          sort: sortBy || "popularity",
           page,
-          limit: 6
+          limit: LISTING_PAGE_SIZE
         };
         const response = await fetchEvents(requestParams);
 
@@ -228,14 +181,7 @@ function EventsPage() {
         }
 
         let payload = response?.data || {};
-        const hasOnlyCityFilter =
-          Boolean(appliedFilters.city) &&
-          !appliedFilters.query &&
-          !appliedFilters.category &&
-          !appliedFilters.date &&
-          !appliedFilters.time &&
-          !appliedFilters.priceMin &&
-          !appliedFilters.priceMax;
+        const hasOnlyCityFilter = Boolean(city) && !debouncedQuery && !category;
 
         if (hasOnlyCityFilter && (!payload.rows || payload.rows.length === 0)) {
           const fallbackResponse = await fetchEvents({
@@ -245,14 +191,10 @@ function EventsPage() {
           payload = fallbackResponse?.data || {};
           setCity("");
           setSelectedCity("");
-          setAppliedFilters((prev) => ({
-            ...prev,
-            city: ""
-          }));
         }
 
         setEvents(payload.rows || []);
-        setTotalPages(Math.max(1, Math.ceil((payload.total || 0) / (payload.limit || 6))));
+        setTotalPages(Math.max(1, Math.ceil((payload.total || 0) / (payload.limit || LISTING_PAGE_SIZE))));
       } catch (_err) {
         if (active) {
           setEvents([]);
@@ -269,7 +211,7 @@ function EventsPage() {
     return () => {
       active = false;
     };
-  }, [appliedFilters, page]);
+  }, [debouncedQuery, city, category, sortBy, page, setSelectedCity]);
 
   return (
     <motion.div
@@ -283,97 +225,8 @@ function EventsPage() {
         <p className="text-sm text-slate-600">Explore verified city events with smart filters, clear pricing, and real-time availability.</p>
       </div>
 
-      <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-amber-50/20 to-sky-50/25 p-3 shadow-soft ring-1 ring-amber-500/[0.07] sm:p-3.5">
-        <div className="pointer-events-none absolute -right-14 -top-14 h-52 w-52 rounded-full bg-gradient-to-br from-amber-400/25 to-sky-400/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-orange-400/15 blur-3xl" />
-
-        {!isAuthenticated ? (
-          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="min-w-0 truncate text-sm font-medium text-slate-700">
-              <span className="mr-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-800">
-                <Sparkles className="h-3.5 w-3.5" /> Hosts &amp; happenings
-              </span>
-              Put your event where the city looks first.
-            </p>
-            <div className="flex shrink-0 items-center gap-2">
-              <Link
-                to="/register"
-                className="inline-flex rounded-lg bg-gradient-to-r from-amber-500 to-sky-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-amber-400 hover:to-sky-500"
-              >
-                Join free
-              </Link>
-              <Link
-                to="/login"
-                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:border-amber-300"
-              >
-                Sign in
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="min-w-0 truncate text-sm font-medium text-slate-700">
-              <span className="mr-2 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-amber-800">
-                <Sparkles className="h-3.5 w-3.5" /> Host tools
-              </span>
-              List experiences from your hub.
-            </p>
-            <div className="flex shrink-0 items-center gap-2">
-              {canOpenOrganizerDashboard ? (
-                <Link
-                  to={{ pathname: "/dashboard/user", hash: "host-events" }}
-                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
-                >
-                  Go to My Hub
-                </Link>
-              ) : organizerEnabled && !canPostEvents ? (
-                <Link
-                  to={{ pathname: "/dashboard/user", hash: "host-events" }}
-                  className="inline-flex rounded-lg border border-sky-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-sky-50/80"
-                >
-                  Open My Hub
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  disabled={organizerCtaLoading}
-                  onClick={async () => {
-                    try {
-                      setOrganizerCtaError("");
-                      setOrganizerCtaLoading(true);
-                      await enableOrganizer();
-                      let canOpenAfterRefresh = false;
-                      const refreshTokenValue = localStorage.getItem("refreshToken");
-                      if (refreshTokenValue) {
-                        const refreshed = await refreshAccessToken(refreshTokenValue);
-                        const payload = refreshed?.data;
-                        if (payload?.accessToken && payload?.refreshToken && payload?.user) {
-                          login(payload);
-                          canOpenAfterRefresh = Boolean(payload.user?.can_post_events);
-                        }
-                      }
-                      if (canOpenAfterRefresh) {
-                        navigate({ pathname: "/dashboard/user", hash: "host-events" });
-                      } else {
-                        setOrganizerCtaError("Organizer access requested. Listing unlocks after approval.");
-                      }
-                    } catch (_err) {
-                      setOrganizerCtaError("Could not submit organizer access request. Please try again.");
-                    } finally {
-                      setOrganizerCtaLoading(false);
-                    }
-                  }}
-                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {organizerCtaLoading ? "Submitting..." : "Request Access"}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
-
       <EventFilterBar
+        compact
         query={query}
         setQuery={setQuery}
         city={city}
@@ -388,30 +241,32 @@ function EventsPage() {
         setPriceMax={setPriceMax}
         sortBy={sortBy}
         setSortBy={setSortBy}
-        onApply={applyFilters}
-        onReset={resetFilters}
-        canApply={canApply}
       />
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="listing-cards-grid">
         {loading
-          ? Array.from({ length: 6 }).map((_, idx) => (
+          ? Array.from({ length: LISTING_PAGE_SIZE }).map((_, idx) => (
               <div
                 key={`events-skeleton-${idx}`}
-                className="h-[320px] animate-pulse rounded-3xl border border-slate-200 bg-white"
+                className="h-[280px] animate-pulse rounded-3xl border border-slate-200 bg-white"
               />
             ))
           : null}
-        {!loading && events.length === 0 ? <p className="text-sm text-slate-500">No events match your current filters.</p> : null}
+        {!loading && events.length === 0 ? (
+          <p className="col-span-full text-sm text-slate-500">No events match your current filters.</p>
+        ) : null}
         {!loading
           ? events.map((item) => (
               <EventCard
                 key={item.id}
                 item={{
                   id: item.id,
+                  public_slug: item.public_slug,
                   title: item.title,
                   category: item.category_name || "General",
                   city: item.city_name || "City",
+                  event_date: item.event_date,
+                  event_time: item.event_time,
                   date: formatDateUS(item.event_date),
                   time: item.event_time ? String(item.event_time).slice(0, 5) : "",
                   price: item.price,
