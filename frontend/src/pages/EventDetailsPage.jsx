@@ -5,7 +5,7 @@ import ListingFavoriteButton from "../components/ListingFavoriteButton";
 import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FiCalendar, FiClock, FiMapPin, FiUser } from "react-icons/fi";
+import { FiCalendar, FiClock, FiMapPin, FiUser, FiYoutube } from "react-icons/fi";
 import { CheckCircle, Clock, Globe, Mic, Users } from "lucide-react";
 import { fetchEventById, trackEventView } from "../services/eventService";
 import { trackEventPageView } from "../utils/googleAnalytics";
@@ -15,9 +15,11 @@ import useAuth from "../hooks/useAuth";
 import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import EventDetailBanner from "../components/EventDetailBanner";
+import GuestPromoVideoCard from "../components/GuestPromoVideoCard";
 import EventTicketCheckoutPanel from "../components/EventTicketCheckoutPanel";
 import EventAirbnbBookingShell from "../components/EventAirbnbBookingShell";
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
+import { parsePromoVideoUrls } from "../utils/youtubeVideo";
 
 function parseHighlights(value) {
   if (!value) {
@@ -164,6 +166,8 @@ function EventDetailsPage() {
     "rounded-xl border border-slate-100 bg-gradient-to-b from-slate-50/95 to-white p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
   const metaValue = "font-semibold text-slate-900";
   const durationText = formatEventDuration(event.duration_hours, event.duration_minutes);
+  const promoVideos = parsePromoVideoUrls(event.promo_video_urls);
+  const hasPromoVideos = promoVideos.length > 0;
 
   return (
     <motion.div
@@ -172,7 +176,13 @@ function EventDetailsPage() {
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-4 lg:space-y-6"
     >
-      <EventDetailBanner event={event} title={event.title} guestLocked={yayDealGuestLocked} />
+      <EventDetailBanner
+        event={event}
+        title={event.title}
+        guestLocked={yayDealGuestLocked}
+        promoVideos={promoVideos}
+        videoGuestLocked={isGuest && hasPromoVideos}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] lg:items-start lg:gap-8">
         <div className="relative rounded-2xl border border-slate-200/90 bg-white p-4 shadow-soft ring-1 ring-slate-900/[0.04] sm:p-5 lg:rounded-3xl lg:border-slate-200 lg:p-6 lg:shadow-sm lg:ring-0">
@@ -307,6 +317,35 @@ function EventDetailsPage() {
             </div>
           ) : null}
 
+          {!isGuest && hasPromoVideos ? (
+            <div className="mt-5 border-t border-slate-100 pt-5 lg:mt-5">
+              <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 lg:text-base lg:font-semibold lg:normal-case lg:tracking-normal lg:text-slate-900">
+                Promo Video{promoVideos.length === 1 ? "" : "s"}
+              </h2>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                {promoVideos.map((watchUrl, index) => (
+                  <a
+                    key={watchUrl}
+                    href={watchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-flex min-h-[44px] flex-1 items-center gap-3 rounded-xl border border-slate-200/90 bg-gradient-to-r from-white to-slate-50/80 px-4 py-3 text-left shadow-sm transition hover:border-rose-200/90 hover:from-rose-50/40 hover:to-white hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 sm:min-w-[220px] sm:flex-none lg:min-h-0 lg:py-2.5"
+                  >
+                    <span className="grid h-10 w-10 shrink-0 place-content-center rounded-lg bg-red-600 text-white shadow-sm ring-1 ring-red-700/20 transition group-hover:bg-red-700">
+                      <FiYoutube className="h-5 w-5" aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-slate-900 group-hover:text-rose-950">
+                        {promoVideos.length === 1 ? "Watch promo video" : `Watch promo video ${index + 1}`}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-slate-500">Opens on YouTube</span>
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {!isGuest && highlights.length > 0 ? (
             <div className="mt-5 border-t border-slate-100 pt-5 lg:mt-5">
               <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 lg:text-base lg:font-semibold lg:normal-case lg:tracking-normal lg:text-slate-900">
@@ -355,24 +394,31 @@ function EventDetailsPage() {
           ) : null}
 
           {isGuest ? (
-            <div className="mt-5 rounded-2xl border border-slate-200/90 bg-slate-50 p-4 lg:rounded-2xl lg:border-slate-200 lg:bg-slate-50">
-              <h2 className="text-sm font-semibold text-slate-900 lg:text-base">View More</h2>
-              <p className="mt-2 text-[15px] leading-relaxed text-slate-700 lg:text-sm lg:leading-normal">
-                Login or register to view complete event details, highlights, and location information.
-              </p>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                <Link
-                  to="/login"
-                  className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 sm:min-h-0 sm:flex-none sm:rounded-xl lg:py-2"
-                >
-                  Login to View More
-                </Link>
-                <Link
-                  to="/register"
-                  className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 sm:min-h-0 sm:flex-none lg:py-2"
-                >
-                  Register
-                </Link>
+            <div className="mt-5 space-y-4">
+              {hasPromoVideos ? (
+                <GuestPromoVideoCard promoCount={promoVideos.length} />
+              ) : null}
+
+              <div className="rounded-2xl border border-slate-200/90 bg-slate-50 p-4 lg:rounded-2xl lg:border-slate-200 lg:bg-slate-50">
+                <h2 className="text-sm font-semibold text-slate-900 lg:text-base">View More</h2>
+                <p className="mt-2 text-[15px] leading-relaxed text-slate-700 lg:text-sm lg:leading-normal">
+                  Login or register to view complete event details, highlights, and location information.
+                </p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Link
+                    to="/login"
+                    state={{ from: eventDetailPath(event) }}
+                    className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 sm:min-h-0 sm:flex-none sm:rounded-xl lg:py-2"
+                  >
+                    Login to View More
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 sm:min-h-0 sm:flex-none lg:py-2"
+                  >
+                    Register
+                  </Link>
+                </div>
               </div>
             </div>
           ) : null}

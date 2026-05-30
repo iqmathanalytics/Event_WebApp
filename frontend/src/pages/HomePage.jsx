@@ -13,6 +13,7 @@ import DealCard from "../components/DealCard";
 import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
 import LandingCarouselSlot from "../components/LandingCarouselSlot";
 import HeroSlideshow from "../components/HeroSlideshow";
+import HeroEventBadge from "../components/HeroEventBadge";
 import LandingSplash from "../components/LandingSplash";
 import { fetchFeaturedEvents } from "../services/eventService";
 import { fetchDeals, fetchInfluencers, trackInfluencerClick } from "../services/listingService";
@@ -293,7 +294,7 @@ function HomePage() {
                       ease: sleek
                     }}
                     style={{ willChange: "opacity" }}
-                    className="max-w-xl text-xs leading-relaxed text-slate-200/95 sm:text-sm lg:text-[14px] lg:leading-[1.65]"
+                    className="line-clamp-4 max-w-xl text-xs leading-relaxed text-slate-200/95 sm:text-sm lg:text-[14px] lg:leading-[1.65]"
                   >
                     {heroNarrative.subline}
                   </motion.p>
@@ -301,11 +302,14 @@ function HomePage() {
               </div>
               {heroNarrative.detailPath ? (
                 <motion.div
-                  className="shrink-0"
+                  className="flex shrink-0 flex-wrap items-center gap-2.5 sm:gap-3"
                   initial={false}
                   animate={landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
                   transition={{ duration: 0.45, delay: landingRevealed ? 0.48 : 0, ease: sleek }}
                 >
+                  {heroNarrative.variant ? (
+                    <HeroEventBadge variant={heroNarrative.variant} compact />
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {

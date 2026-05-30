@@ -5,7 +5,7 @@ const submitEvent = asyncHandler(async (req, res) => {
   const result = await eventService.submitEvent(req.validated.body, req.user.id, { role: req.user.role });
   res.status(201).json({
     success: true,
-    message: "Event submitted for approval",
+    message: result.autoApproved ? "Event published and is now live" : "Event submitted for approval",
     data: result
   });
 });
@@ -84,12 +84,13 @@ const trackEventView = asyncHandler(async (req, res) => {
 });
 
 const editOwnEvent = asyncHandler(async (req, res) => {
-  await eventService.editOwnEvent(Number(req.params.id), req.user.id, req.validated.body, {
+  const result = await eventService.editOwnEvent(Number(req.params.id), req.user.id, req.validated.body, {
     role: req.user.role
   });
   res.status(200).json({
     success: true,
-    message: "Event updated and moved to pending review"
+    message: "Event updated and published",
+    data: result
   });
 });
 

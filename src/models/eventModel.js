@@ -5,6 +5,8 @@ const { normalizeDateList } = require("../utils/eventSchedule");
 const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
 const { parseTotalSeats } = require("../utils/eventSeats");
 const { parseTicketLevelsFromEvent, normalizeTicketLevelsInput } = require("../utils/eventTicketLevels");
+const { parsePromoVideoUrls, promoVideoUrlsDbValue } = require("../utils/youtubeVideo");
+const { sqlAssignFragment, toJsonDbString } = require("../utils/jsonDb");
 
 function parseHighlights(value) {
   if (!value) {
@@ -28,6 +30,9 @@ function parseGalleryImageUrls(value) {
   if (!value) {
     return [];
   }
+  if (Buffer.isBuffer(value)) {
+    return parseGalleryImageUrls(value.toString("utf8"));
+  }
   if (Array.isArray(value)) {
     return value.map((u) => String(u || "").trim()).filter(Boolean);
   }
@@ -41,7 +46,15 @@ function parseGalleryImageUrls(value) {
       return [];
     }
   }
+  if (typeof value === "object") {
+    return parseGalleryImageUrls(Object.values(value));
+  }
   return [];
+}
+
+function galleryImageUrlsDbValue(value) {
+  const urls = parseGalleryImageUrls(value);
+  return urls.length ? toJsonDbString(urls) : null;
 }
 
 function normalizeEventRow(row) {
@@ -54,6 +67,7 @@ function normalizeEventRow(row) {
     ticket_levels: parseTicketLevelsFromEvent(row),
     event_highlights: parseHighlights(row.event_highlights),
     gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
+    promo_video_urls: parsePromoVideoUrls(row.promo_video_urls),
     event_dates: normalizeDateList(
       (() => {
         if (!row.event_dates_json) {
@@ -71,6 +85,14 @@ function normalizeEventRow(row) {
       })()
     )
   };
+}
+
+async function countApprovedEventsByOrganizer(organizerId) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM events WHERE organizer_id = ? AND status = 'approved'`,
+    [organizerId]
+  );
+  return Number(rows[0]?.cnt) || 0;
 }
 
 async function createEvent(payload) {
@@ -95,6 +117,7 @@ async function createEvent(payload) {
     total_seats,
     image_url,
     gallery_image_urls,
+    promo_video_urls,
     price,
     duration_hours,
     duration_minutes,
@@ -106,8 +129,10 @@ async function createEvent(payload) {
     is_yay_deal_event,
     deal_event_discount_code,
     ticket_levels,
-    ticket_levels_json
+    ticket_levels_json,
+    status: requestedStatus
   } = payload;
+  const initialStatus = requestedStatus === "approved" ? "approved" : "pending";
 
   const highlightsValue = Array.isArray(event_highlights)
     ? JSON.stringify(event_highlights)
@@ -123,8 +148,8 @@ async function createEvent(payload) {
       ? String(deal_event_discount_code).trim()
       : null;
 
-  const galleryUrls = parseGalleryImageUrls(gallery_image_urls);
-  const galleryJson = galleryUrls.length ? JSON.stringify(galleryUrls) : null;
+  const galleryForDb = galleryImageUrlsDbValue(gallery_image_urls);
+  const promoForDb = promoVideoUrlsDbValue(promo_video_urls);
 
   const ticketSalesMode = normalizeTicketSalesMode(ticket_sales_mode ?? payload.ticketSalesMode);
   const seatsTotal =
@@ -140,10 +165,10 @@ async function createEvent(payload) {
     `INSERT INTO events
       (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
        venue_name, venue_address, google_maps_link, organizer_id, ticket_link, ticket_sales_mode, total_seats,
-       image_url, gallery_image_urls, price, ticket_levels_json, duration_hours, duration_minutes, age_limit, languages, genres, event_highlights,
+       image_url, gallery_image_urls, promo_video_urls, price, ticket_levels_json, duration_hours, duration_minutes, age_limit, languages, genres, event_highlights,
        is_yay_deal_event, deal_event_discount_code,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -164,7 +189,8 @@ async function createEvent(payload) {
       ticketSalesMode,
       seatsTotal,
       image_url || null,
-      galleryJson,
+      galleryForDb,
+      promoForDb,
       listPrice,
       levelsJson,
       duration_hours ?? null,
@@ -174,7 +200,8 @@ async function createEvent(payload) {
       genres || null,
       highlightsValue,
       yayDeal ? 1 : 0,
-      yayDeal ? discountCode : null
+      yayDeal ? discountCode : null,
+      initialStatus
     ]
   );
 
@@ -321,6 +348,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "total_seats",
     "image_url",
     "gallery_image_urls",
+    "promo_video_urls",
     "price",
     "price_per_day",
     "duration_hours",
@@ -358,8 +386,10 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         return [key, String(value).trim()];
       }
       if (key === "gallery_image_urls") {
-        const urls = parseGalleryImageUrls(value);
-        return [key, urls.length ? JSON.stringify(urls) : null];
+        return [key, galleryImageUrlsDbValue(value)];
+      }
+      if (key === "promo_video_urls") {
+        return [key, promoVideoUrlsDbValue(value)];
       }
       if (key === "ticket_sales_mode") {
         return [key, normalizeTicketSalesMode(value)];
@@ -386,11 +416,11 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     return false;
   }
 
-  const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+  const setClause = entries.map(([key]) => sqlAssignFragment(key)).join(", ");
   const values = entries.map(([, value]) => value);
   const [result] = await pool.query(
     `UPDATE events
-     SET ${setClause}, updated_at = NOW(), status = 'pending'
+     SET ${setClause}, updated_at = NOW()
      WHERE id = ? AND organizer_id = ?`,
     [...values, eventId, organizerId]
   );
@@ -401,6 +431,16 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
       /* ignore */
     }
   }
+  return result.affectedRows > 0;
+}
+
+async function publishOrganizerEvent({ eventId, organizerId }) {
+  const [result] = await pool.query(
+    `UPDATE events
+     SET status = 'approved', review_note = NULL, updated_at = NOW()
+     WHERE id = ? AND organizer_id = ?`,
+    [eventId, organizerId]
+  );
   return result.affectedRows > 0;
 }
 
@@ -620,6 +660,8 @@ async function getEventClickCount(eventId) {
 
 module.exports = {
   createEvent,
+  countApprovedEventsByOrganizer,
+  normalizeEventRow,
   updateEventStatus,
   findEventById,
   findPublicEventById,
@@ -627,6 +669,7 @@ module.exports = {
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
+  publishOrganizerEvent,
   deleteEventByOrganizer,
   listFeaturedEvents,
   incrementEventPopularity,

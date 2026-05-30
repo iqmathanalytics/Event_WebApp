@@ -63,6 +63,8 @@ import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
 import { formatEventDuration } from "../utils/format";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
+import { parseGalleryImageUrls } from "../utils/eventGallery";
+import { parsePromoVideoUrlsForForm } from "../utils/youtubeVideo";
 
 const eventHighlightOptions = [
   "Free Parking",
@@ -619,7 +621,8 @@ function AdminDashboardPage() {
     total_seats: item.total_seats != null && item.total_seats !== "" ? String(item.total_seats) : "",
     ticket_link: item.ticket_link || "",
     image_url: item.image_url || "",
-    gallery_image_urls: Array.isArray(item.gallery_image_urls) ? [...item.gallery_image_urls] : [],
+    gallery_image_urls: parseGalleryImageUrls(item.gallery_image_urls),
+    promo_video_urls: parsePromoVideoUrlsForForm(item.promo_video_urls),
     price: item.price ?? "",
     duration_hours: item.duration_hours ?? "",
     duration_minutes: item.duration_minutes ?? "",
@@ -660,6 +663,10 @@ function AdminDashboardPage() {
         return;
       }
       if (key === "gallery_image_urls" && Array.isArray(value)) {
+        payload[key] = value.map((u) => String(u || "").trim()).filter(Boolean);
+        return;
+      }
+      if (key === "promo_video_urls" && Array.isArray(value)) {
         payload[key] = value.map((u) => String(u || "").trim()).filter(Boolean);
         return;
       }
@@ -790,27 +797,49 @@ function AdminDashboardPage() {
       }
     }
     pushLink("Image", reviewForm.image_url, "View Image");
-    if (Array.isArray(reviewForm.gallery_image_urls)) {
-      reviewForm.gallery_image_urls.forEach((url, idx) => {
+    const galleryUrls = parseGalleryImageUrls(reviewForm.gallery_image_urls);
+    if (galleryUrls.length) {
+      galleryUrls.forEach((url, idx) => {
         pushLink(`Gallery image ${idx + 1}`, url, "View Image");
       });
+    } else {
+      pushText("Additional banner images", "None provided");
+    }
+    const promoUrls = parsePromoVideoUrlsForForm(reviewForm.promo_video_urls);
+    if (promoUrls.length) {
+      promoUrls.forEach((url, idx) => {
+        pushLink(`YouTube promo video ${idx + 1}`, url, "Open YouTube");
+      });
+    } else {
+      pushText("YouTube promo videos", "None provided");
     }
 
     return items;
   }, [reviewListing, reviewForm]);
 
+  const normalizeAdminEventRow = (row) => {
+    if (!row || typeof row !== "object") {
+      return row;
+    }
+    const ticket_levels = parseTicketLevelsFromEvent(row);
+    return {
+      ...row,
+      gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
+      promo_video_urls: parsePromoVideoUrlsForForm(row.promo_video_urls),
+      ...(ticket_levels.length ? { ticket_levels } : {})
+    };
+  };
+
   const fetchHydratedEventRow = async (item) => {
     if (listingType !== "events") {
       return item;
     }
-    const base = item && typeof item === "object" ? { ...item } : item;
+    const base = item && typeof item === "object" ? normalizeAdminEventRow({ ...item }) : item;
     try {
       const res = await fetchAdminListingById("events", item.id);
       const h = res?.data;
       if (h && String(h.id) === String(item.id)) {
-        const merged = { ...base, ...h };
-        const ticket_levels = parseTicketLevelsFromEvent(merged);
-        return ticket_levels.length ? { ...merged, ticket_levels } : merged;
+        return normalizeAdminEventRow({ ...base, ...h });
       }
     } catch (_err) {
       /* fall back to table row */
@@ -3344,6 +3373,54 @@ function AdminDashboardPage() {
                       </button>
                     </div>
                   </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <p className="text-sm font-semibold text-slate-900">YouTube promo videos</p>
+                    <p className="text-xs text-slate-500">Up to 6 links — visible to registered users on the event page.</p>
+                    <div className="space-y-2">
+                      {(editForm.promo_video_urls || []).map((row, idx) => (
+                        <div key={`admin-promo-${idx}`} className="flex gap-2">
+                          <input
+                            type="url"
+                            value={row}
+                            onChange={(e) =>
+                              setEditForm((prev) => {
+                                const next = [...(prev.promo_video_urls || [])];
+                                next[idx] = e.target.value;
+                                return { ...prev, promo_video_urls: next };
+                              })
+                            }
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditForm((prev) => ({
+                                ...prev,
+                                promo_video_urls: (prev.promo_video_urls || []).filter((_, i) => i !== idx)
+                              }))
+                            }
+                            className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={(editForm.promo_video_urls || []).length >= 6}
+                        onClick={() =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            promo_video_urls: [...(prev.promo_video_urls || []), ""]
+                          }))
+                        }
+                        className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                      >
+                        + Add YouTube video
+                      </button>
+                    </div>
+                  </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
                     <p className="text-sm font-semibold text-slate-900">Event Highlights</p>
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -3545,6 +3622,40 @@ function AdminDashboardPage() {
                   ) : (
                     <p className="text-sm text-slate-600">No event details were provided by the organizer.</p>
                   )}
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Additional banner images</p>
+                    {parseGalleryImageUrls(reviewForm.gallery_image_urls).length ? (
+                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm">
+                        {parseGalleryImageUrls(reviewForm.gallery_image_urls).map((u) => (
+                          <li key={u}>
+                            <a href={u} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:underline">
+                              View image
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-700">None provided</p>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube promo videos</p>
+                    {parsePromoVideoUrlsForForm(reviewForm.promo_video_urls).length ? (
+                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm">
+                        {parsePromoVideoUrlsForForm(reviewForm.promo_video_urls).map((u) => (
+                          <li key={u}>
+                            <a href={u} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:underline">
+                              Open YouTube
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-700">None provided</p>
+                    )}
+                  </div>
                 </div>
                 </>
               ) : (
@@ -3829,6 +3940,56 @@ function AdminDashboardPage() {
                       className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
                     >
                       + Add gallery image
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <p className="text-sm font-semibold text-slate-900">YouTube promo videos</p>
+                  <p className="text-xs text-slate-500">Up to 6 links — visible to registered users on the event page.</p>
+                  <div className="space-y-2">
+                    {(reviewForm.promo_video_urls || []).map((row, idx) => (
+                      <div key={`rv-promo-${idx}`} className="flex gap-2">
+                        <input
+                          type="url"
+                          value={row}
+                          onChange={(e) =>
+                            setReviewForm((prev) => {
+                              const next = [...(prev.promo_video_urls || [])];
+                              next[idx] = e.target.value;
+                              return { ...prev, promo_video_urls: next };
+                            })
+                          }
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                          disabled={reviewSaving}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReviewForm((prev) => ({
+                              ...prev,
+                              promo_video_urls: (prev.promo_video_urls || []).filter((_, i) => i !== idx)
+                            }))
+                          }
+                          className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                          disabled={reviewSaving}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={(reviewForm.promo_video_urls || []).length >= 6 || reviewSaving}
+                      onClick={() =>
+                        setReviewForm((prev) => ({
+                          ...prev,
+                          promo_video_urls: [...(prev.promo_video_urls || []), ""]
+                        }))
+                      }
+                      className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                    >
+                      + Add YouTube video
                     </button>
                   </div>
                 </div>
@@ -4196,11 +4357,11 @@ function AdminDashboardPage() {
                       </a>
                     </div>
                   ) : null}
-                  {Array.isArray(viewListing.gallery_image_urls) && viewListing.gallery_image_urls.length ? (
+                  {parseGalleryImageUrls(viewListing.gallery_image_urls).length ? (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Additional images</p>
                       <ul className="mt-2 list-inside list-disc space-y-1 text-sm">
-                        {viewListing.gallery_image_urls.map((u) => (
+                        {parseGalleryImageUrls(viewListing.gallery_image_urls).map((u) => (
                           <li key={u}>
                             <a href={u} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:underline">
                               Open
@@ -4209,7 +4370,31 @@ function AdminDashboardPage() {
                         ))}
                       </ul>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Additional images</p>
+                      <p className="mt-1 text-sm text-slate-700">None provided</p>
+                    </div>
+                  )}
+                  {parsePromoVideoUrlsForForm(viewListing.promo_video_urls).length ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube promo videos</p>
+                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm">
+                        {parsePromoVideoUrlsForForm(viewListing.promo_video_urls).map((u) => (
+                          <li key={u}>
+                            <a href={u} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:underline">
+                              Open YouTube
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube promo videos</p>
+                      <p className="mt-1 text-sm text-slate-700">None provided</p>
+                    </div>
+                  )}
                 </div>
                 )
               ) : viewListingType === "influencers" ? (

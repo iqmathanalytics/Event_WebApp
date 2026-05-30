@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS events (
   total_seats INT UNSIGNED NULL,
   image_url VARCHAR(500) NULL,
   gallery_image_urls JSON NULL,
+  promo_video_urls JSON NULL,
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   ticket_levels_json TEXT NULL,
   duration_hours INT NULL,

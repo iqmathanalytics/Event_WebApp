@@ -10,6 +10,8 @@ import useAuth from "../hooks/useAuth";
 import { fetchDealById, trackDealView } from "../services/listingService";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import ListingDetailBannerImage from "../components/ListingDetailBannerImage";
+import { LISTING_DETAIL_BANNER_SHELL } from "../constants/listingBannerLayout";
 
 function DealDetailsPage() {
   const { slug } = useParams();
@@ -89,15 +91,16 @@ function DealDetailsPage() {
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-4 lg:space-y-6"
     >
-      <div className="relative aspect-[16/9] overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-slate-900/10 sm:aspect-[16/8] lg:aspect-auto lg:h-[75vh] lg:max-h-[920px] lg:min-h-[280px] lg:rounded-3xl lg:ring-0">
+      <div className={`${LISTING_DETAIL_BANNER_SHELL} ring-0 lg:ring-0`}>
         {deal.image_url ? (
-          <img
+          <ListingDetailBannerImage
             src={deal.image_url}
             alt={deal.title}
-            className={`h-full w-full object-fill object-center ${lockedPremium ? "blur-sm" : ""}`}
+            guestLocked={lockedPremium}
+            eager
           />
         ) : (
-          <div className="relative flex aspect-[16/9] h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 sm:aspect-[16/8] lg:aspect-auto">
+          <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(244,63,94,0.2),transparent_40%),radial-gradient(circle_at_75%_80%,rgba(16,185,129,0.18),transparent_42%)]" />
             <div className="relative z-10 flex flex-col items-center gap-2 text-white/85">
               <div className="grid h-14 w-14 place-content-center rounded-2xl bg-white/10 ring-1 ring-white/20 backdrop-blur-sm">
@@ -107,6 +110,7 @@ function DealDetailsPage() {
             </div>
           </div>
         )}
+        <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/10 lg:rounded-3xl" aria-hidden />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:gap-5">

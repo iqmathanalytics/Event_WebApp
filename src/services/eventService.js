@@ -2,12 +2,14 @@ const ApiError = require("../utils/ApiError");
 const { createAdminNotification } = require("../models/adminModel");
 const {
   createEvent,
+  countApprovedEventsByOrganizer,
   updateEventStatus,
   findEventById,
   findPublicEventBySlugOrId,
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
+  publishOrganizerEvent,
   deleteEventByOrganizer,
   listFeaturedEvents,
   incrementEventPopularity
@@ -240,6 +242,37 @@ function applyTicketLevelsToPayload(payload, ticketMode) {
   return { ...payload, ticket_levels_json: null };
 }
 
+function pickOrganizerUpdates(rawPayload, normalizedPayload) {
+  const updates = {};
+  for (const key of Object.keys(rawPayload || {})) {
+    if (key === "ticketSalesMode") {
+      continue;
+    }
+    if (Object.prototype.hasOwnProperty.call(normalizedPayload, key)) {
+      updates[key] = normalizedPayload[key];
+    }
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(rawPayload, "ticket_levels") &&
+    Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_levels_json")
+  ) {
+    updates.ticket_levels_json = normalizedPayload.ticket_levels_json;
+    delete updates.ticket_levels;
+    if (normalizedPayload.price != null) {
+      updates.price = normalizedPayload.price;
+    }
+  }
+  return updates;
+}
+
+async function notifyAdminSafe(notification) {
+  try {
+    await createAdminNotification(notification);
+  } catch (_err) {
+    /* notification must never block organizer save */
+  }
+}
+
 async function submitEvent(payload, organizerId, { role } = {}) {
   const normalizedPayload = normalizeEventSchedulePayload(payload);
   const modeSource = pickTicketSalesModeFromPayload(normalizedPayload);
@@ -251,9 +284,17 @@ async function submitEvent(payload, organizerId, { role } = {}) {
     },
     ticketMode
   );
+  const approvedCount = await countApprovedEventsByOrganizer(organizerId);
+  const autoApproved = approvedCount > 0;
+  const { status: _clientStatus, ...createPayload } = forCreate;
+
   let eventId;
   try {
-    eventId = await createEvent({ ...forCreate, organizer_id: organizerId });
+    eventId = await createEvent({
+      ...createPayload,
+      organizer_id: organizerId,
+      status: autoApproved ? "approved" : "pending"
+    });
   } catch (err) {
     if (err?.code === "ER_NO_REFERENCED_ROW_2") {
       throw new ApiError(400, "Selected city or category is invalid. Please reselect and try again.");
@@ -267,18 +308,26 @@ async function submitEvent(payload, organizerId, { role } = {}) {
     if (err?.code === "ER_WRONG_VALUE_COUNT_ON_ROW") {
       throw new ApiError(500, "Event create failed: database column mismatch. Please run the latest SQL migrations.");
     }
+    if (err?.code === "ER_INVALID_JSON_TEXT") {
+      throw new ApiError(
+        500,
+        "Could not save YouTube promo video links. Run npm run db:migrate and restart the API server."
+      );
+    }
     throw err;
   }
 
-  await createAdminNotification({
+  await notifyAdminSafe({
     type: "event_submitted",
     entityType: "event",
     entityId: eventId,
-    title: "New event submitted",
-    message: `Event #${eventId} is awaiting moderation.`
+    title: autoApproved ? "New event published" : "New event submitted",
+    message: autoApproved
+      ? `Event #${eventId} was posted by a verified organizer and is live (auto-approved).`
+      : `Event #${eventId} is awaiting moderation.`
   });
 
-  return { eventId };
+  return { eventId, autoApproved, status: autoApproved ? "approved" : "pending" };
 }
 
 async function approveEvent(eventId, adminId, note) {
@@ -401,7 +450,14 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
     throw new ApiError(403, "You can only edit your own events");
   }
 
-  const normalizedPayload = normalizeEventSchedulePayload(payload);
+  const normalizedPayload = normalizeEventSchedulePayload({
+    schedule_type: existing.schedule_type,
+    event_date: existing.event_date,
+    event_start_date: existing.event_start_date,
+    event_end_date: existing.event_end_date,
+    event_dates: existing.event_dates,
+    ...payload
+  });
   if (
     Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_sales_mode") ||
     Object.prototype.hasOwnProperty.call(normalizedPayload, "ticketSalesMode")
@@ -453,14 +509,29 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
     delete normalizedPayload.ticket_levels;
   }
 
-  const updated = await updateEventByOrganizer({
-    eventId,
-    organizerId,
-    updates: normalizedPayload
-  });
-  if (!updated) {
-    throw new ApiError(400, "No valid fields provided for update");
+  const updates = pickOrganizerUpdates(payload, normalizedPayload);
+  if (Object.keys(updates).length) {
+    const updated = await updateEventByOrganizer({
+      eventId,
+      organizerId,
+      updates
+    });
+    if (!updated) {
+      throw new ApiError(400, "No valid fields provided for update");
+    }
   }
+
+  await publishOrganizerEvent({ eventId, organizerId });
+
+  await notifyAdminSafe({
+    type: "event_submitted",
+    entityType: "event",
+    entityId: eventId,
+    title: "Event updated",
+    message: `Event #${eventId} was updated by the organizer and is live (auto-published).`
+  });
+
+  return { skipReapproval: true, autoPublished: true, status: "approved" };
 }
 
 async function deleteOwnEvent(eventId, organizerId) {

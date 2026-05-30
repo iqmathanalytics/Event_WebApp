@@ -35,8 +35,10 @@ const {
   purgeReadNotificationsOlderThan,
   deleteAdminNotificationById
 } = require("../models/adminModel");
-const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
-const { findEventById } = require("../models/eventModel");
+const { normalizeTicketSalesMode } = require("../utils/eventTicketSalesMode");
+const { findEventById, normalizeEventRow } = require("../models/eventModel");
+const { promoVideoUrlsDbValue } = require("../utils/youtubeVideo");
+const { sqlAssignFragment } = require("../utils/jsonDb");
 
 async function getModerationQueue() {
   const [rows] = await pool.query(
@@ -357,10 +359,7 @@ async function listListings({ type, status, city, category, date, month, id }) {
     values
   );
   if (table === "events") {
-    return rows.map((row) => ({
-      ...row,
-      ticket_sales_mode: normalizeTicketSalesMode(readTicketSalesModeRaw(row))
-    }));
+    return rows.map((row) => normalizeEventRow(row));
   }
   return rows;
 }
@@ -489,6 +488,7 @@ function resolveEditableColumns(type) {
       "total_seats",
       "image_url",
       "gallery_image_urls",
+      "promo_video_urls",
       "duration_hours",
       "duration_minutes",
       "age_limit",
@@ -608,6 +608,9 @@ async function editListing({ type, id, payload }) {
           : [];
         return [key, urls.length ? JSON.stringify(urls) : null];
       }
+      if (key === "promo_video_urls") {
+        return [key, promoVideoUrlsDbValue(value)];
+      }
       if (key === "ticket_sales_mode") {
         return [key, normalizeTicketSalesMode(value)];
       }
@@ -625,7 +628,7 @@ async function editListing({ type, id, payload }) {
     return [key, value];
   });
 
-  const setClause = mappedEntries.map(([key]) => `${key} = ?`).join(", ");
+  const setClause = mappedEntries.map(([key]) => sqlAssignFragment(key)).join(", ");
   const values = mappedEntries.map(([, value]) => value);
 
   const [result] = await pool.query(

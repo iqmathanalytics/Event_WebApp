@@ -52,6 +52,7 @@ import {
   parseExpiresMs,
   saveEventCheckoutDraft
 } from "../utils/eventCheckoutDraft";
+import { applyTransactionFee, TRANSACTION_FEE_RATE } from "../utils/transactionFee";
 
 function toggleDateInList(list, date) {
   const set = new Set(list);
@@ -105,8 +106,9 @@ function buildBookingPayload({
 const COUPON_HOLD_MINUTES = 5;
 const COUPON_HOLD_MESSAGE = `Coupon applied. Complete your booking within ${COUPON_HOLD_MINUTES} minutes to keep this rate.`;
 
-function PriceTotals({ subtotal, discount, total, suffix = "" }) {
-  if (discount > 0) {
+function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "" }) {
+  const showFee = Number(transactionFee) > 0;
+  if (discount > 0 || showFee) {
     return (
       <div>
         <p className="text-2xl font-semibold leading-tight tracking-tight text-slate-900">
@@ -114,9 +116,19 @@ function PriceTotals({ subtotal, discount, total, suffix = "" }) {
           {suffix ? <span className="ml-1 text-base font-normal text-slate-900">{suffix}</span> : null}
         </p>
         <p className="mt-1.5 text-sm text-slate-600">
-          <span className="line-through">{formatCurrency(subtotal)}</span>
-          <span className="mx-1.5 text-emerald-700">−{formatCurrency(discount)}</span>
-          <span className="font-medium text-slate-800">after coupon</span>
+          {discount > 0 ? (
+            <>
+              <span className="line-through">{formatCurrency(subtotal)}</span>
+              <span className="mx-1.5 text-emerald-700">−{formatCurrency(discount)}</span>
+            </>
+          ) : (
+            <span>{formatCurrency(subtotal)} subtotal</span>
+          )}
+          {showFee ? (
+            <span className="ml-1.5 text-slate-600">
+              + {formatCurrency(transactionFee)} fee ({(TRANSACTION_FEE_RATE * 100).toFixed(1)}%)
+            </span>
+          ) : null}
         </p>
       </div>
     );
@@ -357,9 +369,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const totalDays = selectedDates.length;
   const subtotalAmount = computeCartSubtotal(ticketLevels, ticketCart, totalDays);
   const discountAmount = couponHold ? Number(couponHold.discount || 0) : 0;
-  const totalAmount = couponHold
-    ? Number(couponHold.total || 0)
-    : subtotalAmount;
+  const { transactionFeeAmount, totalAmount } = applyTransactionFee({
+    subtotalAmount,
+    discountAmount
+  });
 
   const sortedSelected = useMemo(() => normalizeDateList(selectedDates), [selectedDates]);
 
@@ -951,6 +964,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           <PriceTotals
             subtotal={subtotalAmount}
             discount={discountAmount}
+            transactionFee={transactionFeeAmount}
             total={totalAmount}
             suffix=" estimated total"
           />
@@ -1035,6 +1049,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <PriceTotals
           subtotal={subtotalAmount}
           discount={discountAmount}
+          transactionFee={transactionFeeAmount}
           total={totalAmount}
           suffix={totalDays > 0 ? ` for ${totalDays} show day${totalDays === 1 ? "" : "s"}` : ""}
         />

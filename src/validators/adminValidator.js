@@ -90,6 +90,7 @@ const editListingSchema = z.object({
     ),
     image_url: z.string().url().max(500).optional(),
     gallery_image_urls: z.array(z.string().url().max(1000)).max(12).optional(),
+    promo_video_urls: z.array(z.string().max(1000)).max(6).optional(),
     duration_hours: z.coerce.number().int().min(0).max(168).optional(),
     duration_minutes: z.coerce.number().int().min(0).max(59).optional(),
     age_limit: z.string().max(50).optional(),

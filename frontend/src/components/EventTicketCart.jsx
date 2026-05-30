@@ -93,14 +93,12 @@ export default function EventTicketCart({
                 <div className="min-w-0 flex-1">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${palette.badge}`}
+                      className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tracking-wide ${palette.badge}`}
                     >
-                      {isLuxe ? <Sparkles className="h-3 w-3 shrink-0" strokeWidth={2.5} /> : null}
-                      <span className="opacity-90">{palette.icon}</span>
-                      {palette.tierLabel}
+                      {isLuxe ? <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} /> : null}
+                      <span className="truncate">{level.name}</span>
                     </span>
                   </div>
-                  <p className={`text-base font-bold tracking-tight ${palette.title}`}>{level.name}</p>
                   {level.description ? (
                     <p className={`mt-1 text-xs leading-relaxed ${palette.desc}`}>{level.description}</p>
                   ) : null}

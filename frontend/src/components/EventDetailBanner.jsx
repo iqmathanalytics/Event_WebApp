@@ -1,9 +1,12 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { FiChevronLeft, FiChevronRight, FiImage } from "react-icons/fi";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, EffectFade, Keyboard, Pagination } from "swiper/modules";
-import { collectEventGalleryUrls } from "../utils/eventGallery";
+import ListingDetailBannerImage from "./ListingDetailBannerImage";
+import EventDetailBannerVideoSlide from "./EventDetailBannerVideoSlide";
+import { LISTING_DETAIL_BANNER_HEIGHT, LISTING_DETAIL_BANNER_SHELL } from "../constants/listingBannerLayout";
+import { collectEventBannerSlides } from "../utils/eventGallery";
 import "swiper/css";
 import "swiper/css/pagination";
 import "swiper/css/effect-fade";
@@ -11,35 +14,28 @@ import "swiper/css/effect-fade";
 const AUTOPLAY_MS = 4200;
 const FADE_MS = 850;
 
-const bannerImgClass =
-  "h-full w-full object-fill object-center motion-safe:transition-transform motion-safe:duration-[9000ms] motion-safe:ease-out motion-safe:group-hover/hero:scale-[1.03]";
-
-function BannerImageFrame({ src, alt, guestLocked, eager }) {
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-slate-900">
-      <img
-        src={src}
-        alt={alt}
-        className={`${bannerImgClass} ${guestLocked ? "blur-sm" : ""}`}
-        loading={eager ? "eager" : "lazy"}
-        decoding="async"
-      />
-    </div>
-  );
-}
-
 /**
- * Hero slideshow: automatic cross-fade, fraction counter, soft edge prev/next, respects reduced motion.
+ * Hero slideshow: images + promo videos, automatic cross-fade, fraction counter, soft edge prev/next.
  */
-export default function EventDetailBanner({ event, title, className = "", guestLocked = false }) {
+export default function EventDetailBanner({
+  event,
+  title,
+  className = "",
+  guestLocked = false,
+  promoVideos = null,
+  videoGuestLocked = false
+}) {
   const reduceMotion = useReducedMotion();
   const swiperRef = useRef(null);
-  const urls = useMemo(() => collectEventGalleryUrls(event), [event]);
-  const multi = urls.length > 1;
-  const hasImage = urls.length > 0;
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [videoPlaying, setVideoPlaying] = useState(false);
 
-  const heroH =
-    "h-[33vh] min-h-[168px] max-h-[400px] sm:h-[42vh] sm:max-h-[480px] sm:min-h-[220px] md:h-[50vh] md:max-h-[560px] lg:h-[75vh] lg:max-h-[920px] lg:min-h-[280px]";
+  const slides = useMemo(
+    () => collectEventBannerSlides(event, { promoVideos: promoVideos ?? undefined }),
+    [event, promoVideos]
+  );
+  const multi = slides.length > 1;
+  const hasSlides = slides.length > 0;
 
   const swiperClass =
     "event-detail-hero-swiper group/hero h-full w-full " +
@@ -50,20 +46,42 @@ export default function EventDetailBanner({ event, title, className = "", guestL
 
   const autoplayActive = multi && !reduceMotion;
 
-  const baseSection = `relative w-full overflow-hidden rounded-2xl bg-slate-950 shadow-xl ring-1 ring-slate-900/10 lg:rounded-3xl ${heroH} ${className}`;
+  const baseSection = `${LISTING_DETAIL_BANNER_SHELL} ${className}`;
 
   const railBtn =
-    "group absolute inset-y-0 z-20 flex items-center w-[4.25rem] touch-manipulation border-0 bg-transparent p-0 outline-none sm:w-28 " +
-    "focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-0";
+    "group absolute top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full border-0 bg-slate-950/55 p-0 outline-none backdrop-blur-sm " +
+    "transition hover:bg-slate-950/75 focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-0 sm:h-12 sm:w-12";
 
   const iconCls =
     "relative z-10 text-white/90 transition-[transform,opacity] duration-300 ease-out group-hover:text-white " +
     "size-9 stroke-[1.35] drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] sm:size-10";
 
+  const handleSlideChange = (swiper) => {
+    setActiveIndex(swiper.realIndex);
+    setVideoPlaying(false);
+    if (autoplayActive) {
+      swiper.autoplay?.start();
+    }
+  };
+
+  const handleVideoPlayStart = () => {
+    swiperRef.current?.autoplay?.stop();
+    setVideoPlaying(true);
+  };
+
+  const handleVideoPlayStop = () => {
+    setVideoPlaying(false);
+    if (autoplayActive) {
+      swiperRef.current?.autoplay?.start();
+    }
+  };
+
+  const ariaLabel = multi ? "Event photos and promo videos" : slides[0]?.type === "video" ? "Event promo video" : "Event cover photo";
+
   return (
-    <section className={baseSection} aria-label={multi ? "Event photos" : "Event cover photo"}>
+    <section className={baseSection} aria-label={ariaLabel}>
       <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/10 lg:rounded-3xl" aria-hidden />
-      {!hasImage ? (
+      {!hasSlides ? (
         <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(244,63,94,0.2),transparent_40%),radial-gradient(circle_at_70%_80%,rgba(99,102,241,0.22),transparent_42%)]" />
           <div className="relative z-10 flex flex-col items-center gap-2 text-white/85">
@@ -80,7 +98,9 @@ export default function EventDetailBanner({ event, title, className = "", guestL
             modules={[Pagination, Autoplay, EffectFade, Keyboard]}
             onSwiper={(instance) => {
               swiperRef.current = instance;
+              handleSlideChange(instance);
             }}
+            onSlideChange={handleSlideChange}
             pagination={{
               clickable: true,
               type: "fraction"
@@ -88,7 +108,7 @@ export default function EventDetailBanner({ event, title, className = "", guestL
             effect="fade"
             fadeEffect={{ crossFade: true }}
             speed={FADE_MS}
-            loop={urls.length >= 2}
+            loop={slides.length >= 2}
             grabCursor
             keyboard={{ enabled: true }}
             autoplay={
@@ -103,46 +123,64 @@ export default function EventDetailBanner({ event, title, className = "", guestL
             }
             slidesPerView={1}
           >
-            {urls.map((src, idx) => (
-              <SwiperSlide key={`${src}-${idx}`} className="!h-full">
-                <BannerImageFrame
-                  src={src}
-                  alt={idx === 0 ? `${title} — cover` : `${title} — photo ${idx + 1}`}
-                  guestLocked={guestLocked}
-                  eager={idx === 0}
-                />
+            {slides.map((slide, idx) => (
+              <SwiperSlide key={slide.type === "image" ? slide.src : slide.watchUrl} className="!h-full">
+                {slide.type === "image" ? (
+                  <ListingDetailBannerImage
+                    src={slide.src}
+                    alt={idx === 0 ? `${title} — cover` : `${title} — photo ${idx + 1}`}
+                    guestLocked={guestLocked}
+                    eager={idx === 0}
+                  />
+                ) : (
+                  <EventDetailBannerVideoSlide
+                    watchUrl={slide.watchUrl}
+                    embedUrl={slide.embedUrl}
+                    thumbnail={slide.thumbnail}
+                    title={title}
+                    slideIndex={idx}
+                    active={activeIndex === idx}
+                    guestLocked={videoGuestLocked}
+                    onPlayStart={handleVideoPlayStart}
+                    onPlayStop={handleVideoPlayStop}
+                  />
+                )}
               </SwiperSlide>
             ))}
           </Swiper>
 
           <button
             type="button"
-            className={`${railBtn} left-0 justify-center sm:justify-start sm:pl-5`}
-            aria-label="Previous photo"
+            className={`${railBtn} left-3 sm:left-5`}
+            aria-label="Previous slide"
             onClick={() => swiperRef.current?.slidePrev()}
           >
-            <span
-              className="pointer-events-none absolute inset-y-0 left-0 w-full bg-gradient-to-r from-slate-950/65 via-slate-950/18 to-transparent opacity-95 transition-opacity duration-500 sm:opacity-55 sm:group-hover:opacity-95 sm:group-focus-visible:opacity-95"
-              aria-hidden
-            />
-            <FiChevronLeft className={`${iconCls} group-hover:-translate-x-0.5 sm:group-hover:-translate-x-1`} aria-hidden />
+            <FiChevronLeft className={`${iconCls} group-hover:-translate-x-0.5`} aria-hidden />
           </button>
           <button
             type="button"
-            className={`${railBtn} right-0 justify-center sm:justify-end sm:pr-5`}
-            aria-label="Next photo"
+            className={`${railBtn} right-3 sm:right-5`}
+            aria-label="Next slide"
             onClick={() => swiperRef.current?.slideNext()}
           >
-            <span
-              className="pointer-events-none absolute inset-y-0 right-0 w-full bg-gradient-to-l from-slate-950/65 via-slate-950/18 to-transparent opacity-95 transition-opacity duration-500 sm:opacity-55 sm:group-hover:opacity-95 sm:group-focus-visible:opacity-95"
-              aria-hidden
-            />
-            <FiChevronRight className={`${iconCls} group-hover:translate-x-0.5 sm:group-hover:translate-x-1`} aria-hidden />
+            <FiChevronRight className={`${iconCls} group-hover:translate-x-0.5`} aria-hidden />
           </button>
         </>
+      ) : slides[0].type === "image" ? (
+        <ListingDetailBannerImage src={slides[0].src} alt={title} guestLocked={guestLocked} eager />
       ) : (
-        <BannerImageFrame src={urls[0]} alt={title} guestLocked={guestLocked} eager />
+        <EventDetailBannerVideoSlide
+          watchUrl={slides[0].watchUrl}
+          embedUrl={slides[0].embedUrl}
+          thumbnail={slides[0].thumbnail}
+          title={title}
+          slideIndex={0}
+          active
+          guestLocked={videoGuestLocked}
+        />
       )}
     </section>
   );
 }
+
+export { LISTING_DETAIL_BANNER_HEIGHT };

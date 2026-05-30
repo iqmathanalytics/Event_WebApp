@@ -29,6 +29,7 @@ function mapFulfillResult(bookingId, pricing, extra = {}) {
     totalDays: pricing.totalDays,
     subtotalAmount: pricing.subtotalAmount,
     discountAmount: pricing.discountAmount,
+    transactionFeeAmount: pricing.transactionFeeAmount,
     totalAmount: pricing.totalAmount,
     couponCode: pricing.couponCode,
     paymentStatus: "paid",
@@ -73,7 +74,7 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     paymentIntent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: "usd",
-      payment_method_types: ["card"],
+      payment_method_types: ["card", "amazon_pay"],
       metadata: {
         guest_checkout: isGuest ? "1" : "0",
         user_id: userId != null ? String(userId) : "",
@@ -104,6 +105,7 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
     subtotalAmount: pricing.subtotalAmount,
     discountAmount: pricing.discountAmount,
+    transactionFeeAmount: pricing.transactionFeeAmount,
     totalAmount: pricing.totalAmount,
     couponCode: pricing.couponCode
   };

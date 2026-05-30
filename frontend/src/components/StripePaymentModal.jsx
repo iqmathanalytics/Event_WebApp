@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import {
+  Elements,
+  ExpressCheckoutElement,
+  PaymentElement,
+  useElements,
+  useStripe
+} from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { Lock, X } from "lucide-react";
 import { buildStripeReturnUrl } from "../utils/stripePaymentReturn";
@@ -40,47 +46,77 @@ const stripeAppearance = {
   }
 };
 
-function PaymentForm({ onSuccess, onError, onClose, totalLabel, returnUrl }) {
+function PaymentForm({
+  clientSecret,
+  onSuccess,
+  onError,
+  onClose,
+  totalLabel,
+  returnUrl
+}) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [expressReady, setExpressReady] = useState(false);
+
+  const confirmPayment = async () => {
+    if (!stripe || !elements) {
+      return { ok: false };
+    }
+
+    const { error: submitError } = await elements.submit();
+    if (submitError) {
+      const msg = submitError.message || "Please check your payment details.";
+      setFormError(msg);
+      onError(msg);
+      return { ok: false };
+    }
+
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      clientSecret,
+      confirmParams: { return_url: returnUrl },
+      redirect: "if_required"
+    });
+
+    if (error) {
+      const msg =
+        error.type === "card_error" || error.type === "validation_error"
+          ? error.message
+          : "Payment could not be completed. Please try again.";
+      setFormError(msg);
+      onError(msg);
+      return { ok: false };
+    }
+
+    if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
+      onSuccess(paymentIntent.id);
+      return { ok: true };
+    }
+
+    const msg = "Payment was not completed. Please try again.";
+    setFormError(msg);
+    onError(msg);
+    return { ok: false };
+  };
+
+  const handleExpressConfirm = async () => {
+    setFormError("");
+    try {
+      setSubmitting(true);
+      await confirmPayment();
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
-    if (!stripe || !elements) {
-      return;
-    }
     try {
       setSubmitting(true);
-      const { error, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        confirmParams: { return_url: returnUrl },
-        redirect: "if_required"
-      });
-
-      if (error) {
-        const msg =
-          error.type === "card_error" || error.type === "validation_error"
-            ? error.message
-            : "Payment could not be completed. Please try again.";
-        setFormError(msg);
-        onError(msg);
-        return;
-      }
-
-      if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
-        onSuccess(paymentIntent.id);
-        return;
-      }
-
-      setFormError("Payment was not completed. Please try again.");
-      onError("Payment was not completed.");
-    } catch (err) {
-      const msg = err?.message || "Payment failed. Please try again.";
-      setFormError(msg);
-      onError(msg);
+      await confirmPayment();
     } finally {
       setSubmitting(false);
     }
@@ -88,20 +124,47 @@ function PaymentForm({ onSuccess, onError, onClose, totalLabel, returnUrl }) {
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="flex min-h-0 flex-1 flex-col">
-      {/* Only this section scrolls */}
       <div className="stripe-payment-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4">
+        <ExpressCheckoutElement
+          options={{
+            buttonHeight: 48,
+            paymentMethods: {
+              applePay: "always",
+              googlePay: "always"
+            },
+            layout: {
+              maxColumns: 2,
+              maxRows: 2
+            }
+          }}
+          onConfirm={handleExpressConfirm}
+          onAvailablePaymentMethodsChange={({ availablePaymentMethods }) => {
+            setExpressReady(Boolean(availablePaymentMethods));
+          }}
+        />
+
+        {expressReady ? (
+          <div className="relative my-4 flex items-center py-1">
+            <div className="h-px flex-1 bg-slate-200" aria-hidden />
+            <span className="px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Or pay with card
+            </span>
+            <div className="h-px flex-1 bg-slate-200" aria-hidden />
+          </div>
+        ) : null}
+
         <div className="stripe-payment-element">
           <PaymentElement
             options={{
-              layout: { type: "tabs" },
-              paymentMethodOrder: ["apple_pay", "google_pay", "card"],
+              layout: { type: "accordion", defaultCollapsed: false, radios: false },
               wallets: {
-                applePay: "auto",
-                googlePay: "auto"
+                applePay: "never",
+                googlePay: "never"
               }
             }}
           />
         </div>
+
         {formError ? (
           <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {formError}
@@ -109,7 +172,6 @@ function PaymentForm({ onSuccess, onError, onClose, totalLabel, returnUrl }) {
         ) : null}
       </div>
 
-      {/* Fixed footer — never scrolls away */}
       <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
         <div className="flex gap-2.5">
           <button
@@ -221,6 +283,7 @@ export default function StripePaymentModal({
         <div className="flex min-h-0 flex-1 flex-col">
           {stripePromise ? (
             <Elements
+              key={clientSecret}
               stripe={stripePromise}
               options={{
                 clientSecret,
@@ -229,6 +292,7 @@ export default function StripePaymentModal({
               }}
             >
               <PaymentForm
+                clientSecret={clientSecret}
                 totalLabel={totalLabel}
                 returnUrl={returnUrl}
                 onClose={onClose}
@@ -246,8 +310,8 @@ export default function StripePaymentModal({
 
       <style>{`
         .stripe-payment-modal {
-          height: min(520px, calc(100vh - 3rem));
-          max-height: min(520px, calc(100vh - 3rem));
+          height: min(580px, calc(100vh - 3rem));
+          max-height: min(580px, calc(100vh - 3rem));
         }
         .stripe-payment-element {
           width: 100%;

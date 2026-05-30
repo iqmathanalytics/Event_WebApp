@@ -33,6 +33,8 @@ import {
   serializeTicketLevelsForApi,
   ticketLevelsToFormRows
 } from "../utils/eventTicketLevels";
+import { MAX_PROMO_VIDEOS, normalizeYoutubePromoUrl, parsePromoVideoUrlsForForm } from "../utils/youtubeVideo";
+import { parseGalleryImageUrls } from "../utils/eventGallery";
 
 const initialForm = {
   title: "",
@@ -54,6 +56,7 @@ const initialForm = {
   price: "",
   image_url: "",
   gallery_image_urls: [],
+  promo_video_urls: [],
   duration_hours: "",
   duration_minutes: "",
   age_limit: "All Ages",
@@ -294,9 +297,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       ticket_link: event.ticket_link || "",
       price: event.price ?? "",
       image_url: event.image_url || "",
-      gallery_image_urls: Array.isArray(event.gallery_image_urls)
-        ? [...event.gallery_image_urls]
-        : [],
+      gallery_image_urls: parseGalleryImageUrls(event.gallery_image_urls),
+      promo_video_urls: parsePromoVideoUrlsForForm(event.promo_video_urls),
       duration_hours: event.duration_hours ?? "",
       duration_minutes: event.duration_minutes ?? "",
       age_limit: event.age_limit || "All Ages",
@@ -497,6 +499,22 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       if (galleryUrls.length > 12) {
         throw new Error("You can add up to 12 additional banner images.");
       }
+      const promoRaw = Array.isArray(form.promo_video_urls) ? form.promo_video_urls : [];
+      const promoVideoUrls = [];
+      for (const line of promoRaw) {
+        const trimmed = String(line || "").trim();
+        if (!trimmed) {
+          continue;
+        }
+        const normalized = normalizeYoutubePromoUrl(trimmed);
+        if (!normalized) {
+          throw new Error("Each promo video must be a valid YouTube link (watch, youtu.be, or shorts URL).");
+        }
+        promoVideoUrls.push(normalized);
+      }
+      if (promoVideoUrls.length > MAX_PROMO_VIDEOS) {
+        throw new Error(`You can add up to ${MAX_PROMO_VIDEOS} promo videos.`);
+      }
 
       const payload = {
         title: form.title.trim(),
@@ -517,6 +535,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         total_seats: resolvedTicketMode === "platform" ? Number(form.total_seats) : undefined,
         image_url: imageUrl,
         gallery_image_urls: galleryUrls,
+        promo_video_urls: promoVideoUrls,
         ticket_levels:
           resolvedTicketMode === "platform" ? serializeTicketLevelsForApi(form.ticket_levels) : undefined,
         price:
@@ -546,14 +565,23 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       const wasEditing = Boolean(editingEvent);
       if (wasEditing) {
         await updateEvent(editingEvent.id, payload);
-      } else {
-        await createEvent(payload);
+        await loadEvents();
+        closeForm();
+        setPostSubmitFeedback({
+          title: "Event updated",
+          description: "Your changes were saved and your event is now live — no admin re-approval needed."
+        });
+        return;
       }
+
+      const result = await createEvent(payload);
+      await loadEvents();
+      const autoApproved = Boolean(result?.data?.autoApproved);
       closeForm();
       setPostSubmitFeedback({
-        title: wasEditing ? "Event updated" : "Event submitted",
-        description: wasEditing
-          ? "Your changes were saved and sent for admin approval."
+        title: autoApproved ? "Event published" : "Event submitted",
+        description: autoApproved
+          ? "Your event is live on the site. Our team can still review the listing details."
           : "Your event was submitted successfully and is pending admin approval."
       });
     } catch (err) {
@@ -2040,6 +2068,59 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       + Add gallery image
+                    </button>
+                  </div>
+                </FormField>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <FormField
+                  label="YouTube promo videos"
+                  hint="Optional. Up to 6 YouTube links shown as a promo slider for registered users (guests are prompted to login)."
+                  className="!mb-0"
+                >
+                  <div className="space-y-2">
+                    {(form.promo_video_urls || []).map((row, idx) => (
+                      <div key={`promo-vid-${idx}`} className="flex gap-2">
+                        <input
+                          type="url"
+                          value={row}
+                          onChange={(e) =>
+                            setForm((prev) => {
+                              const next = [...(prev.promo_video_urls || [])];
+                              next[idx] = e.target.value;
+                              return { ...prev, promo_video_urls: next };
+                            })
+                          }
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                          disabled={saving}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              promo_video_urls: (prev.promo_video_urls || []).filter((_, i) => i !== idx)
+                            }))
+                          }
+                          className="shrink-0 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={(form.promo_video_urls || []).length >= MAX_PROMO_VIDEOS}
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          promo_video_urls: [...(prev.promo_video_urls || []), ""]
+                        }))
+                      }
+                      className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      + Add YouTube video
                     </button>
                   </div>
                 </FormField>

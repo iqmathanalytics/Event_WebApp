@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, EffectFade, Navigation, Pagination } from "swiper/modules";
 import { buildHeroNarrativeFromSlide } from "../utils/heroSlideCopy";
@@ -13,62 +12,6 @@ import "swiper/css/effect-fade";
 
 function isYayEvent(ev) {
   return ev?.is_yay_deal_event === 1 || ev?.is_yay_deal_event === true || String(ev?.is_yay_deal_event || "") === "1";
-}
-
-function HeroSlideOverlay({ variant = "featured" }) {
-  const badgeLabel = variant === "yay" ? "Spotlight event" : "Featured Event";
-  const badgeSubLabel = variant === "yay" ? "Members-only perks" : "Handpicked for you";
-  const badgeClass =
-    variant === "yay"
-      ? "from-amber-400/90 via-rose-500/90 to-fuchsia-500/90"
-      : "from-indigo-400/90 via-fuchsia-500/90 to-rose-500/90";
-
-  return (
-    <div className="absolute right-1.5 bottom-12 z-20 flex flex-col items-end sm:right-3 sm:bottom-14 lg:right-4 lg:bottom-16">
-      <motion.div
-        initial={{ opacity: 0, y: 10, scale: 0.92, rotate: -2 }}
-        animate={{
-          opacity: 1,
-          y: [0, -2.5, 0],
-          scale: 1,
-          rotate: [0, 0.6, 0]
-        }}
-        transition={{
-          opacity: { duration: 0.35, ease: "easeOut" },
-          scale: { duration: 0.35, ease: "easeOut" },
-          y: { duration: 3.2, ease: "easeInOut", repeat: Infinity },
-          rotate: { duration: 4.2, ease: "easeInOut", repeat: Infinity }
-        }}
-        whileHover={{ rotate: [-1.2, 1.2, -0.8, 0.8, 0], transition: { duration: 0.55, ease: "easeInOut" } }}
-        className="group relative overflow-hidden rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 backdrop-blur sm:rounded-2xl sm:px-3 sm:py-2 lg:rounded-3xl lg:px-4 lg:py-3"
-      >
-        <div className="pointer-events-none absolute inset-0 opacity-95">
-          <div className={`absolute inset-0 bg-gradient-to-r ${badgeClass}`} />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.35),transparent_55%)]" />
-          <motion.div
-            aria-hidden
-            animate={{ x: ["-40%", "140%"] }}
-            transition={{ duration: 2.8, ease: "easeInOut", repeat: Infinity, repeatDelay: 1.4 }}
-            className="absolute -left-1/2 top-0 h-full w-1/2 -skew-x-12 bg-white/25 blur-sm"
-          />
-          <motion.div
-            aria-hidden
-            animate={{ opacity: [0.25, 0.6, 0.25] }}
-            transition={{ duration: 2.2, ease: "easeInOut", repeat: Infinity }}
-            className="absolute -inset-8 rounded-full bg-white/10 blur-2xl"
-          />
-        </div>
-        <div className="relative">
-          <p className="text-[8px] font-extrabold uppercase tracking-[0.12em] text-white drop-shadow sm:text-[11px] lg:text-[13px]">
-            {badgeLabel}
-          </p>
-          <p className="mt-0.5 hidden text-[8px] font-semibold text-white/90 drop-shadow-sm sm:block sm:text-[10px] lg:text-[11px]">
-            {badgeSubLabel}
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  );
 }
 
 function pushNarrative(swiper, slidesList, onHeroNarrativeChangeP) {
@@ -222,12 +165,8 @@ function HeroSlideshow({
 
   const renderSlideBody = (slide) => (
     <>
-      <HeroSlideOverlay variant={slide.variant} />
       <img src={slide.image} alt={slide.title} loading="lazy" className="hero-slide-image h-full w-full object-cover" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 sm:p-4 lg:p-5">
-        <p className="text-xs font-semibold tracking-wide text-white drop-shadow sm:text-sm lg:text-base">{slide.title}</p>
-      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/45 to-transparent" />
     </>
   );
 

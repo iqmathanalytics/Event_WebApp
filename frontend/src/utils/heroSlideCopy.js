@@ -4,18 +4,12 @@ export const DEFAULT_HERO_NARRATIVE = {
   headline: "Discover events, deals, and creators around you.",
   subline:
     "Explore trusted local experiences with Book My Tickets — one platform built for city life.",
-  detailPath: null
+  detailPath: null,
+  variant: null
 };
 
-function trimDescription(raw, max = 720) {
-  const text = String(raw || "").replace(/\s+/g, " ").trim();
-  if (!text) {
-    return "";
-  }
-  if (text.length <= max) {
-    return text;
-  }
-  return `${text.slice(0, max - 1).trim()}…`;
+function normalizeDescription(raw) {
+  return String(raw || "").replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -24,12 +18,13 @@ function trimDescription(raw, max = 720) {
 export function buildHeroNarrativeFromSlide(slide) {
   const title = String(slide?.title || "").trim() || DEFAULT_HERO_NARRATIVE.headline;
   const description =
-    trimDescription(slide?.description) ||
+    normalizeDescription(slide?.description) ||
     "See dates, venue, and ticket options on the event page.";
 
   return {
     headline: title,
     subline: description,
-    detailPath: slide?.detailPath || null
+    detailPath: slide?.detailPath || null,
+    variant: slide?.variant || "featured"
   };
 }

@@ -1,5 +1,35 @@
 import { Link } from "react-router-dom";
 import { FiArrowRight, FiMail } from "react-icons/fi";
+import { FaFacebookF } from "react-icons/fa";
+import { Instagram, Youtube } from "lucide-react";
+import { BRAND_SOCIAL_LINKS } from "../constants/brand";
+
+const SOCIAL_BUTTONS = [
+  {
+    id: "instagram",
+    href: BRAND_SOCIAL_LINKS.instagram,
+    label: "Instagram",
+    Icon: Instagram,
+    className:
+      "border-pink-200/80 bg-gradient-to-br from-pink-50 to-rose-50 text-pink-600 hover:border-pink-300 hover:from-pink-100 hover:to-rose-100 hover:text-pink-700"
+  },
+  {
+    id: "facebook",
+    href: BRAND_SOCIAL_LINKS.facebook,
+    label: "Facebook",
+    Icon: FaFacebookF,
+    className:
+      "border-blue-200/80 bg-gradient-to-br from-blue-50 to-sky-50 text-blue-600 hover:border-blue-300 hover:from-blue-100 hover:to-sky-100 hover:text-blue-700"
+  },
+  {
+    id: "youtube",
+    href: BRAND_SOCIAL_LINKS.youtube,
+    label: "YouTube",
+    Icon: Youtube,
+    className:
+      "border-red-200/80 bg-gradient-to-br from-red-50 to-orange-50 text-red-600 hover:border-red-300 hover:from-red-100 hover:to-orange-100 hover:text-red-700"
+  }
+];
 
 function Footer() {
   return (
@@ -27,8 +57,25 @@ function Footer() {
             </Link>
           </div>
         </div>
-        <div className="flex flex-col gap-4 border-t border-slate-200/80 pt-8 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">© {new Date().getFullYear()} Book My Tickets</p>
+        <div className="flex flex-col gap-6 border-t border-slate-200/80 pt-8 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-slate-500">© {new Date().getFullYear()} Book My Tickets</p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {SOCIAL_BUTTONS.map(({ id, href, label, Icon, className }) => (
+                <a
+                  key={id}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  aria-label={`Follow us on ${label}`}
+                  title={label}
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${className}`}
+                >
+                  <Icon className="h-[18px] w-[18px]" aria-hidden />
+                </a>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-4 text-sm text-slate-600">
             <Link to="/newsletter" className="transition hover:text-slate-900">
               City Newsletter

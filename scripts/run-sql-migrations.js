@@ -32,6 +32,7 @@ const FILES = [
   "influencer_premium_gallery_and_metrics.sql",
   "influencer_engagement_timestamp.sql",
   "event_gallery_image_urls.sql",
+  "event_promo_video_urls.sql",
   "newsletter_guest_columns.sql",
   "newsletter_email_unique.sql",
   "newsletter_user_id.sql",

@@ -17,3 +17,10 @@ export const BRAND_BANNER_URL = "/branding/Banner.png";
 
 /** Request on-site / platform ticket sales for an organizer account */
 export const PLATFORM_TICKETS_REQUEST_EMAIL = "tickets@bookmytickets.us";
+
+/** Official brand social profiles (footer + marketing). */
+export const BRAND_SOCIAL_LINKS = {
+  instagram: "https://www.instagram.com/bookmytickets.us",
+  facebook: "https://www.facebook.com/bookmytickets.us",
+  youtube: "https://www.youtube.com/@bookmytickets.us"
+};

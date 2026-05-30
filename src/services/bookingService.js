@@ -17,6 +17,7 @@ const {
   resolveBookingCart,
   computeCartSubtotal
 } = require("../utils/eventTicketLevels");
+const { applyTransactionFee } = require("../utils/transactionFee");
 const { sendTransactionalEmail } = require("../utils/emailIntegrations");
 const {
   buildBookingConfirmationEmail,
@@ -243,6 +244,12 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     selectedDates = applied.selectedDates;
   }
 
+  const feeBreakdown = applyTransactionFee({ subtotalAmount, discountAmount });
+  subtotalAmount = feeBreakdown.subtotalAmount;
+  discountAmount = feeBreakdown.discountAmount;
+  const transactionFeeAmount = feeBreakdown.transactionFeeAmount;
+  totalAmount = feeBreakdown.totalAmount;
+
   const contact = isGuest
     ? requireGuestContactFields(payload)
     : {
@@ -266,6 +273,7 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     ticketCart: cart,
     subtotalAmount,
     discountAmount,
+    transactionFeeAmount,
     totalAmount,
     couponId,
     couponCode,
@@ -396,6 +404,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       totalDays: pricing.totalDays,
       subtotalAmount: pricing.subtotalAmount,
       discountAmount: pricing.discountAmount,
+      transactionFeeAmount: pricing.transactionFeeAmount,
       totalAmount: pricing.totalAmount,
       couponCode: pricing.couponCode,
       paymentStatus: payment_status
