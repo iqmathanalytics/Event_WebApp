@@ -3,6 +3,46 @@ const crypto = require("crypto");
 const MAX_LEVELS = 12;
 const MAX_LEVEL_NAME = 120;
 const MAX_LEVEL_DESC = 2000;
+const MAX_SEATS_PER_LEVEL = 50000;
+
+function todayYmd(referenceDate = new Date()) {
+  const d = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseLevelSeats(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) {
+    return null;
+  }
+  return Math.min(MAX_SEATS_PER_LEVEL, Math.floor(n));
+}
+
+function parseValidUpto(value) {
+  const raw = String(value || "").trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return null;
+  }
+  return raw;
+}
+
+function isTicketLevelSaleActive(level, referenceDate = new Date()) {
+  const validUpto = parseValidUpto(level?.valid_upto);
+  if (!validUpto) {
+    return true;
+  }
+  return todayYmd(referenceDate) <= validUpto;
+}
+
+function filterActiveTicketLevelsForCheckout(levels, referenceDate = new Date()) {
+  return (levels || []).filter((level) => isTicketLevelSaleActive(level, referenceDate));
+}
 
 function slugifyId(value) {
   const base = String(value || "")
@@ -39,6 +79,8 @@ function normalizeTicketLevel(row, index) {
   }
   const price = Number(row?.price);
   const id = String(row?.id || "").trim() || slugifyId(name);
+  const seats = parseLevelSeats(row?.seats);
+  const valid_upto = parseValidUpto(row?.valid_upto);
   return {
     id: id.slice(0, 80),
     name: name.slice(0, MAX_LEVEL_NAME),
@@ -46,7 +88,9 @@ function normalizeTicketLevel(row, index) {
       .trim()
       .slice(0, MAX_LEVEL_DESC),
     price: Number.isFinite(price) && price >= 0 ? Number(price.toFixed(2)) : 0,
-    sort_order: Number.isFinite(Number(row?.sort_order)) ? Number(row.sort_order) : index
+    sort_order: Number.isFinite(Number(row?.sort_order)) ? Number(row.sort_order) : index,
+    seats,
+    valid_upto
   };
 }
 
@@ -81,8 +125,21 @@ function parseTicketLevelsFromEvent(event) {
   return normalizeTicketLevelsInput(event.ticket_levels_json);
 }
 
+function enrichTicketLevelAvailability(level, bookedCount = 0) {
+  const seats = parseLevelSeats(level.seats);
+  const booked = Math.max(0, Number(bookedCount) || 0);
+  const remaining = seats != null ? Math.max(0, seats - booked) : null;
+  return {
+    ...level,
+    level_seats: seats,
+    level_booked: booked,
+    level_seats_remaining: remaining,
+    level_sold_out: seats != null && remaining <= 0
+  };
+}
+
 function getCheckoutTicketLevels(event) {
-  const levels = parseTicketLevelsFromEvent(event);
+  const levels = filterActiveTicketLevelsForCheckout(parseTicketLevelsFromEvent(event));
   if (levels.length) {
     return levels;
   }
@@ -176,10 +233,34 @@ function buildCartFromLegacy({ levels, attendeeCount, totalDays }) {
   ];
 }
 
+function assertTicketLevelCapacity(cart, levels) {
+  const byId = new Map(levels.map((l) => [l.id, l]));
+  for (const row of cart || []) {
+    const level = byId.get(row.level_id);
+    if (!level) {
+      throw new Error("One or more ticket types are no longer available.");
+    }
+    if (!isTicketLevelSaleActive(level)) {
+      throw new Error(`${level.name} is no longer available for purchase.`);
+    }
+    if (level.level_sold_out) {
+      throw new Error(`${level.name} is sold out.`);
+    }
+    const remaining = level.level_seats_remaining;
+    if (remaining != null && Number(row.quantity) > remaining) {
+      throw new Error(
+        remaining <= 0
+          ? `${level.name} is sold out.`
+          : `Only ${remaining} seat${remaining === 1 ? "" : "s"} left for ${level.name}.`
+      );
+    }
+  }
+}
+
 function resolveBookingCart(event, { ticket_items: ticketItems, attendee_count: attendeeCount }) {
   const levels = getCheckoutTicketLevels(event);
   if (!levels.length) {
-    throw new Error("This event has no ticket levels configured.");
+    throw new Error("This event has no ticket levels available to book right now.");
   }
 
   let cart = normalizeTicketItemsInput(ticketItems, levels);
@@ -195,11 +276,20 @@ function resolveBookingCart(event, { ticket_items: ticketItems, attendee_count: 
     throw new Error("You can book up to 50 tickets per order.");
   }
 
+  assertTicketLevelCapacity(cart, levels);
+
   return { levels, cart, attendeeCount: tickets };
 }
 
 module.exports = {
   MAX_LEVELS,
+  MAX_SEATS_PER_LEVEL,
+  todayYmd,
+  parseLevelSeats,
+  parseValidUpto,
+  isTicketLevelSaleActive,
+  filterActiveTicketLevelsForCheckout,
+  enrichTicketLevelAvailability,
   normalizeTicketLevelsInput,
   parseTicketLevelsFromEvent,
   getCheckoutTicketLevels,
@@ -208,5 +298,6 @@ module.exports = {
   normalizeTicketItemsInput,
   cartTicketCount,
   computeCartSubtotal,
+  assertTicketLevelCapacity,
   resolveBookingCart
 };
