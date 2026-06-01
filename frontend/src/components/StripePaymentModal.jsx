@@ -10,6 +10,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 import { Lock, X } from "lucide-react";
 import { buildStripeReturnUrl } from "../utils/stripePaymentReturn";
+import { BRAND_NAME } from "../constants/brand";
 
 const stripeAppearance = {
   theme: "stripe",
@@ -142,14 +143,21 @@ function PaymentForm({
         <ExpressCheckoutElement
           options={{
             buttonHeight: 48,
+            buttonType: {
+              applePay: "buy",
+              googlePay: "buy"
+            },
             paymentMethods: {
               applePay: "always",
-              googlePay: "always"
+              googlePay: "always",
+              amazonPay: "auto",
+              link: "never",
+              paypal: "never"
             },
-            paymentMethodOrder: ["applePay", "googlePay", "amazonPay"],
+            paymentMethodOrder: ["googlePay", "applePay", "amazonPay"],
             layout: {
               maxColumns: 2,
-              maxRows: 2
+              maxRows: 3
             }
           }}
           onConfirm={(event) => void handleExpressConfirm(event)}
@@ -173,7 +181,7 @@ function PaymentForm({
             options={{
               layout: { type: "accordion", defaultCollapsed: false, radios: "never" },
               wallets: {
-                // If Express Checkout omits Apple/Google (common on some browsers), show them here.
+                // Payment Element only accepts "auto" | "never" (not "always"). Express Checkout uses always separately.
                 applePay: applePayInExpress ? "never" : "auto",
                 googlePay: googlePayInExpress ? "never" : "auto"
               }
@@ -304,7 +312,8 @@ export default function StripePaymentModal({
               options={{
                 clientSecret,
                 appearance: stripeAppearance,
-                loader: "auto"
+                loader: "auto",
+                business: { name: BRAND_NAME }
               }}
             >
               <PaymentForm
