@@ -112,7 +112,7 @@ function EventsPage() {
     time: searchParams.get("time") || "",
     priceMin: searchParams.get("price_min") || "",
     priceMax: searchParams.get("price_max") || "",
-    sortBy: searchParams.get("sort") || "popularity"
+    sortBy: searchParams.get("sort") || "event_date"
   };
   const [query, setQuery] = useState(initialFilters.query);
   const [city, setCity] = useState(initialFilters.city);
@@ -170,7 +170,7 @@ function EventsPage() {
           q: debouncedQuery || undefined,
           city: city || undefined,
           category: category || undefined,
-          sort: sortBy || "popularity",
+          sort: sortBy || "event_date",
           page,
           limit: LISTING_PAGE_SIZE
         };

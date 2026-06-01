@@ -58,9 +58,20 @@ function PaymentForm({
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
-  const [expressReady, setExpressReady] = useState(false);
+  const [expressMethods, setExpressMethods] = useState(null);
 
-  const confirmPayment = async () => {
+  const expressReady = Boolean(
+    expressMethods &&
+      (expressMethods.applePay ||
+        expressMethods.googlePay ||
+        expressMethods.amazonPay ||
+        expressMethods.link ||
+        expressMethods.paypal)
+  );
+  const applePayInExpress = Boolean(expressMethods?.applePay);
+  const googlePayInExpress = Boolean(expressMethods?.googlePay);
+
+  const confirmPayment = async (expressEvent) => {
     if (!stripe || !elements) {
       return { ok: false };
     }
@@ -70,6 +81,7 @@ function PaymentForm({
       const msg = submitError.message || "Please check your payment details.";
       setFormError(msg);
       onError(msg);
+      expressEvent?.paymentFailed?.({ message: msg });
       return { ok: false };
     }
 
@@ -87,6 +99,7 @@ function PaymentForm({
           : "Payment could not be completed. Please try again.";
       setFormError(msg);
       onError(msg);
+      expressEvent?.paymentFailed?.({ message: msg });
       return { ok: false };
     }
 
@@ -98,14 +111,15 @@ function PaymentForm({
     const msg = "Payment was not completed. Please try again.";
     setFormError(msg);
     onError(msg);
+    expressEvent?.paymentFailed?.({ message: msg });
     return { ok: false };
   };
 
-  const handleExpressConfirm = async () => {
+  const handleExpressConfirm = async (expressEvent) => {
     setFormError("");
     try {
       setSubmitting(true);
-      await confirmPayment();
+      await confirmPayment(expressEvent);
     } finally {
       setSubmitting(false);
     }
@@ -132,14 +146,15 @@ function PaymentForm({
               applePay: "always",
               googlePay: "always"
             },
+            paymentMethodOrder: ["applePay", "googlePay", "amazonPay"],
             layout: {
               maxColumns: 2,
               maxRows: 2
             }
           }}
-          onConfirm={handleExpressConfirm}
+          onConfirm={(event) => void handleExpressConfirm(event)}
           onAvailablePaymentMethodsChange={({ availablePaymentMethods }) => {
-            setExpressReady(Boolean(availablePaymentMethods));
+            setExpressMethods(availablePaymentMethods || null);
           }}
         />
 
@@ -156,10 +171,11 @@ function PaymentForm({
         <div className="stripe-payment-element">
           <PaymentElement
             options={{
-              layout: { type: "accordion", defaultCollapsed: false, radios: false },
+              layout: { type: "accordion", defaultCollapsed: false, radios: "never" },
               wallets: {
-                applePay: "never",
-                googlePay: "never"
+                // If Express Checkout omits Apple/Google (common on some browsers), show them here.
+                applePay: applePayInExpress ? "never" : "auto",
+                googlePay: googlePayInExpress ? "never" : "auto"
               }
             }}
           />

@@ -17,6 +17,10 @@ function getListingPrimaryMeta(item) {
   return "-";
 }
 
+function isEventListed(item) {
+  return item?.is_listed !== false && item?.is_listed !== 0;
+}
+
 function getStatusBadgeClass(status) {
   const value = String(status || "").toLowerCase();
   if (value === "approved") return "bg-emerald-100 text-emerald-700";
@@ -65,7 +69,8 @@ function AdminListingsTable({
   onView,
   onApprove,
   onReject,
-  onDelete
+  onDelete,
+  onToggleEventListed
 }) {
   const labels = useMemo(() => getColumnLabels(type), [type]);
   const perPage = 5;
@@ -136,6 +141,17 @@ function AdminListingsTable({
             </button>
 
             <div className="p-3">
+              {type === "events" && String(item.status || "").toLowerCase() === "approved" ? (
+                <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isEventListed(item)}
+                    onChange={(e) => onToggleEventListed?.(item, e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  Active (visible on site)
+                </label>
+              ) : null}
               <div className="grid grid-cols-2 gap-2">
                 {String(item.status || "").toLowerCase() === "pending" ? (
                   <>
@@ -208,6 +224,7 @@ function AdminListingsTable({
             <th className="px-4 py-3">{labels.city}</th>
             <th className="px-4 py-3">{labels.category}</th>
             <th className="px-4 py-3">Status</th>
+            {type === "events" ? <th className="px-4 py-3">Active</th> : null}
             <th className="px-4 py-3 text-right">{labels.value}</th>
             <th className="px-4 py-3">Actions</th>
           </tr>
@@ -225,6 +242,23 @@ function AdminListingsTable({
                   {item.status || "n/a"}
                 </span>
               </td>
+              {type === "events" ? (
+                <td className="px-4 py-3">
+                  {String(item.status || "").toLowerCase() === "approved" ? (
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={isEventListed(item)}
+                        onChange={(e) => onToggleEventListed?.(item, e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      Active
+                    </label>
+                  ) : (
+                    <span className="text-xs text-slate-400">—</span>
+                  )}
+                </td>
+              ) : null}
               <td className="px-4 py-3 text-right text-slate-600">{getListingPrimaryMeta(item)}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-2">

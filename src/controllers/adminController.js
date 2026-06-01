@@ -68,6 +68,17 @@ const updateListingStatus = asyncHandler(async (req, res) => {
   });
 });
 
+const updateEventListed = asyncHandler(async (req, res) => {
+  await adminService.updateEventListingVisibility({
+    eventId: Number(req.validated.params.id),
+    isListed: req.validated.body.is_listed
+  });
+  return res.status(200).json({
+    success: true,
+    message: req.validated.body.is_listed ? "Event is now visible on the site" : "Event hidden from the site"
+  });
+});
+
 const editListing = asyncHandler(async (req, res) => {
   const updated = await adminService.editListing({
     type: req.validated.params.type,
@@ -489,6 +500,7 @@ module.exports = {
   listListings,
   getListingById,
   updateListingStatus,
+  updateEventListed,
   editListing,
   deleteListing,
   createTeamUser,

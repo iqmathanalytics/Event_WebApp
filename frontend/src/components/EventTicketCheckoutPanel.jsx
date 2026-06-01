@@ -27,6 +27,11 @@ import {
 } from "../services/couponService";
 import useAuth from "../hooks/useAuth";
 import { formatCurrency, formatDateUS, formatTime12Hour } from "../utils/format";
+import {
+  formatBookingContactName,
+  splitFullName,
+  validateBookingContactNames
+} from "../utils/bookingContact";
 import { getEventAvailableDates, normalizeDateList } from "../utils/eventSchedule";
 import { BRAND_NAME } from "../constants/brand";
 import EventTicketCart from "./EventTicketCart";
@@ -52,7 +57,7 @@ import {
   parseExpiresMs,
   saveEventCheckoutDraft
 } from "../utils/eventCheckoutDraft";
-import { applyTransactionFee, TRANSACTION_FEE_RATE } from "../utils/transactionFee";
+import { applyTransactionFee } from "../utils/transactionFee";
 
 function toggleDateInList(list, date) {
   const set = new Set(list);
@@ -70,19 +75,13 @@ function requiresCardPayment(totalAmount) {
   return Number(totalAmount) >= STRIPE_MIN_USD;
 }
 
-function bookingPolicyBanner(requiresPayment) {
-  if (requiresPayment) {
-    return `Secure card payment via Stripe when you confirm. You can still change dates and tickets before you pay.`;
-  }
-  return `No card charge for this booking total. You can still change dates and tickets before you confirm.`;
-}
-
 function buildBookingPayload({
   eventId,
   levels,
   ticketCart,
   selectedDates,
-  name,
+  firstName,
+  lastName,
   email,
   phone,
   couponHold
@@ -90,13 +89,18 @@ function buildBookingPayload({
   const sortedDates = normalizeDateList(selectedDates);
   const ticket_items = buildTicketItemsPayload(levels, ticketCart);
   const attendee_count = cartTicketCount(ticketCart);
+  const first = String(firstName || "").trim();
+  const last = String(lastName || "").trim();
+  const name = formatBookingContactName({ firstName: first, lastName: last });
   return {
     event_id: Number(eventId),
     attendee_count,
     ticket_items,
     selected_dates: sortedDates,
     booking_date: sortedDates[0],
-    name: name.trim() || undefined,
+    first_name: first || undefined,
+    last_name: last || undefined,
+    name: name || undefined,
     email: email.trim() || undefined,
     phone: phone.trim() || undefined,
     coupon_hold_token: couponHold?.holdToken || undefined
@@ -126,7 +130,7 @@ function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "" })
           )}
           {showFee ? (
             <span className="ml-1.5 text-slate-600">
-              + {formatCurrency(transactionFee)} fee ({(TRANSACTION_FEE_RATE * 100).toFixed(1)}%)
+              + {formatCurrency(transactionFee, { decimals: 2 })} transaction fees
             </span>
           ) : null}
         </p>
@@ -170,7 +174,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const ticketLevels = useMemo(() => getCheckoutTicketLevels(event), [event]);
   const [ticketCart, setTicketCart] = useState(() => createEmptyCart(getCheckoutTicketLevels(event)));
   const attendeeCount = useMemo(() => cartTicketCount(ticketCart), [ticketCart]);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState("form");
@@ -260,8 +265,15 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
     setSelectedDates(datesForCart);
     setTicketCart(cart);
-    if (draft.name) {
-      setName(String(draft.name));
+    if (draft.firstName) {
+      setFirstName(String(draft.firstName));
+    } else if (draft.name) {
+      const split = splitFullName(draft.name);
+      setFirstName(split.firstName);
+      setLastName(split.lastName);
+    }
+    if (draft.lastName) {
+      setLastName(String(draft.lastName));
     }
     if (draft.email) {
       setEmail(String(draft.email));
@@ -355,10 +367,17 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (guestMode) {
       return;
     }
-    setName(String(user?.name || "").trim());
+    const split = splitFullName(user?.name);
+    setFirstName(split.firstName);
+    setLastName(split.lastName);
     setEmail(String(user?.email || "").trim());
     setPhone(String(user?.mobile_number || "").trim());
   }, [user, guestMode]);
+
+  const contactName = useMemo(
+    () => formatBookingContactName({ firstName, lastName }),
+    [firstName, lastName]
+  );
 
   const maxTickets = useMemo(
     () => (SHOW_SEAT_AVAILABILITY_UI ? maxTicketsForBooking(event) : 50),
@@ -404,7 +423,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       : "";
 
   const needsCardPayment = useMemo(() => requiresCardPayment(totalAmount), [totalAmount]);
-  const policyLine = useMemo(() => bookingPolicyBanner(needsCardPayment), [needsCardPayment]);
 
   const clearCouponHold = useCallback(
     async (opts = {}) => {
@@ -445,7 +463,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         attendeeCount: guests,
         ticketItems: buildTicketItemsPayload(ticketLevels, cart),
         ticketCart: cart,
-        name: overrides.name ?? name,
+        firstName: overrides.firstName ?? firstName,
+        lastName: overrides.lastName ?? lastName,
+        name: overrides.name ?? contactName,
         email: overrides.email ?? email,
         phone: overrides.phone ?? phone,
         step: overrides.step ?? step,
@@ -469,7 +489,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       couponMessage,
       email,
       eventId,
-      name,
+      firstName,
+      lastName,
+      contactName,
       phone,
       selectedDates,
       step,
@@ -586,7 +608,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         attendeeCount,
         ticketItems: buildTicketItemsPayload(ticketLevels, ticketCart),
         ticketCart,
-        name,
+        firstName,
+        lastName,
+        name: contactName,
         email,
         phone,
         step,
@@ -615,19 +639,22 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       return "One of the dates you picked isn’t offered for this event.";
     }
     const ticketCap = maxTickets > 0 ? maxTickets : 50;
+    if (!ticketLevels.length) {
+      return "No ticket types are available to book for this event right now.";
+    }
     if (!Number.isFinite(attendeeCount) || attendeeCount < 1) {
       return "Select at least one ticket.";
     }
     if (attendeeCount > ticketCap) {
       return `You can book up to ${ticketCap} ticket${ticketCap === 1 ? "" : "s"} per order.`;
     }
-    const nameTrim = name.trim();
+    const nameCheck = validateBookingContactNames({ firstName, lastName });
     const emailTrim = email.trim();
     const phoneTrim = phone.trim();
+    if (!nameCheck.ok) {
+      return nameCheck.message;
+    }
     if (guestMode || !userId) {
-      if (nameTrim.length < 2) {
-        return "Enter your full name to continue.";
-      }
       if (!emailTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
         return "Enter a valid email address.";
       }
@@ -639,12 +666,34 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       return "Enter a valid phone number (at least 8 digits).";
     }
     return "";
-  }, [availableDates, attendeeCount, phone, selectedDates, maxTickets, ticketCart, guestMode, name, email, userId]);
+  }, [
+    availableDates,
+    attendeeCount,
+    phone,
+    selectedDates,
+    maxTickets,
+    ticketCart,
+    ticketLevels.length,
+    guestMode,
+    firstName,
+    lastName,
+    email,
+    userId
+  ]);
 
   useEffect(() => {
-    if (ticketLevels.length && Object.keys(ticketCart).length !== ticketLevels.length) {
-      setTicketCart(createEmptyCart(ticketLevels));
+    if (!ticketLevels.length) {
+      return;
     }
+    setTicketCart((prev) => {
+      const next = createEmptyCart(ticketLevels);
+      ticketLevels.forEach((level) => {
+        if (prev[level.id] != null) {
+          next[level.id] = prev[level.id];
+        }
+      });
+      return next;
+    });
   }, [eventId, ticketLevels]);
 
   const onContinueToConfirm = () => {
@@ -720,7 +769,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       levels: ticketLevels,
       ticketCart,
       selectedDates: sortedDates,
-      name,
+      firstName,
+      lastName,
       email,
       phone,
       couponHold
@@ -1001,12 +1051,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             </div>
             <p>
               <span className="text-slate-500">Contact: </span>
-              {name || "—"} · {email || "—"}
+              {contactName || "—"} · {email || "—"}
             </p>
           </div>
         </div>
-
-        <div className="mb-4 rounded-xl bg-slate-100 px-4 py-2.5 text-center text-sm text-slate-600">{policyLine}</div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
           <button
@@ -1074,15 +1122,23 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           </div>
         </div>
         <div className="border-t border-slate-200/90 bg-gradient-to-b from-slate-100/60 via-white to-amber-50/30 px-3.5 pb-3.5 pt-4">
-          <EventTicketCart
-            eventId={eventId}
-            levels={ticketLevels}
-            cart={ticketCart}
-            onChange={setTicketCart}
-            totalDays={totalDays}
-            maxTickets={maxTickets > 0 ? maxTickets : 50}
-          />
-          <p className="mt-3 text-center text-[11px] font-medium text-slate-500">Max 50 tickets per order</p>
+          {ticketLevels.length ? (
+            <>
+              <EventTicketCart
+                eventId={eventId}
+                levels={ticketLevels}
+                cart={ticketCart}
+                onChange={setTicketCart}
+                totalDays={totalDays}
+                maxTickets={maxTickets > 0 ? maxTickets : 50}
+              />
+              <p className="mt-3 text-center text-[11px] font-medium text-slate-500">Max 50 tickets per order</p>
+            </>
+          ) : (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-4 text-center text-sm text-amber-900">
+              No ticket types are available to book right now. Sale periods may have ended for all tiers.
+            </p>
+          )}
         </div>
       </div>
 
@@ -1110,15 +1166,27 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       ) : null}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
-        <div className="sm:col-span-2">
+        <div>
           <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
-            Name on tickets <span className="text-rose-600">*</span>
+            First name <span className="text-rose-600">*</span>
           </label>
           <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-900"
-            autoComplete="name"
+            autoComplete="given-name"
+            required
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+            Last name <span className="text-rose-600">*</span>
+          </label>
+          <input
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-900"
+            autoComplete="family-name"
             required
           />
         </div>
@@ -1149,12 +1217,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           />
         </div>
       </div>
-
-      {guestMode ? (
-        <p className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
-          Checking out as a guest — no account needed. We will email your confirmation to the address above.
-        </p>
-      ) : null}
 
       {!guestMode && subtotalAmount > 0 ? (
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
@@ -1189,8 +1251,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </div>
       ) : null}
 
-      <div className="mb-4 rounded-xl bg-slate-100 px-4 py-2.5 text-center text-sm text-slate-600">{policyLine}</div>
-
       <button
         type="button"
         onClick={onContinueToConfirm}
@@ -1200,11 +1260,11 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       </button>
 
       {error ? <p className="mt-3 text-center text-sm font-medium text-rose-700">{error}</p> : null}
-      <p className="mt-3 text-center text-xs text-slate-600">
-        {needsCardPayment
-          ? "Card payment is collected securely when you confirm your booking."
-          : `No card payment required when your total is under ${formatCurrency(STRIPE_MIN_USD)}.`}
-      </p>
+      {!needsCardPayment ? (
+        <p className="mt-3 text-center text-xs text-slate-600">
+          {`No card payment required when your total is under ${formatCurrency(STRIPE_MIN_USD)}.`}
+        </p>
+      ) : null}
     </CheckoutCard>
   );
 }

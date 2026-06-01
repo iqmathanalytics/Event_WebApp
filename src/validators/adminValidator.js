@@ -288,6 +288,16 @@ const adminNewsletterDeleteSchema = z.object({
   })
 });
 
+const updateEventListedSchema = z.object({
+  body: z.object({
+    is_listed: z.boolean()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
 module.exports = {
   analyticsSchema,
   listListingsSchema,
@@ -295,6 +305,7 @@ module.exports = {
   updateListingStatusSchema,
   editListingSchema,
   deleteListingSchema,
+  updateEventListedSchema,
   createTeamUserSchema,
   listTeamUsersSchema,
   listUsersSchema,

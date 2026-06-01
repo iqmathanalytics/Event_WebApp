@@ -25,7 +25,7 @@ import { pickHomeCarouselSix, pickLandingSectionCards } from "../utils/homeCarou
 import {
   enrichEventWithCountdown,
   isUpcomingEvent,
-  sortEventsByPopularity
+  sortEventsByDate
 } from "../utils/eventPopularity";
 import { DEFAULT_HERO_NARRATIVE } from "../utils/heroSlideCopy";
 import { markHomeSplashConsumed, shouldShowHomeSplash } from "../utils/homeSplashPolicy";
@@ -117,7 +117,7 @@ function HomePage() {
         if (active) {
           const rawRows = response?.data || [];
 
-          const enriched = sortEventsByPopularity(
+          const enriched = sortEventsByDate(
             rawRows
               .filter(isUpcomingEvent)
               .map(enrichEventWithCountdown)
@@ -207,6 +207,11 @@ function HomePage() {
   const sleek = [0.25, 0.46, 0.45, 0.94];
   const landingHandoffEase = [0.19, 1, 0.22, 1];
 
+  const heroActionPill =
+    "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3.5 text-xs font-semibold leading-none transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:px-4 lg:h-9 lg:px-3.5 lg:text-xs";
+  const heroActionGhost = `${heroActionPill} border border-white/30 bg-white/10 text-white backdrop-blur hover:bg-white/20`;
+  const heroActionPrimary = `${heroActionPill} border border-white/20 bg-brand-600 text-white shadow-sm hover:bg-brand-700 lg:bg-gradient-to-r lg:from-rose-500 lg:via-fuchsia-500 lg:to-indigo-500 lg:shadow-[0_12px_28px_rgba(244,63,94,0.18)] lg:ring-1 lg:ring-white/15 lg:hover:-translate-y-0.5`;
+
   return (
     <>
       {showEntranceSplash ? (
@@ -230,7 +235,7 @@ function HomePage() {
         style={{ pointerEvents: landingRevealed ? "auto" : "none" }}
       >
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-700 px-4 py-6 text-white sm:px-8 sm:py-7 lg:px-10 lg:py-7">
-        <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-[0.72fr_1.28fr] lg:items-stretch lg:gap-8">
+        <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-stretch lg:gap-8">
           <div className="flex min-h-0 flex-col lg:h-full lg:pr-2">
             <div className="shrink-0 overflow-hidden">
               <AnimatePresence mode="wait">
@@ -300,28 +305,6 @@ function HomePage() {
                   </motion.p>
                 </AnimatePresence>
               </div>
-              {heroNarrative.detailPath ? (
-                <motion.div
-                  className="flex shrink-0 flex-wrap items-center gap-2.5 sm:gap-3"
-                  initial={false}
-                  animate={landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-                  transition={{ duration: 0.45, delay: landingRevealed ? 0.48 : 0, ease: sleek }}
-                >
-                  {heroNarrative.variant ? (
-                    <HeroEventBadge variant={heroNarrative.variant} compact />
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      trackEventClick(heroNarrative.detailPath.replace(/^\/events\//, "")).catch(() => {});
-                      navigate(heroNarrative.detailPath);
-                    }}
-                    className="inline-flex rounded-full border border-white/35 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/20 sm:text-sm"
-                  >
-                    View details
-                  </button>
-                </motion.div>
-              ) : null}
             </div>
 
             <motion.div
@@ -329,22 +312,31 @@ function HomePage() {
               animate={
                 landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }
               }
-              transition={{ duration: 0.65, delay: landingRevealed ? 0.55 : 0, ease: sleek }}
-              className="mt-6 flex shrink-0 flex-wrap items-center gap-2.5 sm:mt-8 sm:gap-3 lg:mt-4 lg:pt-2"
+              transition={{ duration: 0.65, delay: landingRevealed ? 0.48 : 0, ease: sleek }}
+              className="mt-6 flex shrink-0 flex-wrap items-center gap-2 sm:mt-8 lg:mt-4 lg:flex-nowrap lg:gap-2"
             >
-              <Link
-                to="/events"
-                className="group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:px-5 sm:py-2.5 sm:text-sm lg:bg-gradient-to-r lg:from-rose-500 lg:via-fuchsia-500 lg:to-indigo-500 lg:px-5 lg:py-2.5 lg:text-sm lg:shadow-[0_16px_36px_rgba(244,63,94,0.2)] lg:ring-1 lg:ring-white/15 lg:hover:-translate-y-0.5 lg:hover:shadow-[0_22px_50px_rgba(99,102,241,0.26)]"
-              >
+              {heroNarrative.detailPath && heroNarrative.variant ? (
+                <HeroEventBadge variant={heroNarrative.variant} alignActions />
+              ) : null}
+              {heroNarrative.detailPath ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    trackEventClick(heroNarrative.detailPath.replace(/^\/events\//, "")).catch(() => {});
+                    navigate(heroNarrative.detailPath);
+                  }}
+                  className={heroActionGhost}
+                >
+                  View details
+                </button>
+              ) : null}
+              <Link to="/events" className={`group relative overflow-hidden ${heroActionPrimary}`}>
                 <span className="pointer-events-none absolute inset-0 hidden opacity-0 transition duration-300 group-hover:opacity-100 lg:block">
                   <span className="absolute -left-1/4 top-0 h-full w-1/2 -skew-x-12 bg-white/20 blur-sm" />
                 </span>
                 <span className="relative">Explore Events</span>
               </Link>
-              <Link
-                to="/deals"
-                className="group relative inline-flex items-center justify-center overflow-hidden rounded-full border border-white/30 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/35 sm:px-5 sm:py-2.5 sm:text-sm lg:border lg:border-white/25 lg:bg-white/10 lg:px-5 lg:py-2.5 lg:text-sm lg:shadow-[0_14px_32px_rgba(15,23,42,0.2)] lg:ring-1 lg:ring-white/10 lg:backdrop-blur lg:hover:-translate-y-0.5 lg:hover:bg-white/15 lg:hover:shadow-[0_20px_44px_rgba(15,23,42,0.26)]"
-              >
+              <Link to="/deals" className={`group relative overflow-hidden ${heroActionGhost}`}>
                 <span className="pointer-events-none absolute inset-0 hidden opacity-0 transition duration-300 group-hover:opacity-100 lg:block">
                   <span className="absolute inset-0 bg-gradient-to-r from-amber-400/20 via-rose-400/15 to-indigo-400/20" />
                 </span>

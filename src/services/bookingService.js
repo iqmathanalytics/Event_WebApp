@@ -13,6 +13,7 @@ const {
   countReservedSeatsForEvent
 } = require("../models/bookingModel");
 const { assertSeatsAvailableForBooking } = require("../utils/eventSeats");
+const { attachTicketLevelAvailability } = require("../utils/eventTicketLevelAvailability");
 const {
   resolveBookingCart,
   computeCartSubtotal
@@ -159,26 +160,52 @@ function assertPlatformEventForBooking(event) {
   }
 }
 
+const { assertBookingContactNames } = require("../utils/bookingContact");
+
 function requireGuestContactFields(payload) {
-  const name = String(payload.name || "").trim();
+  const asserted = assertBookingContactNames(payload);
+  if (!asserted.ok) {
+    throw new ApiError(400, asserted.message);
+  }
   const email = String(payload.email || "")
     .trim()
     .toLowerCase();
   const phone = String(payload.phone || "").trim();
-  if (name.length < 2) {
-    throw new ApiError(400, "Full name is required for guest checkout.");
-  }
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new ApiError(400, "A valid email address is required for guest checkout.");
   }
   if (phone.length < 8) {
     throw new ApiError(400, "Phone number is required for guest checkout.");
   }
-  return { name, email, phone };
+  return { name: asserted.name, email, phone };
+}
+
+function resolveSignedInContactFields(payload, user) {
+  const asserted = assertBookingContactNames(payload);
+  if (asserted.ok) {
+    return {
+      name: asserted.name,
+      email: payload.email?.trim()?.toLowerCase() || user.email,
+      phone: String(payload.phone || user.mobile_number || "").trim()
+    };
+  }
+  const fallbackName = String(user?.name || "").trim();
+  if (fallbackName.length >= 2) {
+    return {
+      name: fallbackName,
+      email: payload.email?.trim()?.toLowerCase() || user.email,
+      phone: String(payload.phone || user.mobile_number || "").trim()
+    };
+  }
+  throw new ApiError(400, asserted.message);
 }
 
 async function resolveEventBookingPricingCore({ event, payload, userId, user, isGuest }) {
   assertPlatformEventForBooking(event);
+
+  const eventWithLevels = await attachTicketLevelAvailability(event, {
+    excludeHoldToken: payload.coupon_hold_token || null
+  });
 
   if (isGuest) {
     if (isExclusiveDealEvent(event)) {
@@ -192,7 +219,7 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     }
   }
 
-  const availableDates = getEventAvailableDates(event);
+  const availableDates = getEventAvailableDates(eventWithLevels);
   if (!availableDates.length) {
     throw new ApiError(400, "This event has no available booking dates.");
   }
@@ -212,14 +239,14 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
   let cart;
   let guests;
   try {
-    ({ cart, attendeeCount: guests } = resolveBookingCart(event, payload));
+    ({ cart, attendeeCount: guests } = resolveBookingCart(eventWithLevels, payload));
   } catch (err) {
     throw new ApiError(400, err.message || "Invalid ticket selection.");
   }
   const reservedSeats = await countReservedSeatsForEvent(payload.event_id, {
     excludeHoldToken: payload.coupon_hold_token || null
   });
-  assertSeatsAvailableForBooking(event, guests, reservedSeats);
+  assertSeatsAvailableForBooking(eventWithLevels, guests, reservedSeats);
 
   let subtotalAmount = computeCartSubtotal(cart, totalDays);
   let discountAmount = 0;
@@ -250,19 +277,13 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
   const transactionFeeAmount = feeBreakdown.transactionFeeAmount;
   totalAmount = feeBreakdown.totalAmount;
 
-  const contact = isGuest
-    ? requireGuestContactFields(payload)
-    : {
-        name: payload.name?.trim() || user.name,
-        email: payload.email?.trim()?.toLowerCase() || user.email,
-        phone: String(payload.phone || user.mobile_number || "").trim()
-      };
+  const contact = isGuest ? requireGuestContactFields(payload) : resolveSignedInContactFields(payload, user);
 
   return {
-    event,
+    event: eventWithLevels,
     user,
     isGuest,
-    organizerId: event.organizer_id,
+    organizerId: eventWithLevels.organizer_id,
     userName: contact.name,
     userEmail: contact.email,
     userPhone: contact.phone,

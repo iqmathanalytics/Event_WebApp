@@ -43,6 +43,7 @@ import {
   markAdminNotificationsRead,
   updateTeamUserCapabilities,
   updateAdminListingStatus,
+  updateAdminEventListed,
   fetchAdminEventInsights
 } from "../services/adminService";
 import OrganizerInsightsPanel from "../components/OrganizerInsightsPanel";
@@ -874,6 +875,22 @@ function AdminDashboardPage() {
     setViewEventBookings([]);
     const row = await fetchHydratedEventRow(item);
     setViewListing(row);
+  };
+
+  const handleToggleEventListed = async (item, isListed) => {
+    if (listingType !== "events") {
+      return;
+    }
+    try {
+      await updateAdminEventListed({ id: item.id, is_listed: Boolean(isListed) });
+      setRows((prev) =>
+        prev.map((row) =>
+          String(row.id) === String(item.id) ? { ...row, is_listed: isListed ? 1 : 0 } : row
+        )
+      );
+    } catch (err) {
+      window.alert(err?.response?.data?.message || "Could not update event visibility.");
+    }
   };
 
   const handleDelete = async (item) => {
@@ -1969,6 +1986,7 @@ function AdminDashboardPage() {
               onApprove={handleApprove}
               onReject={handleReject}
               onDelete={handleDelete}
+              onToggleEventListed={listingType === "events" ? handleToggleEventListed : undefined}
             />
           </div>
         ) : activeSection === "bookings" ? (

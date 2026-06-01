@@ -1,4 +1,4 @@
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDateUS } from "../utils/format";
 import { parseTicketLevelsFromEvent } from "../utils/eventTicketLevels";
 
 export default function AdminTicketLevelsSummary({ event, className = "" }) {
@@ -32,6 +32,25 @@ export default function AdminTicketLevelsSummary({ event, className = "" }) {
           {level.description ? (
             <p className="mt-1 text-xs leading-relaxed text-slate-600">{level.description}</p>
           ) : null}
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">
+            {level.seats != null ? (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5">
+                {level.level_booked != null
+                  ? `${level.level_booked} / ${level.seats} seats booked`
+                  : `${level.seats} seats`}
+              </span>
+            ) : (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5">Unlimited seats</span>
+            )}
+            {level.valid_upto ? (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-900">
+                Valid through {formatDateUS(level.valid_upto)}
+              </span>
+            ) : null}
+            {level.level_sold_out ? (
+              <span className="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700">Sold out</span>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>

@@ -17,7 +17,11 @@ const ticketLevelSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional().default(""),
   price: z.coerce.number().min(0),
-  sort_order: z.coerce.number().int().min(0).max(99).optional()
+  sort_order: z.coerce.number().int().min(0).max(99).optional(),
+  seats: z.coerce.number().int().min(1).max(50000).optional().nullable(),
+  valid_upto: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()])
+    .optional()
 });
 
 const ticketLevelsField = z
@@ -146,7 +150,7 @@ const fetchEventsSchema = z.object({
     price_max: z.string().regex(/^\d+(\.\d+)?$/).optional(),
     q: z.string().max(120).optional(),
     search: z.string().max(120).optional(),
-    sort: z.enum(["price", "newest", "relevance", "popularity"]).optional(),
+    sort: z.enum(["price", "newest", "relevance", "popularity", "event_date"]).optional(),
     sort_order: z.enum(["asc", "desc"]).optional(),
     page: z.string().regex(/^\d+$/).optional(),
     limit: z.string().regex(/^\d+$/).optional()

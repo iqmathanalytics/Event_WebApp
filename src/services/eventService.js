@@ -20,6 +20,7 @@ const {
   parseTotalSeats,
   requiresTotalSeats
 } = require("../utils/eventSeats");
+const { attachTicketLevelAvailability } = require("../utils/eventTicketLevelAvailability");
 const { getMonthRange } = require("../utils/dateRange");
 const { getPrimaryEventDate, normalizeDateList, parseDateOnly } = require("../utils/eventSchedule");
 const {
@@ -367,12 +368,13 @@ async function fetchEvents(query, viewerUser) {
   const search = query.q || query.search || null;
   const { monthStart, monthEnd } = getMonthRange(query.month || null);
   const status = query.status || "approved";
-  const sort = query.sort || "newest";
+  const sort = query.sort || "event_date";
   const sortByPopularity = sort === "popularity";
   const useGaPopularitySort = sortByPopularity && googleAnalytics.isConfigured();
 
   const filters = {
     status,
+    publicListedOnly: status === "approved",
     cityId: query.city ? Number(query.city) : null,
     categoryId: query.category ? Number(query.category) : null,
     date: query.date || null,
@@ -434,7 +436,8 @@ async function fetchEventById(slugOrId, viewerUser) {
     display_date: getPrimaryEventDate(withGaPopularity)
   });
   const withSeats = await attachEventSeatAvailability(enriched);
-  return sanitizePublicEventForViewer(withSeats, viewerUser);
+  const withLevelSeats = await attachTicketLevelAvailability(withSeats);
+  return sanitizePublicEventForViewer(withLevelSeats, viewerUser);
 }
 
 async function fetchMySubmissions(userId) {

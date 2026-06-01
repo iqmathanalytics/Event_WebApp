@@ -7,6 +7,8 @@ function emptyLevel(sortOrder = 0) {
     name: "",
     description: "",
     price: "",
+    seats: "",
+    valid_upto: "",
     sort_order: sortOrder
   };
 }
@@ -36,6 +38,8 @@ export default function EventTicketLevelsEditor({ levels, onChange, disabled = f
           name: preset.name,
           description: preset.description,
           price: "",
+          seats: "",
+          valid_upto: "",
           sort_order: sortOrder
         }
       ]);
@@ -50,7 +54,8 @@ export default function EventTicketLevelsEditor({ levels, onChange, disabled = f
         <div>
           <p className="text-sm font-semibold text-slate-900">Ticket levels</p>
           <p className="mt-0.5 text-xs text-slate-600">
-            Add as many tiers as you need (e.g. General, Premium, VIP). Each level has its own price and description.
+            Add tiers with price, optional seat cap per level, and optional sale end date. Expired levels are hidden
+            from buyers automatically.
           </p>
         </div>
         <button
@@ -127,6 +132,34 @@ export default function EventTicketLevelsEditor({ levels, onChange, disabled = f
                     placeholder="0.00"
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                    Seats for this level <span className="font-normal normal-case text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={row.seats}
+                    disabled={disabled}
+                    onChange={(e) => updateRow(index, { seats: e.target.value })}
+                    placeholder="Unlimited if empty"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                    Valid up to <span className="font-normal normal-case text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={row.valid_upto || ""}
+                    disabled={disabled}
+                    onChange={(e) => updateRow(index, { valid_upto: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">Hidden from buyers after this date.</p>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">

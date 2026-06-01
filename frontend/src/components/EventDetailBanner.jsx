@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { FiChevronLeft, FiChevronRight, FiImage } from "react-icons/fi";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -58,23 +58,27 @@ export default function EventDetailBanner({
 
   const handleSlideChange = (swiper) => {
     setActiveIndex(swiper.realIndex);
-    setVideoPlaying(false);
-    if (autoplayActive) {
-      swiper.autoplay?.start();
-    }
   };
 
   const handleVideoPlayStart = () => {
-    swiperRef.current?.autoplay?.stop();
     setVideoPlaying(true);
   };
 
   const handleVideoPlayStop = () => {
     setVideoPlaying(false);
-    if (autoplayActive) {
-      swiperRef.current?.autoplay?.start();
-    }
   };
+
+  useEffect(() => {
+    const swiper = swiperRef.current;
+    if (!swiper?.autoplay) {
+      return;
+    }
+    if (videoPlaying) {
+      swiper.autoplay.stop();
+    } else if (autoplayActive) {
+      swiper.autoplay.start();
+    }
+  }, [videoPlaying, autoplayActive]);
 
   const ariaLabel = multi ? "Event photos and promo videos" : slides[0]?.type === "video" ? "Event promo video" : "Event cover photo";
 
@@ -109,15 +113,17 @@ export default function EventDetailBanner({
             fadeEffect={{ crossFade: true }}
             speed={FADE_MS}
             loop={slides.length >= 2}
-            grabCursor
-            keyboard={{ enabled: true }}
+            grabCursor={!videoPlaying}
+            allowTouchMove={!videoPlaying}
+            keyboard={{ enabled: !videoPlaying }}
             autoplay={
-              autoplayActive
+              autoplayActive && !videoPlaying
                 ? {
                     delay: AUTOPLAY_MS,
                     disableOnInteraction: false,
-                    pauseOnMouseEnter: false,
-                    waitForTransition: true
+                    pauseOnMouseEnter: true,
+                    waitForTransition: true,
+                    stopOnLastSlide: false
                   }
                 : false
             }
@@ -177,6 +183,8 @@ export default function EventDetailBanner({
           slideIndex={0}
           active
           guestLocked={videoGuestLocked}
+          onPlayStart={handleVideoPlayStart}
+          onPlayStop={handleVideoPlayStop}
         />
       )}
     </section>

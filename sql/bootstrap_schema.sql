@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS events (
   is_yay_deal_event TINYINT(1) NOT NULL DEFAULT 0,
   deal_event_discount_code VARCHAR(80) NULL,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  is_listed TINYINT(1) NOT NULL DEFAULT 1,
   popularity_score INT NOT NULL DEFAULT 0,
   click_count INT NOT NULL DEFAULT 0,
   view_count INT NOT NULL DEFAULT 0,

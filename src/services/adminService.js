@@ -372,7 +372,8 @@ async function getListingById({ type, id }) {
       return null;
     }
     const { attachEventSeatAvailability } = require("../utils/eventSeats");
-    const withSeats = await attachEventSeatAvailability(ev);
+    const { attachTicketLevelAvailability } = require("../utils/eventTicketLevelAvailability");
+    const withSeats = await attachTicketLevelAvailability(await attachEventSeatAvailability(ev));
     const [[cityRows], [catRows]] = await Promise.all([
       pool.query("SELECT name FROM cities WHERE id = ? LIMIT 1", [ev.city_id]),
       pool.query("SELECT name FROM categories WHERE id = ? LIMIT 1", [ev.category_id])
@@ -938,6 +939,15 @@ async function deleteAdminNotification({ adminId, notificationId }) {
   return { unread: Number(unread || 0) };
 }
 
+async function updateEventListingVisibility({ eventId, isListed }) {
+  const { updateEventListed } = require("../models/eventModel");
+  const updated = await updateEventListed({ eventId, isListed: Boolean(isListed) });
+  if (!updated) {
+    throw new ApiError(404, "Event not found");
+  }
+  return true;
+}
+
 module.exports = {
   getModerationQueue,
   getAnalytics,
@@ -946,6 +956,7 @@ module.exports = {
   updateListingStatus,
   editListing,
   deleteListing,
+  updateEventListingVisibility,
   createStaffUser,
   fetchTeamUsers,
   fetchAllUsers,

@@ -41,3 +41,15 @@ export function sortEventsByPopularity(events) {
       Number(a.ga_page_views_30d ?? a.popularity_score ?? 0)
   );
 }
+
+/** Soonest event_date first (YYYY-MM-DD). */
+export function sortEventsByDate(events, order = "asc") {
+  return [...events].sort((a, b) => {
+    const da = String(a?.event_date || "").slice(0, 10);
+    const db = String(b?.event_date || "").slice(0, 10);
+    if (da === db) {
+      return 0;
+    }
+    return order === "desc" ? db.localeCompare(da) : da.localeCompare(db);
+  });
+}

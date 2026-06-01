@@ -69,7 +69,7 @@ Paste the CLI’s `whsec_...` into root `.env` as `STRIPE_WEBHOOK_SECRET` and re
 - **Apple Pay**: in Stripe Dashboard → **Settings** → **Payment methods** → **Apple Pay** → add your domain (`bookmytickets.us`, `www.bookmytickets.us`) and complete domain verification.
 - **Amazon Pay**: in Stripe Dashboard → **Settings** → **Payment methods** → **Amazon Pay** → turn on, then register your checkout domain(s) under **Payment method domains** (same as Apple Pay / Google Pay).
 
-The API creates PaymentIntents with `payment_method_types: card, amazon_pay`. The checkout modal uses Stripe **Express Checkout Element** (Apple Pay, Google Pay, Amazon Pay buttons) plus the card Payment Element.
+The API creates PaymentIntents with `payment_method_types: card, amazon_pay`. The checkout modal uses Stripe **Express Checkout Element** (Apple Pay, Google Pay, Amazon Pay) plus the card **Payment Element** (Apple/Google Pay also appear here when Express Checkout does not offer them).
 
 **Domain registration (required for wallets to appear on production):**
 1. Stripe Dashboard → **Settings** → **Payment methods** → enable **Apple Pay** and **Amazon Pay**.
@@ -78,7 +78,19 @@ The API creates PaymentIntents with `payment_method_types: card, amazon_pay`. Th
    `frontend/public/.well-known/apple-developer-merchantid-domain-association`
    Then rebuild and deploy the frontend so it is served at `https://www.bookmytickets.us/.well-known/apple-developer-merchantid-domain-association`.
 
-Wallets will **not** appear on `http://localhost` — test on the live HTTPS site (Safari/Chrome with a card saved in Apple Pay or Google Pay).
+Wallets will **not** appear on `http://localhost` — test on the live HTTPS site.
+
+**Apple Pay vs Amazon Pay**
+
+| | Amazon Pay | Apple Pay |
+|---|------------|-----------|
+| Browsers | Chrome, Edge, Firefox (when enabled in Stripe) | **Safari** on iPhone/iPad/Mac; Chrome on **Mac only** (with a card in Wallet) |
+| Windows PC | Can show | **Does not show** |
+| Domain file | Register in Payment method domains | Same + verify in **Apple Pay** settings |
+
+Run `node scripts/check-apple-pay-domain.js` after deploy to confirm the `.well-known` file is served.
+
+**If Amazon Pay shows but Apple Pay does not:** you are likely on Windows/Android, or the domain is not verified under Stripe → Settings → Payment methods → **Apple Pay** (not only Payment method domains). Add a card to Apple Wallet and retry in **Safari** on an iPhone or Mac.
 
 ## Env checklist (live)
 

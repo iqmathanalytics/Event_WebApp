@@ -92,8 +92,9 @@ export const categories = [
 ].sort(byLabelAsc);
 
 export const sortOptions = [
+  { value: "event_date", label: "Event date" },
   { value: "popularity", label: "Popularity" },
   { value: "relevance", label: "Relevance" },
   { value: "newest", label: "Newest" },
   { value: "price", label: "Price" }
-].sort(byLabelAsc);
+];

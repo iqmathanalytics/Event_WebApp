@@ -15,6 +15,7 @@ const {
   updateListingStatusSchema,
   editListingSchema,
   deleteListingSchema,
+  updateEventListedSchema,
   createTeamUserSchema,
   listTeamUsersSchema,
   listUsersSchema,
@@ -51,6 +52,11 @@ router.patch(
   adminController.updateListingStatus
 );
 router.patch("/listings/:type/:id", validateRequest(editListingSchema), adminController.editListing);
+router.patch(
+  "/listings/events/:id/listed",
+  validateRequest(updateEventListedSchema),
+  adminController.updateEventListed
+);
 router.delete("/listings/:type/:id", validateRequest(deleteListingSchema), adminController.deleteListing);
 router.post("/team/users", validateRequest(createTeamUserSchema), adminController.createTeamUser);
 router.get("/team/users", validateRequest(listTeamUsersSchema), adminController.getTeamUsers);

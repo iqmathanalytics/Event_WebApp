@@ -6,7 +6,8 @@ const ticketItemSchema = z.object({
 });
 
 const guestContactFields = {
-  name: z.string().trim().min(2, "Full name is required").max(120),
+  first_name: z.string().trim().min(1, "First name is required").max(60),
+  last_name: z.string().trim().min(1, "Last name is required").max(60),
   email: z.string().trim().email("A valid email is required"),
   phone: z
     .string()
@@ -24,6 +25,8 @@ const createBookingSchema = z.object({
     ticket_items: z.array(ticketItemSchema).max(20).optional(),
     booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     selected_dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(366).optional(),
+    first_name: z.string().trim().min(1).max(60).optional(),
+    last_name: z.string().trim().min(1).max(60).optional(),
     name: z.string().trim().min(2).max(120).optional(),
     email: z.string().trim().email().optional(),
     phone: z

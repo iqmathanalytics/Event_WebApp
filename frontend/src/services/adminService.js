@@ -45,6 +45,11 @@ export async function updateAdminListingStatus({ type, id, status, note }) {
   return response.data;
 }
 
+export async function updateAdminEventListed({ id, is_listed }) {
+  const response = await api.patch(`/admin/listings/events/${id}/listed`, { is_listed });
+  return response.data;
+}
+
 export async function editAdminListing({ type, id, payload }) {
   const response = await api.patch(`/admin/listings/${type}/${id}`, payload);
   return response.data;

@@ -61,8 +61,12 @@ function normalizeEventRow(row) {
   if (!row) {
     return row;
   }
+  const isListedRaw = row.is_listed;
+  const is_listed =
+    isListedRaw === undefined || isListedRaw === null ? true : Number(isListedRaw) !== 0;
   return {
     ...row,
+    is_listed,
     ticket_sales_mode: normalizeTicketSalesMode(readTicketSalesModeRaw(row)),
     ticket_levels: parseTicketLevelsFromEvent(row),
     event_highlights: parseHighlights(row.event_highlights),
@@ -270,7 +274,7 @@ async function findPublicEventBySlugOrId(param) {
          LEFT JOIN cities c ON c.id = e.city_id
          LEFT JOIN categories cat ON cat.id = e.category_id
          LEFT JOIN users u ON u.id = e.organizer_id
-         WHERE e.public_slug = ? AND e.status = 'approved'
+         WHERE e.public_slug = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1
          LIMIT 1`,
         [slug]
       );
@@ -307,11 +311,19 @@ async function findPublicEventById(id) {
      LEFT JOIN cities c ON c.id = e.city_id
      LEFT JOIN categories cat ON cat.id = e.category_id
      LEFT JOIN users u ON u.id = e.organizer_id
-     WHERE e.id = ? AND e.status = 'approved'
+     WHERE e.id = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1
      LIMIT 1`,
     [id]
   );
   return normalizeEventRow(rows[0] || null);
+}
+
+async function updateEventListed({ eventId, isListed }) {
+  const [result] = await pool.query(
+    `UPDATE events SET is_listed = ?, updated_at = NOW() WHERE id = ?`,
+    [isListed ? 1 : 0, eventId]
+  );
+  return result.affectedRows > 0;
 }
 
 async function listEventsByOrganizer(organizerId) {
@@ -473,6 +485,9 @@ async function listEvents({ filters, pagination }) {
     conditions.push("e.status = ?");
     whereValues.push(filters.status);
   }
+  if (filters.publicListedOnly) {
+    conditions.push("COALESCE(e.is_listed, 1) = 1");
+  }
   if (filters.cityId) {
     conditions.push("e.city_id = ?");
     whereValues.push(filters.cityId);
@@ -523,6 +538,8 @@ async function listEvents({ filters, pagination }) {
     orderBy = `e.popularity_score ${sortOrder}`;
   } else if (filters.sortBy === "newest") {
     orderBy = "e.created_at DESC";
+  } else if (filters.sortBy === "event_date") {
+    orderBy = `e.event_date ${sortOrder}, e.event_time ${sortOrder}, e.created_at DESC`;
   } else if (filters.sortBy === "relevance" && filters.q) {
     orderBy = "relevance_score DESC, e.popularity_score DESC";
   }
@@ -613,6 +630,7 @@ async function listFeaturedEvents({ cityId, limit = 6 }) {
      LEFT JOIN cities c ON c.id = e.city_id
      LEFT JOIN categories cat ON cat.id = e.category_id
      WHERE e.status = 'approved'
+       AND COALESCE(e.is_listed, 1) = 1
        AND e.event_date >= CURDATE()
        ${cityClause}
      ORDER BY e.event_date ASC, e.created_at DESC
@@ -666,6 +684,7 @@ module.exports = {
   findEventById,
   findPublicEventById,
   findPublicEventBySlugOrId,
+  updateEventListed,
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,

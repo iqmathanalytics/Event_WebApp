@@ -228,6 +228,54 @@ async function listBookingsByUser({ userId }) {
   return rows;
 }
 
+function parseTicketItemsFromBookingRow(row) {
+  const raw = row?.ticket_items_json;
+  if (!raw) {
+    return [];
+  }
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_err) {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed
+    .map((item) => ({
+      level_id: String(item?.level_id || item?.levelId || "").trim(),
+      quantity: Math.max(0, Number(item?.quantity) || 0)
+    }))
+    .filter((item) => item.level_id && item.quantity > 0);
+}
+
+/**
+ * Tickets sold per level_id (paid, free, and pending bookings).
+ * @returns {Promise<Map<string, number>>}
+ */
+async function countBookedTicketsByLevelForEvent(eventId) {
+  const [rows] = await pool.query(
+    `SELECT ticket_items_json, attendee_count
+     FROM event_bookings
+     WHERE event_id = ?
+       AND payment_status IN ('paid', 'free', 'pending')`,
+    [eventId]
+  );
+  const map = new Map();
+  for (const row of rows) {
+    const items = parseTicketItemsFromBookingRow(row);
+    if (items.length) {
+      items.forEach((item) => {
+        map.set(item.level_id, (map.get(item.level_id) || 0) + item.quantity);
+      });
+    }
+  }
+  return map;
+}
+
 /**
  * Seats counted against capacity: confirmed bookings + active coupon holds.
  */
@@ -266,5 +314,6 @@ module.exports = {
   listBookingsByOrganizer,
   listBookingsForAdmin,
   listBookingsByUser,
-  countReservedSeatsForEvent
+  countReservedSeatsForEvent,
+  countBookedTicketsByLevelForEvent
 };

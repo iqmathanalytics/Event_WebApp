@@ -25,6 +25,7 @@
     "deploy:milesweb:build": "npm run deploy:milesweb:env && npm run build:frontend",
     "stripe:login": "powershell -ExecutionPolicy Bypass -File scripts/stripe-cli.ps1 login",
     "stripe:listen": "powershell -ExecutionPolicy Bypass -File scripts/stripe-cli.ps1 listen --forward-to http://localhost:5000/webhooks/stripe --events payment_intent.succeeded,payment_intent.payment_failed,payment_intent.canceled",
+    "check:apple-pay-domain": "node scripts/check-apple-pay-domain.js",
     "deploy:render": "node scripts/render-deploy.js",
     "sync:render-env": "node scripts/sync-render-env-from-local.js",
     "lint": "echo \"No linter configured yet\""

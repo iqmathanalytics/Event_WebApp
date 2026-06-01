@@ -1,9 +1,17 @@
-export function formatCurrency(value) {
-  return new Intl.NumberFormat("en-US", {
+export function formatCurrency(value, options = {}) {
+  const amount = Number(value || 0);
+  const { decimals } = options;
+  const formatOptions = {
     style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0
-  }).format(Number(value || 0));
+    currency: "USD"
+  };
+  if (decimals != null) {
+    formatOptions.minimumFractionDigits = decimals;
+    formatOptions.maximumFractionDigits = decimals;
+  } else {
+    formatOptions.maximumFractionDigits = 0;
+  }
+  return new Intl.NumberFormat("en-US", formatOptions).format(amount);
 }
 
 /**
