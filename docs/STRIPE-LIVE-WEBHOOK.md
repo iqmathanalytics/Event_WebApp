@@ -65,15 +65,19 @@ Paste the CLI’s `whsec_...` into root `.env` as `STRIPE_WEBHOOK_SECRET` and re
 
 ## Apple Pay, Google Pay & Amazon Pay (production)
 
-- **Google Pay**: usually works in Chrome when card payments are enabled.
-- **Apple Pay**: in Stripe Dashboard → **Settings** → **Payment methods** → **Apple Pay** → add your domain (`bookmytickets.us`, `www.bookmytickets.us`) and complete domain verification.
-- **Amazon Pay**: in Stripe Dashboard → **Settings** → **Payment methods** → **Amazon Pay** → turn on, then register your checkout domain(s) under **Payment method domains** (same as Apple Pay / Google Pay).
+The checkout modal uses Stripe **Express Checkout** (Google Pay, Apple Pay, Amazon Pay) plus the card **Payment Element** (Google/Apple Pay also appear below when the express row does not show them).
 
-The API creates PaymentIntents with `payment_method_types: card, amazon_pay`. The checkout modal uses Stripe **Express Checkout Element** (Apple Pay, Google Pay, Amazon Pay) plus the card **Payment Element** (Apple/Google Pay also appear here when Express Checkout does not offer them).
+The API creates PaymentIntents with `payment_method_types: card, amazon_pay`. Google Pay and Apple Pay are enabled through the `card` type (no separate API type).
 
-**Domain registration (required for wallets to appear on production):**
-1. Stripe Dashboard → **Settings** → **Payment methods** → enable **Apple Pay** and **Amazon Pay**.
-2. Stripe Dashboard → **Settings** → **Payment method domains** → add `bookmytickets.us` and `www.bookmytickets.us`.
+| Wallet | Stripe Dashboard | Browser / device |
+|--------|------------------|------------------|
+| **Google Pay** | **Payment methods** → enable **Google Pay** (Cards) | Chrome, Edge, Android Chrome; card in [Google Wallet](https://pay.google.com) |
+| **Apple Pay** | **Payment methods** → **Apple Pay** → verify domain | Safari on iPhone/Mac; Chrome on Mac with card in Wallet |
+| **Amazon Pay** | **Payment methods** → **Amazon Pay** | Most desktop browsers when enabled |
+
+**Domain registration (required on production HTTPS):**
+1. Stripe Dashboard → **Settings** → **Payment methods** → enable **Google Pay** (under Cards), **Apple Pay**, and **Amazon Pay**.
+2. Stripe Dashboard → **Settings** → **Payment method domains** → add `bookmytickets.us` and `www.bookmytickets.us` (required for Google Pay and Amazon Pay).
 3. For **Apple Pay**, download the domain verification file from Stripe and upload it to your site at:
    `frontend/public/.well-known/apple-developer-merchantid-domain-association`
    Then rebuild and deploy the frontend so it is served at `https://www.bookmytickets.us/.well-known/apple-developer-merchantid-domain-association`.
@@ -89,6 +93,8 @@ Wallets will **not** appear on `http://localhost` — test on the live HTTPS sit
 | Domain file | Register in Payment method domains | Same + verify in **Apple Pay** settings |
 
 Run `node scripts/check-apple-pay-domain.js` after deploy to confirm the `.well-known` file is served.
+
+**If Amazon Pay shows but Google Pay does not:** register domains under **Payment method domains**, enable **Google Pay** in Payment methods, use **Chrome** with a card in Google Wallet, and test on **HTTPS** (not localhost).
 
 **If Amazon Pay shows but Apple Pay does not:** you are likely on Windows/Android, or the domain is not verified under Stripe → Settings → Payment methods → **Apple Pay** (not only Payment method domains). Add a card to Apple Wallet and retry in **Safari** on an iPhone or Mac.
 

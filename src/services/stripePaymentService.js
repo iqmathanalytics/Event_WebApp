@@ -74,7 +74,7 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     paymentIntent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: "usd",
-      // `card` enables Apple/Google Pay in Express Checkout; `amazon_pay` is required for Amazon Pay.
+      // `card` enables Apple Pay + Google Pay (wallets); `amazon_pay` enables Amazon Pay in Express Checkout.
       payment_method_types: ["card", "amazon_pay"],
       metadata: {
         guest_checkout: isGuest ? "1" : "0",
