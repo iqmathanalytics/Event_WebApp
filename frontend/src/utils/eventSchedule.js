@@ -56,4 +56,13 @@ export function getEventAvailableDates(event) {
   return single ? [single] : [];
 }
 
+/** Earliest show date used for listing sort and display consistency. */
+export function getEventSortDate(event) {
+  const dates = getEventAvailableDates(event);
+  if (dates.length) {
+    return dates[0];
+  }
+  return parseDateOnly(event?.event_date) || "";
+}
+
 export { normalizeDateList, parseDateOnly };

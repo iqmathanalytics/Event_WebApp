@@ -539,7 +539,7 @@ async function listEvents({ filters, pagination }) {
   } else if (filters.sortBy === "newest") {
     orderBy = "e.created_at DESC";
   } else if (filters.sortBy === "event_date") {
-    orderBy = `e.event_date ${sortOrder}, e.event_time ${sortOrder}, e.created_at DESC`;
+    orderBy = `e.event_date ${sortOrder}, e.id ASC`;
   } else if (filters.sortBy === "relevance" && filters.q) {
     orderBy = "relevance_score DESC, e.popularity_score DESC";
   }
@@ -633,7 +633,7 @@ async function listFeaturedEvents({ cityId, limit = 6 }) {
        AND COALESCE(e.is_listed, 1) = 1
        AND e.event_date >= CURDATE()
        ${cityClause}
-     ORDER BY e.event_date ASC, e.created_at DESC
+     ORDER BY e.event_date ASC, e.id ASC
      LIMIT ?`,
     values
   );

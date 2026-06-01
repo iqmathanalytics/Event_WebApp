@@ -20,8 +20,9 @@ import { fetchDeals, fetchInfluencers, trackInfluencerClick } from "../services/
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
 import { formatDateUS } from "../utils/format";
+import { getEventSortDate } from "../utils/eventSchedule";
 import { trackEventClick } from "../services/eventService";
-import { pickHomeCarouselSix, pickLandingSectionCards } from "../utils/homeCarouselCuration";
+import { pickHomeCarouselFromSorted, pickLandingSectionFromSorted } from "../utils/homeCarouselCuration";
 import {
   enrichEventWithCountdown,
   isUpcomingEvent,
@@ -123,9 +124,8 @@ function HomePage() {
               .map(enrichEventWithCountdown)
           );
 
-          const curated = pickHomeCarouselSix(enriched);
-          setTrendingEvents(curated);
-          setLandingEvents(pickLandingSectionCards(enriched, { limit: 8 }));
+          setTrendingEvents(pickHomeCarouselFromSorted(enriched, 6));
+          setLandingEvents(pickLandingSectionFromSorted(enriched, { limit: 8 }));
         }
       } catch (_err) {
         if (active) {
@@ -365,14 +365,15 @@ function HomePage() {
                 <EventCard
                   variant="landing"
                   item={{
+                    ...item,
                     id: item.id,
                     public_slug: item.public_slug,
                     title: item.title,
                     category: item.category_name || "General",
                     city: item.city_name || "City",
-                    event_date: item.event_date,
+                    event_date: getEventSortDate(item) || item.event_date,
                     event_time: item.event_time,
-                    date: formatDateUS(item.event_date),
+                    date: formatDateUS(getEventSortDate(item) || item.event_date),
                     time: item.event_time ? String(item.event_time).slice(0, 5) : "",
                     price: item.price,
                     image: item.image_url,

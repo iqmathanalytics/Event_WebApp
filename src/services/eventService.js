@@ -153,6 +153,19 @@ function sortRowsByPopularity(rows) {
   );
 }
 
+/** Sort listings by calendar date only (earliest show date), not time or popularity. */
+function sortRowsByEventDate(rows, order = "asc") {
+  const desc = String(order).toLowerCase() === "desc";
+  return [...rows].sort((a, b) => {
+    const da = getPrimaryEventDate(a) || parseDateOnly(a?.event_date) || "";
+    const db = getPrimaryEventDate(b) || parseDateOnly(b?.event_date) || "";
+    if (da !== db) {
+      return desc ? db.localeCompare(da) : da.localeCompare(db);
+    }
+    return String(a?.id ?? "").localeCompare(String(b?.id ?? ""), undefined, { numeric: true });
+  });
+}
+
 function attachDynamicEventTags(event) {
   const bookingCount = toNumber(event.booking_count);
   const views30d = toNumber(event.ga_page_views_30d);
@@ -417,6 +430,10 @@ async function fetchEvents(query, viewerUser) {
     .map(attachDynamicEventTags)
     .map((row) => sanitizePublicEventForViewer(row, viewerUser));
 
+  if (sort === "event_date") {
+    rows = sortRowsByEventDate(rows, filters.sortOrder);
+  }
+
   return {
     ...data,
     rows,
@@ -559,7 +576,7 @@ async function fetchFeaturedEvents({ city, limit }, viewerUser) {
   const cityId = city ? Number(city) : null;
   let rows = await listFeaturedEvents({ cityId, limit: Number(limit) || 6 });
   rows = await applyGaPopularityMetrics(rows);
-  rows = sortRowsByPopularity(rows);
+  rows = sortRowsByEventDate(rows, "asc");
   return rows
     .map(attachDynamicEventTags)
     .map((row) => sanitizePublicEventForViewer(row, viewerUser));

@@ -6,6 +6,7 @@ import { formatCurrency, formatDateUS, formatTime12Hour } from "../utils/format"
 import { trackEventClick } from "../services/eventService";
 import { trackEventListingClick } from "../utils/googleAnalytics";
 import { eventDetailPath } from "../utils/listingPaths";
+import { getEventSortDate } from "../utils/eventSchedule";
 import useAuth from "../hooks/useAuth";
 import PremiumLockOverlay from "./PremiumLockOverlay";
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
@@ -26,7 +27,8 @@ function EventCard({
   const [premiumGateOpen, setPremiumGateOpen] = useState(false);
   const locked = Boolean(isYayDealEvent) && !isAuthenticated;
   const showBadge = Boolean(showPremiumBadge) && Boolean(isYayDealEvent);
-  const dateLabel = item.event_date ? formatDateUS(item.event_date) : item.date;
+  const sortDate = getEventSortDate(item) || item.display_date || item.event_date || item.date;
+  const dateLabel = sortDate ? formatDateUS(sortDate) : "";
   const timeLabel = item.event_time
     ? formatTime12Hour(String(item.event_time).slice(0, 5))
     : item.time

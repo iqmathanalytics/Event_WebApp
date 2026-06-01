@@ -12,6 +12,8 @@ import useAuth from "../hooks/useAuth";
 import { enableOrganizer } from "../services/userService";
 import { refreshAccessToken } from "../services/authService";
 import { formatDateUS } from "../utils/format";
+import { getEventSortDate } from "../utils/eventSchedule";
+import { sortEventsByDate } from "../utils/eventPopularity";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import { FiAlertCircle, FiCheckCircle, FiClock, FiInfo } from "react-icons/fi";
 import { CalendarDays, MousePointerClick, Sparkles, Ticket } from "lucide-react";
@@ -193,7 +195,10 @@ function EventsPage() {
           setSelectedCity("");
         }
 
-        setEvents(payload.rows || []);
+        const rows = payload.rows || [];
+        setEvents(
+          (sortBy || "event_date") === "event_date" ? sortEventsByDate(rows, "asc") : rows
+        );
         setTotalPages(Math.max(1, Math.ceil((payload.total || 0) / (payload.limit || LISTING_PAGE_SIZE))));
       } catch (_err) {
         if (active) {
@@ -260,14 +265,15 @@ function EventsPage() {
               <EventCard
                 key={item.id}
                 item={{
+                  ...item,
                   id: item.id,
                   public_slug: item.public_slug,
                   title: item.title,
                   category: item.category_name || "General",
                   city: item.city_name || "City",
-                  event_date: item.event_date,
+                  event_date: getEventSortDate(item) || item.event_date,
                   event_time: item.event_time,
-                  date: formatDateUS(item.event_date),
+                  date: formatDateUS(getEventSortDate(item) || item.event_date),
                   time: item.event_time ? String(item.event_time).slice(0, 5) : "",
                   price: item.price,
                   image: item.image_url,

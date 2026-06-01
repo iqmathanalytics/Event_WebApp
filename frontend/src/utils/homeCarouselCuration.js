@@ -42,6 +42,12 @@ export function pickHomeCarouselSix(items) {
   return sortByPopularity(items).slice(0, 6);
 }
 
+/** First N items — caller should pass a list already sorted by event date. */
+export function pickHomeCarouselFromSorted(items, count = 6) {
+  const cap = Math.max(1, Number(count) || 6);
+  return (items || []).filter((x) => x && x.id != null).slice(0, cap);
+}
+
 /**
  * Landing grid section — top N by GA popularity.
  * @param {object[]} items
@@ -50,4 +56,10 @@ export function pickHomeCarouselSix(items) {
 export function pickLandingSectionCards(items, { limit = 5 } = {}) {
   const cap = Math.max(1, Number(limit) || 5);
   return sortByPopularity(items).slice(0, cap);
+}
+
+/** First N items — caller should pass a list already sorted by event date. */
+export function pickLandingSectionFromSorted(items, { limit = 5 } = {}) {
+  const cap = Math.max(1, Number(limit) || 5);
+  return (items || []).filter((x) => x && x.id != null).slice(0, cap);
 }

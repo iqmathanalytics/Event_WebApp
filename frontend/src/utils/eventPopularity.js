@@ -1,6 +1,8 @@
+import { getEventSortDate } from "./eventSchedule";
+
 /** True when event_date is today or in the future (YYYY-MM-DD compare). */
 export function isUpcomingEvent(event) {
-  const dateStr = String(event?.event_date || "").slice(0, 10);
+  const dateStr = getEventSortDate(event) || String(event?.event_date || "").slice(0, 10);
   if (!dateStr) {
     return true;
   }
@@ -42,14 +44,15 @@ export function sortEventsByPopularity(events) {
   );
 }
 
-/** Soonest event_date first (YYYY-MM-DD). */
+/** Soonest show date first (YYYY-MM-DD calendar order only — ignores event time). */
 export function sortEventsByDate(events, order = "asc") {
+  const desc = order === "desc";
   return [...events].sort((a, b) => {
-    const da = String(a?.event_date || "").slice(0, 10);
-    const db = String(b?.event_date || "").slice(0, 10);
-    if (da === db) {
-      return 0;
+    const da = getEventSortDate(a) || "";
+    const db = getEventSortDate(b) || "";
+    if (da !== db) {
+      return desc ? db.localeCompare(da) : da.localeCompare(db);
     }
-    return order === "desc" ? db.localeCompare(da) : da.localeCompare(db);
+    return String(a?.id ?? "").localeCompare(String(b?.id ?? ""), undefined, { numeric: true });
   });
 }
