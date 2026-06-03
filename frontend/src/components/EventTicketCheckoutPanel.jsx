@@ -722,6 +722,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       }
       setDoneSummary({
         bookingId: data?.bookingId,
+        checkInCode: data?.checkInCode || "",
+        email: String(email || data?.email || "").trim(),
         totalAmount: data?.totalAmount ?? totalAmount,
         subtotalAmount: data?.subtotalAmount ?? subtotalAmount,
         discountAmount: data?.discountAmount ?? discountAmount,
@@ -991,6 +993,12 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
               Open my dashboard
             </Link>
           )}
+          {doneSummary.checkInCode ? (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              Your entry QR code was sent to <strong>{doneSummary.email || "your email"}</strong>. Show that QR at
+              the venue for check-in.
+            </p>
+          ) : null}
           {doneSummary.paidWithCard ? (
             <p className="text-xs text-slate-500">Paid securely with Stripe.</p>
           ) : (

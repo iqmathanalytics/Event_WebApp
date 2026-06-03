@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
@@ -15,6 +16,7 @@ import UserDashboardPage from "./pages/UserDashboardPage";
 import UserSubmissionsPage from "./pages/UserSubmissionsPage";
 import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+const AdminVerifyTicketPage = lazy(() => import("./pages/AdminVerifyTicketPage"));
 import ContactPage from "./pages/ContactPage";
 import NewsletterPage from "./pages/NewsletterPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -88,6 +90,18 @@ function App() {
             }
           >
             <Route path="/dashboard/admin" element={<AdminDashboardPage />} />
+            <Route
+              path="/dashboard/admin/verify-ticket"
+              element={
+                <Suspense
+                  fallback={
+                    <p className="py-8 text-center text-sm text-slate-500">Loading ticket scanner…</p>
+                  }
+                >
+                  <AdminVerifyTicketPage />
+                </Suspense>
+              }
+            />
           </Route>
 
           <Route path="/404" element={<NotFoundPage />} />

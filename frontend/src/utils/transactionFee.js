@@ -1,5 +1,5 @@
 /** Platform transaction fee applied to ticket bookings (after discounts). */
-export const TRANSACTION_FEE_RATE = 0.029;
+export const TRANSACTION_FEE_RATE = 0.04373;
 
 export function computeTransactionFee(amountAfterDiscount) {
   const base = Math.max(0, Number(amountAfterDiscount) || 0);

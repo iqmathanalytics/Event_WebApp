@@ -63,7 +63,9 @@ function buildLayout({
   ctaLabel,
   ctaUrl,
   footerNote,
-  headerTone = "rose"
+  headerTone = "rose",
+  qrImageDataUrl = null,
+  qrCaption = "Entry QR — staff will scan this at the door"
 }) {
   const logoUrl = brandLogoEmailUrl();
   const headerGrad =
@@ -130,6 +132,13 @@ function buildLayout({
     })
     .join("");
 
+  const qrHtml = qrImageDataUrl
+    ? `<div style="margin:20px 0 8px;text-align:center;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#64748b;">${escapeHtml(qrCaption)}</p>
+        <img src="${qrImageDataUrl}" alt="Ticket QR code" width="200" height="200" style="display:inline-block;width:200px;height:200px;border:8px solid #ffffff;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,0.12);" />
+      </div>`
+    : "";
+
   const ctaHtml =
     ctaUrl && ctaLabel
       ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:22px;">
@@ -173,6 +182,7 @@ function buildLayout({
                   ${highlightsHtml ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:18px;"><tr>${highlightsHtml}</tr></table>` : ""}
                   ${ticketBlocksHtml ? `<div style="margin-bottom:16px;">${ticketBlocksHtml}</div>` : ""}
                   ${rowsHtml ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:4px;">${rowsHtml}</table>` : ""}
+                  ${qrHtml}
                   ${ctaHtml}
                   <p style="margin:24px 0 0;font-size:12px;line-height:1.55;color:#64748b;">${escapeHtml(footerNote || `You're receiving this because you use ${BRAND_NAME}.`)}</p>
                 </td>
@@ -299,7 +309,8 @@ function buildBookingConfirmationEmail({
   discountAmount,
   totalAmount,
   couponCode,
-  paymentStatus
+  paymentStatus,
+  qrImageDataUrl = null
 }) {
   const safeName = String(guestName || "there").trim() || "there";
   const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "See your booking";
@@ -321,6 +332,7 @@ function buildBookingConfirmationEmail({
     discount > 0 ? `Discount: ${formatUsd(discount)}${couponCode ? ` (${couponCode})` : ""}` : "",
     `Status: ${payLabel}`,
     `Booking reference: #${bookingId}`,
+    qrImageDataUrl ? "Your entry QR code is attached and shown in this email." : "",
     "",
     `View event: ${eventUrl}`,
     `My bookings: ${dashboardUrl("/dashboard/user")}`,
@@ -345,13 +357,17 @@ function buildBookingConfirmationEmail({
     preheader: `Booking confirmed for ${eventTitle || "your event"}.`,
     eyebrow: "Booking confirmed",
     title: "You're all set for the show",
-    subtitle: `Hi ${safeName}, we've reserved your tickets. Bring this confirmation to My Hub anytime.`,
+    subtitle: qrImageDataUrl
+      ? `Hi ${safeName}, your tickets are confirmed. Show the QR code below at the venue for entry.`
+      : `Hi ${safeName}, we've reserved your tickets. Bring this confirmation to My Hub anytime.`,
     headerTone: "violet",
     ticketBlocks: ticketBlocks || [],
     rows,
+    qrImageDataUrl,
+    qrCaption: "Scan at entry · keep this email handy",
     ctaLabel: "View my bookings",
     ctaUrl: dashboardUrl("/dashboard/user"),
-    footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. This is your booking confirmation — not a printable ticket receipt.`
+    footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
   });
 
   return { subject, text, html };

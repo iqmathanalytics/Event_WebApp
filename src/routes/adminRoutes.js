@@ -24,6 +24,8 @@ const {
   deleteUserSchema,
   activateTeamUserSchema,
   adminBookingsSchema,
+  adminVerifyTicketSchema,
+  adminCheckInTicketSchema,
   adminNewsletterListSchema,
   adminNewsletterExportSchema,
   adminContactListSchema,
@@ -79,6 +81,16 @@ router.patch(
 router.delete("/users/:id", validateRequest(deleteUserSchema), adminController.deleteUser);
 router.get("/bookings", validateRequest(adminBookingsSchema), adminController.listBookings);
 router.get("/bookings/export", validateRequest(adminBookingsSchema), adminController.exportBookings);
+router.get(
+  "/bookings/verify-ticket",
+  validateRequest(adminVerifyTicketSchema),
+  adminController.verifyTicket
+);
+router.post(
+  "/bookings/check-in",
+  validateRequest(adminCheckInTicketSchema),
+  adminController.checkInTicket
+);
 router.get(
   "/newsletter/subscribers",
   validateRequest(adminNewsletterListSchema),

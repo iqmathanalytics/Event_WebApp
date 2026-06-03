@@ -1,4 +1,4 @@
-import api from "./api";
+import api, { optionalAuthRequest } from "./api";
 
 export async function subscribeNewsletter({ city_id }) {
   const response = await api.post("/newsletter/subscribe", {
@@ -70,6 +70,7 @@ export async function fetchMyNewsletterStatus() {
   statusInflightToken = token;
   statusInflight = api
     .get("/newsletter/me/status", {
+      ...optionalAuthRequest,
       headers: {
         "Cache-Control": "no-cache",
         Pragma: "no-cache"

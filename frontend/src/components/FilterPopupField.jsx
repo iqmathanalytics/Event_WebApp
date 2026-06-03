@@ -11,6 +11,10 @@ function FilterPopupField({
   panelContent,
   panelClassName = "w-full min-w-[220px]",
   usePortal = true,
+  /** Open above the trigger when there is not enough room below (e.g. table directly under filters). */
+  preferOpenUp = false,
+  /** Element below the trigger (e.g. data table); panel will not extend past its top edge. */
+  collisionBottomRef = null,
   /** Must sit above app modals (often z-[221]); portal panels used to default to z-[220] and hid behind them. */
   portalZIndexClass = "z-[260]"
 }) {
@@ -20,6 +24,7 @@ function FilterPopupField({
   const resizeObserverRef = useRef(null);
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 8 });
   const [portalWidth, setPortalWidth] = useState(null);
+  const [portalPositionReady, setPortalPositionReady] = useState(false);
   const showDateIcon = /date|when/i.test(String(label || ""));
   const triggerClientOk =
     Boolean(triggerRef.current) && triggerRef.current.getClientRects().length > 0;
@@ -48,14 +53,27 @@ function FilterPopupField({
 
     const belowTop = triggerRect.bottom + spacing;
     const aboveTop = triggerRect.top - panelHeight - spacing;
-    const shouldOpenUp = belowTop + panelHeight > viewportHeight - spacing && aboveTop >= spacing;
+    let maxExtentBelow = viewportHeight - spacing;
+    if (collisionBottomRef?.current) {
+      const boundaryTop = collisionBottomRef.current.getBoundingClientRect().top;
+      if (boundaryTop > triggerRect.bottom) {
+        maxExtentBelow = Math.min(maxExtentBelow, boundaryTop - spacing);
+      }
+    }
+    const roomBelow = maxExtentBelow - belowTop;
+    const fitsBelow = roomBelow >= panelHeight;
+    const shouldOpenUp =
+      (preferOpenUp && aboveTop >= spacing) ||
+      (!fitsBelow && aboveTop >= spacing) ||
+      (belowTop + panelHeight > viewportHeight - spacing && aboveTop >= spacing);
     const top = shouldOpenUp
       ? aboveTop
       : Math.min(belowTop, Math.max(spacing, viewportHeight - panelHeight - spacing));
 
     setPortalWidth(nextWidth);
     setPortalPosition({ top, left });
-  }, [isActive, panelClassName, usePortal]);
+    setPortalPositionReady(true);
+  }, [collisionBottomRef, isActive, panelClassName, preferOpenUp, usePortal]);
 
   const scheduleReposition = useCallback(() => {
     if (!usePortal || !isActive) {
@@ -72,9 +90,11 @@ function FilterPopupField({
 
   useLayoutEffect(() => {
     if (!usePortal || !isActive) {
+      setPortalPositionReady(false);
       return undefined;
     }
 
+    setPortalPositionReady(false);
     updatePortalPosition();
     scheduleReposition();
 
@@ -138,7 +158,8 @@ function FilterPopupField({
               position: "fixed",
               top: portalPosition.top,
               left: portalPosition.left,
-              width: portalWidth || undefined
+              width: portalWidth || undefined,
+              visibility: portalPositionReady ? "visible" : "hidden"
             }
           : undefined
       }
@@ -149,7 +170,7 @@ function FilterPopupField({
   );
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <button
         ref={triggerRef}
         type="button"

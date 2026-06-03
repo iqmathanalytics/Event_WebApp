@@ -226,6 +226,12 @@ function UserBookingCard({ booking }) {
 
           {hasDiscount ? <BookingDiscountSummary booking={booking} /> : null}
 
+          {booking.has_ticket_qr && booking.check_in_code ? (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+              Your entry QR code was sent to your email. Show that QR at the venue for check-in.
+            </p>
+          ) : null}
+
           {(venueLine || booking.organizer_name || mapUrl) && (
             <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
               {venueLine ? (

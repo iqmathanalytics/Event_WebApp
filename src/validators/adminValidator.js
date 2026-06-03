@@ -288,6 +288,22 @@ const adminNewsletterDeleteSchema = z.object({
   })
 });
 
+const adminVerifyTicketSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    code: z.string().min(8).max(128)
+  }),
+  params: z.object({}).passthrough()
+});
+
+const adminCheckInTicketSchema = z.object({
+  body: z.object({
+    code: z.string().min(8).max(512)
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
 const updateEventListedSchema = z.object({
   body: z.object({
     is_listed: z.boolean()
@@ -314,6 +330,8 @@ module.exports = {
   deleteUserSchema,
   activateTeamUserSchema,
   adminBookingsSchema,
+  adminVerifyTicketSchema,
+  adminCheckInTicketSchema,
   adminNewsletterListSchema,
   adminNewsletterExportSchema,
   adminContactListSchema,

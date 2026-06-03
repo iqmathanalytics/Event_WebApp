@@ -127,10 +127,16 @@ function mapBookingRow(row) {
     row.is_guest_booking === true ||
     String(row.is_guest_booking || "") === "1" ||
     row.user_id == null;
+  const paymentStatus = String(row.payment_status || "").toLowerCase();
+  const hasTicketQr =
+    Boolean(row.check_in_code) && (paymentStatus === "paid" || paymentStatus === "free");
+
   return {
     ...row,
     is_guest_booking: isGuest ? 1 : 0,
     guest_label: isGuest ? "Guest" : "Registered",
+    has_ticket_qr: hasTicketQr,
+    checked_in: Boolean(row.checked_in_at),
     selected_dates: parseSelectedDates(row.selected_dates_json),
     ticket_items: ticket_items.length
       ? ticket_items
@@ -324,13 +330,33 @@ async function resolveGuestEventBookingPricing({ payload }) {
   });
 }
 
-async function dispatchBookingConfirmationEmail({ bookingId, payload, pricing, paymentStatus }) {
+async function dispatchBookingConfirmationEmail({
+  bookingId,
+  checkInCode,
+  payload,
+  pricing,
+  paymentStatus
+}) {
   const event = pricing.event;
   const recipient = String(
     payload.email?.trim() || pricing.userEmail || pricing.user?.email || ""
   ).trim();
   if (!recipient || !bookingId || !event) {
     return;
+  }
+
+  const status = String(paymentStatus || "paid").toLowerCase();
+  let qrImageDataUrl = null;
+  let qrAttachment = null;
+  if (checkInCode && (status === "paid" || status === "free")) {
+    try {
+      const { generateBookingQrDataUrl, generateBookingQrAttachment } = require("../utils/bookingQr");
+      qrImageDataUrl = await generateBookingQrDataUrl(checkInCode);
+      qrAttachment = await generateBookingQrAttachment(checkInCode);
+    } catch (_err) {
+      qrImageDataUrl = null;
+      qrAttachment = null;
+    }
   }
 
   const mail = buildBookingConfirmationEmail({
@@ -346,14 +372,16 @@ async function dispatchBookingConfirmationEmail({ bookingId, payload, pricing, p
     discountAmount: pricing.discountAmount,
     totalAmount: pricing.totalAmount,
     couponCode: pricing.couponCode,
-    paymentStatus: paymentStatus || "paid"
+    paymentStatus: paymentStatus || "paid",
+    qrImageDataUrl
   });
 
   await sendTransactionalEmail({
     to: recipient,
     subject: mail.subject,
     text: mail.text,
-    html: mail.html
+    html: mail.html,
+    attachments: qrAttachment ? [qrAttachment] : undefined
   }).catch(() => {});
 }
 
@@ -372,7 +400,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       throw new ApiError(400, "Phone number is required for booking.");
     }
 
-    const bookingId = await createBooking(
+    const created = await createBooking(
       {
         event_id: payload.event_id,
         organizer_id: pricing.organizerId,
@@ -402,6 +430,8 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       },
       conn
     );
+    const bookingId = created.id;
+    const checkInCode = created.check_in_code;
 
     if (holdToken && pricing.couponId && userId) {
       await couponService.finalizeCouponRedemption(
@@ -414,6 +444,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
 
     await dispatchBookingConfirmationEmail({
       bookingId,
+      checkInCode,
       payload,
       pricing,
       paymentStatus: payment_status
@@ -421,6 +452,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
 
     return {
       bookingId,
+      checkInCode,
       selectedDates: pricing.selectedDates,
       totalDays: pricing.totalDays,
       subtotalAmount: pricing.subtotalAmount,

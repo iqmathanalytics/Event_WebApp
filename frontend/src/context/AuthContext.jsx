@@ -100,6 +100,11 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  /** Clear stale tokens without logout overlay or login redirect (e.g. expired session on a public page). */
+  const invalidateSession = useCallback(() => {
+    clearSession();
+  }, [clearSession]);
+
   const refreshSession = useCallback(async () => {
     if (!accessToken) {
       return;
@@ -112,7 +117,7 @@ export function AuthProvider({ children }) {
 
     const storedRefresh = refreshToken || localStorage.getItem("refreshToken");
     try {
-      const profile = await fetchMyProfile();
+      const profile = await fetchMyProfile({ optionalAuth: true });
       const fullUser = profile?.data;
       if (fullUser) {
         const storedRefresh = refreshToken || localStorage.getItem("refreshToken");
@@ -196,9 +201,10 @@ export function AuthProvider({ children }) {
       login,
       logout,
       refreshSession,
+      invalidateSession,
       isLoggingOut
     }),
-    [user, accessToken, refreshToken, isLoggingOut, refreshSession]
+    [user, accessToken, refreshToken, isLoggingOut, refreshSession, invalidateSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

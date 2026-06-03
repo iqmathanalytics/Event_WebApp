@@ -267,7 +267,7 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
   try {
     await conn.beginTransaction();
 
-    const bookingId = await createBooking(
+    const created = await createBooking(
       {
         event_id: payload.event_id,
         organizer_id: pricing.organizerId,
@@ -297,6 +297,8 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
       },
       conn
     );
+    const bookingId = created.id;
+    const checkInCode = created.check_in_code;
 
     if (holdToken && pricing.couponId && checkout.user_id) {
       await couponService.finalizeCouponRedemption(
@@ -319,6 +321,7 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
 
     await dispatchBookingConfirmationEmail({
       bookingId,
+      checkInCode,
       payload,
       pricing,
       paymentStatus: "paid"
@@ -326,7 +329,7 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
 
     return {
       alreadyFulfilled: false,
-      ...mapFulfillResult(bookingId, pricing)
+      ...mapFulfillResult(bookingId, pricing, { checkInCode })
     };
   } catch (err) {
     await conn.rollback();

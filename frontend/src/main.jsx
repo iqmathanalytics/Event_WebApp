@@ -7,6 +7,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import App from "./App";
 import "./index.css";
 import { AuthProvider } from "./context/AuthContext";
+import { FavoritesProvider } from "./context/FavoritesContext";
 import { CityFilterProvider } from "./context/CityFilterContext";
 import { RouteContentReadyProvider } from "./context/RouteContentReadyContext";
 
@@ -17,11 +18,13 @@ const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || "";
 const app = (
   <BrowserRouter>
     <AuthProvider>
-      <CityFilterProvider>
-        <RouteContentReadyProvider>
-          <App />
-        </RouteContentReadyProvider>
-      </CityFilterProvider>
+      <FavoritesProvider>
+        <CityFilterProvider>
+          <RouteContentReadyProvider>
+            <App />
+          </RouteContentReadyProvider>
+        </CityFilterProvider>
+      </FavoritesProvider>
     </AuthProvider>
   </BrowserRouter>
 );

@@ -106,6 +106,18 @@ export async function fetchAdminEventInsights(eventId, { hourlyDate } = {}) {
   return response.data;
 }
 
+export async function verifyAdminTicket(code) {
+  const response = await api.get("/admin/bookings/verify-ticket", {
+    params: { code: String(code || "").trim() }
+  });
+  return response.data;
+}
+
+export async function checkInAdminTicket(code) {
+  const response = await api.post("/admin/bookings/check-in", { code: String(code || "").trim() });
+  return response.data;
+}
+
 export async function fetchAdminBookings(params = {}) {
   const response = await api.get("/admin/bookings", { params });
   return response.data;

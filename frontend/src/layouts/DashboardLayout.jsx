@@ -8,7 +8,7 @@ function DashboardLayout() {
     <div className="flex min-h-screen flex-col bg-transparent">
       <Navbar />
       <main className="container-page mobile-safe-main flex-1 pt-20 pb-8 sm:pt-24 sm:pb-10">
-        <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-soft backdrop-blur-[1px] sm:p-6">
+        <div className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-soft backdrop-blur-[1px] sm:p-6">
           <Outlet />
         </div>
       </main>

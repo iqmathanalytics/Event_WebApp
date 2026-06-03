@@ -9,6 +9,9 @@ const sameOriginProdBaseURL =
 const baseURL = configuredBaseURL || (import.meta.env.PROD ? sameOriginProdBaseURL : localBaseURL);
 export const API_BASE_URL = baseURL;
 
+/** Mark requests that may fail with 401 on public pages — do not redirect to login. */
+export const optionalAuthRequest = { optionalAuth: true };
+
 const api = axios.create({
   baseURL,
   timeout: 15000
@@ -89,12 +92,15 @@ api.interceptors.response.use(
       requestUrl.includes("/auth/google") ||
       requestUrl.includes("/auth/refresh-token") ||
       requestUrl.includes("/bookings/guest");
+    const isOptionalAuth = Boolean(originalRequest?.optionalAuth);
 
     if (status === 401 && !isAuthRequest && originalRequest && !originalRequest.__isRetryRequest) {
       const storedRefreshToken = localStorage.getItem("refreshToken");
       if (!storedRefreshToken) {
-        clearAuthStorage();
-        redirectToLogin();
+        if (!isOptionalAuth) {
+          clearAuthStorage();
+          redirectToLogin();
+        }
         return Promise.reject(error);
       }
 
@@ -122,8 +128,10 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${refreshedAuth.accessToken}`;
         return api(originalRequest);
       } catch (_refreshErr) {
-        clearAuthStorage();
-        redirectToLogin();
+        if (!isOptionalAuth) {
+          clearAuthStorage();
+          redirectToLogin();
+        }
         return Promise.reject(error);
       }
     }

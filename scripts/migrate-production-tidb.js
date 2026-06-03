@@ -109,6 +109,11 @@ async function main() {
     runScript("backfill-listing-slugs.js");
   }
 
+  if (process.argv.includes("--backfill-check-in")) {
+    console.log("\nBackfilling booking check-in codes…");
+    runScript("backfill-booking-check-in-codes.js");
+  }
+
   console.log("\nSchema verification:");
   await checkSchema(cfg);
   console.log("\nProduction TiDB migrations finished.");

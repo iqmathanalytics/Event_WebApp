@@ -68,10 +68,10 @@ async function parseBrevoErrorResponse(res) {
 
 /**
  * Send a single transactional email via Brevo.
- * @param {{ to: string, subject: string, text?: string, html?: string, replyTo?: string }} params
+ * @param {{ to: string, subject: string, text?: string, html?: string, replyTo?: string, attachments?: Array<{ name: string, content: string }> }} params
  * @returns {Promise<{ sent: boolean, skipped?: boolean, provider?: string, error?: string }>}
  */
-async function sendTransactionalEmail({ to, subject, text, html, replyTo }) {
+async function sendTransactionalEmail({ to, subject, text, html, replyTo, attachments }) {
   const { apiKey, fromEmail, fromName } = getBrevoConfig();
   const recipient = String(to || "").trim();
 
@@ -102,6 +102,15 @@ async function sendTransactionalEmail({ to, subject, text, html, replyTo }) {
   const reply = String(replyTo || "").trim();
   if (reply) {
     payload.replyTo = { email: reply };
+  }
+
+  if (Array.isArray(attachments) && attachments.length) {
+    payload.attachment = attachments
+      .filter((item) => item?.name && item?.content)
+      .map((item) => ({
+        name: String(item.name),
+        content: String(item.content)
+      }));
   }
 
   try {
