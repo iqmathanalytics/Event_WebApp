@@ -65,7 +65,9 @@ export function parseStripeReturnParams(search = "") {
   const redirectStatus = params.get("redirect_status") || null;
   const clientSecret = params.get("payment_intent_client_secret") || null;
   const isPaymentReturn =
-    params.get("payment_return") === "1" || Boolean(paymentIntentId && redirectStatus);
+    params.get("payment_return") === "1" ||
+    Boolean(paymentIntentId && redirectStatus) ||
+    Boolean(paymentIntentId && clientSecret);
 
   return {
     isPaymentReturn,

@@ -9,6 +9,7 @@ import {
   createGuestBookingCheckout,
   createGuestBookingPaymentIntent
 } from "../services/bookingService";
+import { confirmBookingPaymentWithRetry } from "../utils/confirmBookingPaymentWithRetry";
 import StripePaymentModal from "./StripePaymentModal";
 import StripePaymentReturnRelay from "./StripePaymentReturnRelay";
 import BookingSuccessAnimation from "./BookingSuccessAnimation";
@@ -822,7 +823,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       try {
         setSubmitting(true);
         const sortedDates = normalizeDateList(selectedDates);
-        const body = guestMode ? await confirmGuestBookingPayment(piId) : await confirmBookingPayment(piId);
+        const confirmFn = guestMode ? confirmGuestBookingPayment : confirmBookingPayment;
+        const body = await confirmBookingPaymentWithRetry(confirmFn, piId);
         const data = body?.data || body;
         finishBookingSuccess(data, sortedDates);
       } catch (err) {
@@ -838,7 +840,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         setCompletingPaymentReturn(false);
       }
     },
-    [selectedDates, finishBookingSuccess]
+    [selectedDates, finishBookingSuccess, guestMode]
   );
 
   const handleStripePaymentReturn = useCallback(
@@ -880,15 +882,16 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }, [handleStripePaymentReturn]);
 
   useEffect(() => {
-    if (!checkoutReady || !checkoutUserId || !eventId || paymentReturnHandledRef.current || popupReturnRelay) {
+    const stripeReturn = parseStripeReturnParams();
+    if (!stripeReturn.isPaymentReturn || !stripeReturn.paymentIntentId || paymentReturnHandledRef.current) {
       return;
     }
-    const stripeReturn = parseStripeReturnParams();
-    if (!stripeReturn.paymentIntentId || !stripeReturn.redirectStatus) {
+    if (popupReturnRelay) {
       return;
     }
     if (
       stripeReturn.eventIdFromUrl != null &&
+      eventId != null &&
       Number(stripeReturn.eventIdFromUrl) !== Number(eventId)
     ) {
       return;
@@ -896,8 +899,11 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
       return;
     }
-    void handleStripePaymentReturn(stripeReturn.paymentIntentId, stripeReturn.redirectStatus);
-  }, [checkoutReady, checkoutUserId, eventId, popupReturnRelay, handleStripePaymentReturn]);
+    void handleStripePaymentReturn(
+      stripeReturn.paymentIntentId,
+      stripeReturn.redirectStatus || "succeeded"
+    );
+  }, [eventId, popupReturnRelay, handleStripePaymentReturn]);
 
   const onPaymentModalClose = () => {
     if (submitting) {

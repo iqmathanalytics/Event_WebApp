@@ -6,6 +6,7 @@ const checkoutPaymentModel = require("../models/checkoutPaymentModel");
 const { createBooking, findBookingByPaymentIntentId } = require("../models/bookingModel");
 const couponModel = require("../models/couponModel");
 const couponService = require("./couponService");
+const { findEventById } = require("../models/eventModel");
 const {
   resolveEventBookingPricing,
   resolveGuestEventBookingPricing,
@@ -13,6 +14,97 @@ const {
 } = require("./bookingService");
 
 const PAYMENT_HOLD_EXTENSION_MINUTES = 30;
+const PI_POLL_ATTEMPTS = 20;
+const PI_POLL_DELAY_MS = 1500;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function buildPricingSnapshot(pricing, payload) {
+  return {
+    organizerId: pricing.organizerId,
+    userName: pricing.userName,
+    userEmail: pricing.userEmail,
+    userPhone: pricing.userPhone,
+    selectedDates: pricing.selectedDates,
+    bookingDate: pricing.bookingDate,
+    totalDays: pricing.totalDays,
+    attendeeCount: pricing.attendeeCount,
+    ticketCart: pricing.ticketCart,
+    subtotalAmount: pricing.subtotalAmount,
+    discountAmount: pricing.discountAmount,
+    transactionFeeAmount: pricing.transactionFeeAmount,
+    totalAmount: pricing.totalAmount,
+    couponId: pricing.couponId,
+    couponCode: pricing.couponCode
+  };
+}
+
+function pricingFromSnapshot(payload) {
+  const snap = payload?.pricing_snapshot;
+  if (!snap || snap.totalAmount == null) {
+    return null;
+  }
+  return {
+    organizerId: snap.organizerId,
+    userName: snap.userName || payload.name,
+    userEmail: snap.userEmail || payload.email,
+    userPhone: snap.userPhone || payload.phone,
+    selectedDates: snap.selectedDates || payload.selected_dates || [],
+    bookingDate: snap.bookingDate || payload.booking_date,
+    totalDays: snap.totalDays ?? (snap.selectedDates?.length || 1),
+    attendeeCount: snap.attendeeCount ?? payload.attendee_count,
+    ticketCart: snap.ticketCart || [],
+    subtotalAmount: snap.subtotalAmount,
+    discountAmount: snap.discountAmount,
+    transactionFeeAmount: snap.transactionFeeAmount ?? 0,
+    totalAmount: snap.totalAmount,
+    couponId: snap.couponId ?? null,
+    couponCode: snap.couponCode ?? null,
+    holdToken: payload.coupon_hold_token || null
+  };
+}
+
+async function resolvePricingForFulfillment({ checkout, payload, isGuestCheckout }) {
+  const holdToken = payload.coupon_hold_token || null;
+  if (holdToken) {
+    await couponModel.extendHoldExpiry(holdToken, PAYMENT_HOLD_EXTENSION_MINUTES);
+  }
+
+  try {
+    if (isGuestCheckout) {
+      return await resolveGuestEventBookingPricing({ payload });
+    }
+    return await resolveEventBookingPricing({ userId: checkout.user_id, payload });
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.statusCode >= 500) {
+      throw err;
+    }
+    const fromSnap = pricingFromSnapshot(payload);
+    if (!fromSnap) {
+      throw err;
+    }
+    const event = await findEventById(payload.event_id);
+    if (!event) {
+      throw new ApiError(404, "Event not found");
+    }
+    return {
+      ...fromSnap,
+      event,
+      user: null,
+      isGuest: isGuestCheckout
+    };
+  }
+}
+
+/** Apple Pay / Google Pay / Amazon Pay may stay in `processing` briefly after the customer approves payment. */
+async function waitForPaymentIntentSucceeded(stripe, paymentIntentId) {
+  let pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+  for (let attempt = 0; attempt < PI_POLL_ATTEMPTS && pi.status === "processing"; attempt += 1) {
+    await sleep(PI_POLL_DELAY_MS);
+    pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+  }
+  return pi;
+}
 
 function parsePayloadJson(raw) {
   try {
@@ -66,7 +158,8 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     name: payload.name,
     email: payload.email,
     phone: payload.phone,
-    coupon_hold_token: holdToken
+    coupon_hold_token: holdToken,
+    pricing_snapshot: buildPricingSnapshot(pricing, payload)
   };
 
   let paymentIntent;
@@ -157,12 +250,11 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
     throw new ApiError(500, "Checkout data is invalid.");
   }
 
-  const pricing = isGuestCheckout
-    ? await resolveGuestEventBookingPricing({ payload })
-    : await resolveEventBookingPricing({
-        userId: checkout.user_id,
-        payload
-      });
+  const pricing = await resolvePricingForFulfillment({
+    checkout,
+    payload,
+    isGuestCheckout
+  });
 
   const expectedCents = dollarsToCents(pricing.totalAmount);
   if (expectedCents !== Number(checkout.amount_cents)) {
@@ -304,7 +396,7 @@ async function handleStripeWebhookEvent(event) {
 
 async function confirmPaymentCore({ userId, paymentIntentId, isGuest }) {
   const stripe = assertStripeConfigured();
-  const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+  let pi = await stripe.paymentIntents.retrieve(paymentIntentId);
 
   if (isGuest) {
     if (pi.metadata?.guest_checkout !== "1") {
@@ -312,6 +404,10 @@ async function confirmPaymentCore({ userId, paymentIntentId, isGuest }) {
     }
   } else if (Number(pi.metadata?.user_id) !== Number(userId)) {
     throw new ApiError(403, "This payment belongs to another account.");
+  }
+
+  if (pi.status === "processing") {
+    pi = await waitForPaymentIntentSucceeded(stripe, paymentIntentId);
   }
 
   if (pi.status === "succeeded") {
@@ -341,7 +437,10 @@ async function confirmPaymentCore({ userId, paymentIntentId, isGuest }) {
   }
 
   if (pi.status === "processing") {
-    throw new ApiError(409, "Payment is still processing. Please wait a moment and try again.");
+    throw new ApiError(
+      409,
+      "Payment is still processing. Please wait a moment — this page will confirm your booking automatically."
+    );
   }
 
   if (pi.status === "requires_payment_method" || pi.status === "requires_confirmation") {

@@ -10,6 +10,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 import { Lock, X } from "lucide-react";
 import { buildStripeReturnUrl } from "../utils/stripePaymentReturn";
+import { getWalletCheckoutEnvironment, getWalletCheckoutHint } from "../utils/walletCheckoutHint";
 import { BRAND_NAME } from "../constants/brand";
 
 const stripeAppearance = {
@@ -71,6 +72,15 @@ function PaymentForm({
   );
   const applePayInExpress = Boolean(expressMethods?.applePay);
   const googlePayInExpress = Boolean(expressMethods?.googlePay);
+  const walletHint =
+    expressMethods != null ? getWalletCheckoutHint(expressMethods) : null;
+
+  const expressPaymentMethodOrder = useMemo(() => {
+    const { isIOS } = getWalletCheckoutEnvironment();
+    return isIOS
+      ? ["applePay", "googlePay", "amazonPay"]
+      : ["googlePay", "applePay", "amazonPay"];
+  }, []);
 
   const confirmPayment = async (expressEvent) => {
     if (!stripe || !elements) {
@@ -148,23 +158,30 @@ function PaymentForm({
               googlePay: "buy"
             },
             paymentMethods: {
+              // "always" (Express only): show wallet buttons so mobile users can tap; Stripe hides if truly unsupported.
               applePay: "always",
               googlePay: "always",
               amazonPay: "auto",
               link: "never",
               paypal: "never"
             },
-            paymentMethodOrder: ["googlePay", "applePay", "amazonPay"],
+            paymentMethodOrder: expressPaymentMethodOrder,
             layout: {
-              maxColumns: 2,
-              maxRows: 3
+              maxColumns: 1,
+              maxRows: 4
             }
           }}
           onConfirm={(event) => void handleExpressConfirm(event)}
           onAvailablePaymentMethodsChange={({ availablePaymentMethods }) => {
-            setExpressMethods(availablePaymentMethods || null);
+            setExpressMethods(availablePaymentMethods ?? null);
           }}
         />
+
+        {walletHint ? (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            {walletHint}
+          </p>
+        ) : null}
 
         {expressReady ? (
           <div className="relative my-4 flex items-center py-1">
@@ -274,7 +291,7 @@ export default function StripePaymentModal({
 
   const modal = (
     <div
-      className="fixed inset-0 z-[380] flex items-start justify-center p-4 pt-[12vh] sm:pt-[14vh]"
+      className="fixed inset-0 z-[380] flex items-end justify-center p-0 sm:items-start sm:p-4 sm:pt-[14vh]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="stripe-payment-title"
@@ -286,7 +303,7 @@ export default function StripePaymentModal({
         onClick={onClose}
       />
 
-      <div className="stripe-payment-modal relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+      <div className="stripe-payment-modal relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-xl">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
           <div>
             <h2 id="stripe-payment-title" className="text-base font-bold text-slate-900">
@@ -335,8 +352,14 @@ export default function StripePaymentModal({
 
       <style>{`
         .stripe-payment-modal {
-          height: min(580px, calc(100vh - 3rem));
-          max-height: min(580px, calc(100vh - 3rem));
+          height: min(92vh, 640px);
+          max-height: min(92vh, 640px);
+        }
+        @media (min-width: 640px) {
+          .stripe-payment-modal {
+            height: min(580px, calc(100vh - 3rem));
+            max-height: min(580px, calc(100vh - 3rem));
+          }
         }
         .stripe-payment-element {
           width: 100%;

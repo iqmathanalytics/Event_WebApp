@@ -27,6 +27,9 @@
     "stripe:listen": "powershell -ExecutionPolicy Bypass -File scripts/stripe-cli.ps1 listen --forward-to http://localhost:5000/webhooks/stripe --events payment_intent.succeeded,payment_intent.payment_failed,payment_intent.canceled",
     "check:apple-pay-domain": "node scripts/check-apple-pay-domain.js",
     "check:payment-domains": "node scripts/check-payment-wallet-domains.js",
+    "stripe:payment-domains": "node scripts/stripe-payment-method-domains.js",
+    "stripe:payment-domains:register": "node scripts/stripe-payment-method-domains.js --register",
+    "stripe:fulfill-intent": "node scripts/fulfill-paid-stripe-intent.js",
     "deploy:render": "node scripts/render-deploy.js",
     "sync:render-env": "node scripts/sync-render-env-from-local.js",
     "lint": "echo \"No linter configured yet\""

@@ -43,6 +43,18 @@ Use this for **production** (`sk_live_` / `pk_live_`). Test-mode webhooks use a 
    STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxx
    ```
 
+   **Required for Apple Pay / Google Pay / Amazon Pay:** these wallets often redirect back to your site (especially Apple Pay on iPhone). If the webhook is missing or wrong, money can be taken without a booking, email, or organizer row. After deploy, test each wallet you enable and confirm the webhook shows **200** in Stripe → Developers → Webhooks.
+
+## Recover a charged payment with no booking
+
+If a customer was charged but has no ticket (no email / not in organizer dashboard), find the **Payment intent** id (`pi_…`) in Stripe Dashboard → Payments, then on the server:
+
+```bash
+npm run stripe:fulfill-intent -- pi_xxxxxxxxxxxxxxxx
+```
+
+This creates the booking and sends the confirmation email when the payment succeeded (works for card, Apple Pay, Google Pay, and Amazon Pay).
+
 5. Restart the Node API after saving.
 
 **Important:** Do not reuse a **test** `whsec_` from Stripe CLI or a test-mode endpoint. Live payments need the **live** endpoint’s secret.
