@@ -85,10 +85,10 @@ export function ChartEmptyState({ message = "No data yet for this period." }) {
 function ChartFrame({ children, height = 280, className = "" }) {
   return (
     <div
-      className={`rounded-xl bg-gradient-to-b from-slate-50/80 to-white p-2 ring-1 ring-slate-100 ${className}`}
-      style={{ height }}
+      className={`min-w-0 w-full rounded-xl bg-gradient-to-b from-slate-50/80 to-white p-2 ring-1 ring-slate-100 ${className}`}
+      style={{ height, minHeight: height }}
     >
-      {children}
+      <div className="h-full min-h-0 min-w-0 w-full">{children}</div>
     </div>
   );
 }
@@ -100,7 +100,7 @@ export function ViewsOverTimeChart({ data, emptyMessage }) {
   }
   return (
     <ChartFrame height={300}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
         <AreaChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: data.length > 14 ? 28 : 0 }}>
           <defs>
             <linearGradient id={`viewsGrad-${gradId}`} x1="0" y1="0" x2="0" y2="1">
@@ -157,7 +157,7 @@ export function HourlyViewsChart({
   }
   return (
     <ChartFrame height={280}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
         <BarChart data={data} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid stroke={CHART_PALETTE.grid} strokeDasharray="4 4" vertical={false} />
           <XAxis dataKey="hour" tick={axisTickSmall} tickLine={false} axisLine={{ stroke: CHART_PALETTE.grid }} interval={2} />
@@ -231,7 +231,7 @@ export function HorizontalBarChart({ data, valueFormatter, emptyMessage, valueLa
   const fmt = valueFormatter || formatCount;
   return (
     <ChartFrame height={Math.max(220, data.length * 36 + 48)}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
         <BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
           <CartesianGrid stroke={CHART_PALETTE.grid} strokeDasharray="4 4" horizontal={false} />
           <XAxis type="number" tick={axisTick} tickLine={false} axisLine={{ stroke: CHART_PALETTE.grid }} allowDecimals={false} />
@@ -278,7 +278,7 @@ export function CityBarChart({ data, emptyMessage }) {
   }
   return (
     <ChartFrame height={280}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
         <BarChart data={data} margin={{ top: 12, right: 8, left: 0, bottom: 48 }}>
           <CartesianGrid stroke={CHART_PALETTE.grid} strokeDasharray="4 4" vertical={false} />
           <XAxis
@@ -322,7 +322,7 @@ export function BookingsRevenueChart({ data, emptyMessage }) {
   }
   return (
     <ChartFrame height={300}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
         <AreaChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
           <defs>
             <linearGradient id={`book-${gradBook}`} x1="0" y1="0" x2="0" y2="1">
@@ -426,7 +426,7 @@ export function DistributionDonutChart({
     <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center lg:justify-center">
       <div className="relative w-full max-w-[280px]">
         <ChartFrame height={260}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
             <PieChart>
               <Pie
                 data={data}
@@ -514,7 +514,7 @@ export function DeviceDonutChart({ data, emptyMessage }) {
     <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center lg:justify-center">
       <div className="relative w-full max-w-[280px]">
         <ChartFrame height={260}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
             <PieChart>
               <Pie
                 data={data}
@@ -587,7 +587,7 @@ export function TierHorizontalBarChart({ data, valueFormatter, title }) {
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h4 className="text-sm font-bold text-slate-900">{title}</h4>
       <ChartFrame height={chartH - 32} className="mt-3 border-0 bg-transparent p-0 ring-0">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
           <CartesianGrid stroke={CHART_PALETTE.grid} strokeDasharray="4 4" horizontal={false} />
           <XAxis type="number" tick={axisTickSmall} tickLine={false} axisLine={{ stroke: CHART_PALETTE.grid }} />

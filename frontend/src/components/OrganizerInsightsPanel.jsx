@@ -78,6 +78,7 @@ export default function OrganizerInsightsPanel({
 }) {
   const [events, setEvents] = useState(eventsProp);
   const [selectedEventId, setSelectedEventId] = useState("");
+  const [loadedEventId, setLoadedEventId] = useState("");
   const [query, setQuery] = useState("");
   const [insights, setInsights] = useState(null);
   const [loadingList, setLoadingList] = useState(false);
@@ -90,6 +91,7 @@ export default function OrganizerInsightsPanel({
 
   const fetchInsights = fetchEventInsightsFn || fetchOrganizerEventInsights;
   const skipEventPicker = Boolean(fixedEventId) || embedded;
+  const autoLoadInsights = Boolean(fixedEventId) || embedded;
 
   const loadSummary = useCallback(async () => {
     if (fixedEventId) {
@@ -101,15 +103,12 @@ export default function OrganizerInsightsPanel({
       const res = await fetchOrganizerInsightsSummary();
       const list = res?.data?.events || [];
       setEvents(list);
-      if (!selectedEventId && list.length) {
-        setSelectedEventId(String(list[0].id));
-      }
     } catch (err) {
       setError(err?.response?.data?.message || "Could not load events for insights.");
     } finally {
       setLoadingList(false);
     }
-  }, [fixedEventId, selectedEventId]);
+  }, [fixedEventId]);
 
   const loadInsights = useCallback(
     async ({ silent = false, hourlyDate: hourlyDateOverride } = {}) => {
@@ -149,39 +148,47 @@ export default function OrganizerInsightsPanel({
   useEffect(() => {
     if (fixedEventId) {
       setSelectedEventId(String(fixedEventId));
+      setLoadedEventId(String(fixedEventId));
       return;
     }
     if (!eventsProp.length) {
       void loadSummary();
     } else {
       setEvents(eventsProp);
-      if (!selectedEventId && eventsProp.length) {
-        setSelectedEventId(String(eventsProp[0].id));
-      }
     }
-  }, [eventsProp, fixedEventId, loadSummary, selectedEventId]);
+  }, [eventsProp, fixedEventId, loadSummary]);
 
   useEffect(() => {
     setHourlyDate(null);
-  }, [selectedEventId]);
+    if (!autoLoadInsights) {
+      setInsights(null);
+      setLoadedEventId("");
+    }
+  }, [selectedEventId, autoLoadInsights]);
 
   useEffect(() => {
+    if (!autoLoadInsights) {
+      return;
+    }
     void loadInsights();
-  }, [loadInsights]);
+  }, [autoLoadInsights, loadInsights]);
 
   useEffect(() => {
-    if (refreshKey > 0) {
-      void loadSummary();
+    if (refreshKey <= 0) {
+      return;
+    }
+    void loadSummary();
+    if (autoLoadInsights || (loadedEventId && loadedEventId === selectedEventId)) {
       void loadInsights();
     }
-  }, [refreshKey, loadSummary, loadInsights]);
+  }, [refreshKey, loadSummary, loadInsights, autoLoadInsights, loadedEventId, selectedEventId]);
 
   useEffect(() => {
-    if (!selectedEventId) {
+    if (!loadedEventId || loadedEventId !== selectedEventId) {
       return;
     }
     void loadInsights({ silent: true });
-  }, [organizerBookings.length, selectedEventId, loadInsights]);
+  }, [organizerBookings.length, loadedEventId, selectedEventId, loadInsights]);
 
   const filteredEvents = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -241,24 +248,24 @@ export default function OrganizerInsightsPanel({
   const hourlyIsLive = Boolean(hourlyChartMeta.is_today);
 
   useEffect(() => {
-    if (!selectedEventId || activeTab !== "traffic" || !hourlyIsLive) {
+    if (!loadedEventId || loadedEventId !== selectedEventId || activeTab !== "traffic" || !hourlyIsLive) {
       return undefined;
     }
     const timer = window.setInterval(() => {
       void loadInsights({ silent: true });
     }, 60000);
     return () => window.clearInterval(timer);
-  }, [selectedEventId, activeTab, hourlyIsLive, loadInsights]);
+  }, [loadedEventId, selectedEventId, activeTab, hourlyIsLive, loadInsights]);
 
   useEffect(() => {
-    if (!selectedEventId || activeTab !== "bookings") {
+    if (!loadedEventId || loadedEventId !== selectedEventId || activeTab !== "bookings") {
       return undefined;
     }
     const timer = window.setInterval(() => {
       void loadInsights({ silent: true });
     }, 30000);
     return () => window.clearInterval(timer);
-  }, [selectedEventId, activeTab, loadInsights]);
+  }, [loadedEventId, selectedEventId, activeTab, loadInsights]);
 
   const hourlySectionTitle = hourlyChartMeta.is_today
     ? "Today by hour"
@@ -353,7 +360,26 @@ export default function OrganizerInsightsPanel({
         { key: "geo", label: "Geography" }
       ];
 
-  const activeEventId = fixedEventId || selectedEventId;
+  const activeEventId = autoLoadInsights ? fixedEventId || selectedEventId : loadedEventId;
+  const analyticsReady = Boolean(activeEventId && insights);
+  const canLoadAnalytics = Boolean(selectedEventId) && !autoLoadInsights;
+  const showLoadPrompt = canLoadAnalytics && loadedEventId !== selectedEventId && !loadingInsights;
+
+  const handleLoadAnalytics = () => {
+    if (!selectedEventId) {
+      return;
+    }
+    setError("");
+    setLoadedEventId(selectedEventId);
+    void loadInsights();
+  };
+
+  const handleRefreshAnalytics = () => {
+    void loadSummary();
+    if (autoLoadInsights || loadedEventId) {
+      void loadInsights();
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -370,10 +396,7 @@ export default function OrganizerInsightsPanel({
             </div>
             <button
               type="button"
-              onClick={() => {
-                void loadSummary();
-                void loadInsights();
-              }}
+              onClick={handleRefreshAnalytics}
               className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold ring-1 ring-white/20 hover:bg-white/15"
             >
               <RefreshCw className={`h-4 w-4 ${loadingInsights ? "animate-spin" : ""}`} />
@@ -398,7 +421,7 @@ export default function OrganizerInsightsPanel({
       {!skipEventPicker ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
           <label className="text-sm font-semibold text-slate-900">Select event</label>
-          <p className="mt-1 text-xs text-slate-500">Pick an event to view its performance.</p>
+          <p className="mt-1 text-xs text-slate-500">Choose an event, then load analytics when you are ready.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
             <input
               type="search"
@@ -409,7 +432,12 @@ export default function OrganizerInsightsPanel({
             />
             <select
               value={selectedEventId}
-              onChange={(e) => setSelectedEventId(e.target.value)}
+              onChange={(e) => {
+                setSelectedEventId(e.target.value);
+                setInsights(null);
+                setLoadedEventId("");
+                setError("");
+              }}
               className="min-w-[200px] rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium"
             >
               <option value="">Choose event</option>
@@ -419,6 +447,22 @@ export default function OrganizerInsightsPanel({
                 </option>
               ))}
             </select>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleLoadAnalytics}
+              disabled={!selectedEventId || loadingInsights}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loadingInsights && loadedEventId === selectedEventId ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : null}
+              Load analytics
+            </button>
+            {showLoadPrompt ? (
+              <p className="text-xs text-slate-500">Select an event and click Load analytics to view performance.</p>
+            ) : null}
           </div>
           {loadingList ? <p className="mt-2 text-xs text-slate-500">Loading events…</p> : null}
         </div>
@@ -431,14 +475,18 @@ export default function OrganizerInsightsPanel({
       ) : null}
 
       {!activeEventId ? (
-        <p className="text-sm text-slate-500">Select an event to view analytics.</p>
+        <p className="text-sm text-slate-500">
+          {selectedEventId && !autoLoadInsights
+            ? "Click Load analytics above to view performance for the selected event."
+            : "Select an event to view analytics."}
+        </p>
       ) : loadingInsights && !insights ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />
           ))}
         </div>
-      ) : insights ? (
+      ) : insights && analyticsReady ? (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
@@ -512,7 +560,7 @@ export default function OrganizerInsightsPanel({
           </div>
 
           {activeTab === "traffic" ? (
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid min-w-0 gap-5 lg:grid-cols-2">
               <SectionCard
                 title="Views over time"
                 hint="Daily page views for the last 30 days. Drag the slider under the chart to focus on a date range."
@@ -609,7 +657,7 @@ export default function OrganizerInsightsPanel({
           ) : null}
 
           {activeTab === "bookings" && isPlatform ? (
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid min-w-0 gap-5 lg:grid-cols-2">
               <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-4">
                 <KpiCard label="Bookings" value={bookings?.total_bookings ?? 0} accent="emerald" />
                 <KpiCard label="Attendees" value={bookings?.total_attendees ?? 0} />
@@ -695,7 +743,7 @@ export default function OrganizerInsightsPanel({
           ) : null}
 
           {activeTab === "audience" ? (
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid min-w-0 gap-5 lg:grid-cols-2">
               <SectionCard title="Visitor cities" hint="Top cities your visitors are in (last 30 days).">
                 <CityBarChart
                   data={cityData}

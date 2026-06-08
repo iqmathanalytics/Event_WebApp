@@ -49,6 +49,7 @@ const lines = [
   `GOOGLE_CLIENT_ID=${req("GOOGLE_CLIENT_ID")}`,
   `FRONTEND_URL=${opt("FRONTEND_URL", "https://bookmytickets.us")}`,
   `PUBLIC_APP_URL=${opt("PUBLIC_APP_URL", "https://bookmytickets.us")}`,
+  `PUBLIC_API_URL=${opt("PUBLIC_API_URL", `${opt("PUBLIC_APP_URL", "https://bookmytickets.us")}/api`)}`,
   "",
   `BREVO_API_KEY=${opt("BREVO_API_KEY")}`,
   `BREVO_FROM_EMAIL=${opt("BREVO_FROM_EMAIL")}`,

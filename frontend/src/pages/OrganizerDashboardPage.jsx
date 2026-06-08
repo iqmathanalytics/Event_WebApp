@@ -168,6 +168,28 @@ function parseDateValue(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function MyEventsActionBar({ showOrganizerDashboardLink, onCreate, className = "" }) {
+  return (
+    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
+      {showOrganizerDashboardLink ? (
+        <Link
+          to="/dashboard/organizer"
+          className="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 shadow-sm transition hover:bg-emerald-100/90"
+        >
+          Organizer dashboard
+        </Link>
+      ) : null}
+      <button
+        type="button"
+        onClick={onCreate}
+        className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-slate-800"
+      >
+        Create New Event
+      </button>
+    </div>
+  );
+}
+
 function FormField({ label, hint, example, className = "", children }) {
   return (
     <div className={`block ${className}`}>
@@ -194,7 +216,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   ref
 ) {
   const navigate = useNavigate();
-  const { user, canSellPlatformTickets, refreshSession } = useAuth();
+  const { user, canSellPlatformTickets, refreshSession, isOrganizer } = useAuth();
 
   const openPlatformTicketRequest = () => {
     if (typeof onRequestPlatformTickets === "function") {
@@ -650,6 +672,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
   const showBackToUserDashboard =
     !embedded && user?.role === "user" && (user?.organizer_enabled === 1 || user?.role === "organizer");
+  const showOrganizerDashboardLink = myEventsOnly && isOrganizer;
   const scheduleTypeLabel =
     form.schedule_type === "multiple"
       ? "Multiple Dates Event"
@@ -807,6 +830,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft"
             >
+              <MyEventsActionBar
+                showOrganizerDashboardLink={showOrganizerDashboardLink}
+                onCreate={openCreate}
+                className="mb-4"
+              />
               <div>
                 <h2 className="text-base font-bold text-slate-900">My events</h2>
                 <p className="mt-1 text-sm text-slate-600">Create, edit, and track review status.</p>
@@ -1044,13 +1072,20 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
         <section className="space-y-4">
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Organizer Dashboard</h1>
-              <p className="text-sm text-slate-600">
-                Track event performance, booking activity, and submissions in one place.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+            {myEventsOnly ? (
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">My events</h2>
+                <p className="text-sm text-slate-600">Create, edit, and track review status.</p>
+              </div>
+            ) : (
+              <div>
+                <h1 className="text-2xl font-bold">Organizer Dashboard</h1>
+                <p className="text-sm text-slate-600">
+                  Track event performance, booking activity, and submissions in one place.
+                </p>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
               {showBackToUserDashboard ? (
                 <Link
                   to="/dashboard/user"
@@ -1059,7 +1094,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   Back to User Dashboard
                 </Link>
               ) : null}
-              {activeSection === "my-events" ? (
+              {myEventsOnly ? (
+                <MyEventsActionBar
+                  showOrganizerDashboardLink={showOrganizerDashboardLink}
+                  onCreate={openCreate}
+                />
+              ) : activeSection === "my-events" ? (
                 <button
                   type="button"
                   onClick={openCreate}

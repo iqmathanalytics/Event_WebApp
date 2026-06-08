@@ -11,6 +11,7 @@ import { fetchEventById, trackEventView } from "../services/eventService";
 import { trackEventPageView } from "../utils/googleAnalytics";
 import { formatCurrency, formatDateUS, formatEventDuration, formatTime12Hour } from "../utils/format";
 import { normalizeEventTicketSalesMode } from "../utils/eventTicketSalesMode";
+import { resolveEventListPrice } from "../utils/eventTicketLevels";
 import useAuth from "../hooks/useAuth";
 import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
@@ -126,7 +127,7 @@ function EventDetailsPage() {
 
   useRouteContentReady(loading);
 
-  const pricePerDay = Number(event?.price || 0);
+  const pricePerDay = resolveEventListPrice(event);
 
   if (loading) {
     return <p className="text-sm text-slate-500">Loading event details...</p>;

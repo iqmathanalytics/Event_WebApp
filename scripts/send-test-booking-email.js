@@ -3,6 +3,8 @@
  *
  *   node scripts/send-test-booking-email.js
  *   node scripts/send-test-booking-email.js you@example.com
+ *
+ * Set PUBLIC_API_URL=https://www.bookmytickets.us/api in .env so the QR image loads in email clients.
  */
 require("dotenv").config({ path: require("path").resolve(__dirname, "..", ".env") });
 
@@ -12,8 +14,9 @@ const {
   buildBookingConfirmationEmail,
   ticketBlocksFromCart
 } = require("../src/utils/transactionalEmailTemplates");
-const { generateBookingQrDataUrl, generateBookingQrAttachment } = require("../src/utils/bookingQr");
+const { publicBookingQrImageUrl } = require("../src/utils/bookingQr");
 const { generateCheckInCode } = require("../src/utils/bookingCheckIn");
+const { dashboardUrl } = require("../src/utils/brandEmail");
 
 async function loadSampleEvent() {
   try {
@@ -52,23 +55,17 @@ async function main() {
   const selectedDates = ["2026-06-15"];
   const totalDays = 1;
   const attendeeCount = 2;
-  const ticketCart = [
-    { level_name: "General Admission", quantity: 2, unit_price: 50 }
-  ];
+  const ticketCart = [{ level_name: "General Admission", quantity: 2, unit_price: 50 }];
   const subtotalAmount = 100;
   const discountAmount = 0;
   const totalAmount = 104.37;
   const paymentStatus = "paid";
-
-  let qrImageDataUrl = null;
-  let qrAttachment = null;
-  try {
-    qrImageDataUrl = await generateBookingQrDataUrl(checkInCode);
-    qrAttachment = await generateBookingQrAttachment(checkInCode);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn("[send-test-booking-email] QR generation failed:", err.message);
-  }
+  const qrImageUrl = publicBookingQrImageUrl(checkInCode);
+  const guestAccount = {
+    created: true,
+    email: to,
+    setPasswordUrl: `${dashboardUrl("/set-password")}?token=demo-link-for-email-preview`
+  };
 
   const mail = buildBookingConfirmationEmail({
     guestName,
@@ -84,7 +81,8 @@ async function main() {
     totalAmount,
     couponCode: null,
     paymentStatus,
-    qrImageDataUrl
+    qrImageUrl,
+    guestAccount
   });
 
   // eslint-disable-next-line no-console
@@ -94,14 +92,13 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log(`  Booking ref: #${bookingId} (test only, not in database)`);
   // eslint-disable-next-line no-console
-  console.log(`  Check-in code: ${checkInCode.slice(0, 8)}…`);
+  console.log(`  QR image URL: ${qrImageUrl}`);
 
   const result = await sendTransactionalEmail({
     to,
     subject: mail.subject,
     text: mail.text,
-    html: mail.html,
-    attachments: qrAttachment ? [qrAttachment] : undefined
+    html: mail.html
   });
 
   if (result.sent) {

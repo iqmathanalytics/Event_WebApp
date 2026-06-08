@@ -1,6 +1,7 @@
 const express = require("express");
 const favoriteController = require("../controllers/favoriteController");
 const authMiddleware = require("../middleware/authMiddleware");
+const optionalAuthMiddleware = require("../middleware/optionalAuthMiddleware");
 const validateRequest = require("../middleware/validateRequest");
 const {
   createFavoriteSchema,
@@ -10,9 +11,13 @@ const {
 
 const router = express.Router();
 
-router.use(authMiddleware);
-router.post("/", validateRequest(createFavoriteSchema), favoriteController.createFavorite);
-router.get("/", validateRequest(getFavoritesSchema), favoriteController.getFavorites);
-router.delete("/", validateRequest(deleteFavoriteSchema), favoriteController.removeFavorite);
+router.get(
+  "/",
+  optionalAuthMiddleware,
+  validateRequest(getFavoritesSchema),
+  favoriteController.getFavorites
+);
+router.post("/", authMiddleware, validateRequest(createFavoriteSchema), favoriteController.createFavorite);
+router.delete("/", authMiddleware, validateRequest(deleteFavoriteSchema), favoriteController.removeFavorite);
 
 module.exports = router;

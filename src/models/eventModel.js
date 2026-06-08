@@ -4,7 +4,11 @@ const { setPublicSlug } = require("./listingSlugModel");
 const { normalizeDateList } = require("../utils/eventSchedule");
 const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
 const { parseTotalSeats } = require("../utils/eventSeats");
-const { parseTicketLevelsFromEvent, normalizeTicketLevelsInput } = require("../utils/eventTicketLevels");
+const {
+  parseTicketLevelsFromEvent,
+  normalizeTicketLevelsInput,
+  resolveEventListPrice
+} = require("../utils/eventTicketLevels");
 const { parsePromoVideoUrls, promoVideoUrlsDbValue } = require("../utils/youtubeVideo");
 const { sqlAssignFragment, toJsonDbString } = require("../utils/jsonDb");
 
@@ -64,11 +68,20 @@ function normalizeEventRow(row) {
   const isListedRaw = row.is_listed;
   const is_listed =
     isListedRaw === undefined || isListedRaw === null ? true : Number(isListedRaw) !== 0;
+  const ticket_levels = parseTicketLevelsFromEvent(row);
+  const ticket_sales_mode = normalizeTicketSalesMode(readTicketSalesModeRaw(row));
+  const listPrice = resolveEventListPrice({
+    ...row,
+    ticket_sales_mode,
+    ticket_levels
+  });
+
   return {
     ...row,
     is_listed,
-    ticket_sales_mode: normalizeTicketSalesMode(readTicketSalesModeRaw(row)),
-    ticket_levels: parseTicketLevelsFromEvent(row),
+    ticket_sales_mode,
+    ticket_levels,
+    price: listPrice != null ? listPrice : row.price,
     event_highlights: parseHighlights(row.event_highlights),
     gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
     promo_video_urls: parsePromoVideoUrls(row.promo_video_urls),

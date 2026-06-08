@@ -11,8 +11,11 @@ const favoriteRoutes = require("./favoriteRoutes");
 const bookingRoutes = require("./bookingRoutes");
 const metaRoutes = require("./metaRoutes");
 const uploadRoutes = require("./uploadRoutes");
+const publicRoutes = require("./publicRoutes");
 
 const router = express.Router();
+
+router.use("/public", publicRoutes);
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);

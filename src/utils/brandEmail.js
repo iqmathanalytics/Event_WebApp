@@ -27,6 +27,19 @@ function eventDetailUrl(event) {
   return dashboardUrl(`/events/${segment}`);
 }
 
+/** Public API base for email image URLs (Brevo requires absolute https URLs, not data: or cid:). */
+function publicApiBaseUrl() {
+  const explicit = String(process.env.PUBLIC_API_URL || process.env.API_PUBLIC_BASE_URL || "").trim();
+  if (explicit) {
+    return explicit.replace(/\/$/, "");
+  }
+  if (process.env.NODE_ENV === "production") {
+    return `${appBaseUrl()}/api`;
+  }
+  const port = Number(process.env.PORT) || 5000;
+  return `http://localhost:${port}`;
+}
+
 module.exports = {
   BRAND_NAME,
   BRAND_TAGLINE,
@@ -34,5 +47,6 @@ module.exports = {
   appBaseUrl,
   brandLogoEmailUrl,
   dashboardUrl,
-  eventDetailUrl
+  eventDetailUrl,
+  publicApiBaseUrl
 };

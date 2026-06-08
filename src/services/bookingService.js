@@ -19,6 +19,8 @@ const {
   computeCartSubtotal
 } = require("../utils/eventTicketLevels");
 const { applyTransactionFee } = require("../utils/transactionFee");
+const { ensureGuestUserAccount } = require("./guestAccountService");
+const { publicBookingQrImageUrl } = require("../utils/bookingQr");
 const { sendTransactionalEmail } = require("../utils/emailIntegrations");
 const {
   buildBookingConfirmationEmail,
@@ -335,7 +337,8 @@ async function dispatchBookingConfirmationEmail({
   checkInCode,
   payload,
   pricing,
-  paymentStatus
+  paymentStatus,
+  guestAccount = null
 }) {
   const event = pricing.event;
   const recipient = String(
@@ -346,17 +349,9 @@ async function dispatchBookingConfirmationEmail({
   }
 
   const status = String(paymentStatus || "paid").toLowerCase();
-  let qrImageDataUrl = null;
-  let qrAttachment = null;
+  let qrImageUrl = null;
   if (checkInCode && (status === "paid" || status === "free")) {
-    try {
-      const { generateBookingQrDataUrl, generateBookingQrAttachment } = require("../utils/bookingQr");
-      qrImageDataUrl = await generateBookingQrDataUrl(checkInCode);
-      qrAttachment = await generateBookingQrAttachment(checkInCode);
-    } catch (_err) {
-      qrImageDataUrl = null;
-      qrAttachment = null;
-    }
+    qrImageUrl = publicBookingQrImageUrl(checkInCode);
   }
 
   const mail = buildBookingConfirmationEmail({
@@ -373,15 +368,15 @@ async function dispatchBookingConfirmationEmail({
     totalAmount: pricing.totalAmount,
     couponCode: pricing.couponCode,
     paymentStatus: paymentStatus || "paid",
-    qrImageDataUrl
+    qrImageUrl,
+    guestAccount
   });
 
   await sendTransactionalEmail({
     to: recipient,
     subject: mail.subject,
     text: mail.text,
-    html: mail.html,
-    attachments: qrAttachment ? [qrAttachment] : undefined
+    html: mail.html
   }).catch(() => {});
 }
 
@@ -390,6 +385,21 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
   const isGuest = Boolean(pricing.isGuest);
   const holdToken = pricing.holdToken;
   const payment_status = paymentMeta?.payment_status || "paid";
+  let guestAccount = null;
+  let effectiveUserId = userId;
+
+  if (isGuest) {
+    const phone = String(pricing.userPhone || payload.phone || "").trim();
+    guestAccount = await ensureGuestUserAccount({
+      name: pricing.userName,
+      email: pricing.userEmail,
+      phone
+    });
+    if (guestAccount?.userId) {
+      effectiveUserId = guestAccount.userId;
+    }
+  }
+
   const conn = await pool.getConnection();
 
   try {
@@ -404,7 +414,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       {
         event_id: payload.event_id,
         organizer_id: pricing.organizerId,
-        user_id: isGuest ? null : userId,
+        user_id: isGuest ? effectiveUserId : userId,
         is_guest_booking: isGuest,
         name: pricing.userName,
         email: pricing.userEmail,
@@ -447,7 +457,14 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       checkInCode,
       payload,
       pricing,
-      paymentStatus: payment_status
+      paymentStatus: payment_status,
+      guestAccount: guestAccount?.created
+        ? {
+            created: true,
+            email: guestAccount.email,
+            setPasswordUrl: guestAccount.setPasswordUrl
+          }
+        : null
     }).catch(() => {});
 
     return {

@@ -64,7 +64,7 @@ function buildLayout({
   ctaUrl,
   footerNote,
   headerTone = "rose",
-  qrImageDataUrl = null,
+  qrImageUrl = null,
   qrCaption = "Entry QR — staff will scan this at the door"
 }) {
   const logoUrl = brandLogoEmailUrl();
@@ -132,10 +132,10 @@ function buildLayout({
     })
     .join("");
 
-  const qrHtml = qrImageDataUrl
+  const qrHtml = qrImageUrl
     ? `<div style="margin:20px 0 8px;text-align:center;">
         <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#64748b;">${escapeHtml(qrCaption)}</p>
-        <img src="${qrImageDataUrl}" alt="Ticket QR code" width="200" height="200" style="display:inline-block;width:200px;height:200px;border:8px solid #ffffff;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,0.12);" />
+        <img src="${escapeHtml(qrImageUrl)}" alt="Ticket QR code" width="200" height="200" style="display:inline-block;width:200px;height:200px;border:8px solid #ffffff;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,0.12);" />
       </div>`
     : "";
 
@@ -310,7 +310,8 @@ function buildBookingConfirmationEmail({
   totalAmount,
   couponCode,
   paymentStatus,
-  qrImageDataUrl = null
+  qrImageUrl = null,
+  guestAccount = null
 }) {
   const safeName = String(guestName || "there").trim() || "there";
   const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "See your booking";
@@ -320,6 +321,18 @@ function buildBookingConfirmationEmail({
   const totalLine = formatUsd(totalAmount);
   const discount = Number(discountAmount) || 0;
   const payLabel = paymentStatusLabel(paymentStatus);
+
+  const accountTextLines =
+    guestAccount?.created && guestAccount?.setPasswordUrl
+      ? [
+          "",
+          "Your My Hub account is ready.",
+          `Create your password: ${guestAccount.setPasswordUrl}`,
+          "This secure link expires in 72 hours."
+        ]
+      : guestAccount?.email && !guestAccount?.created
+        ? ["", `Already have an account? Sign in at ${dashboardUrl("/login")} with ${guestAccount.email}.`]
+        : [];
 
   const text = [
     `Hi ${safeName},`,
@@ -332,7 +345,8 @@ function buildBookingConfirmationEmail({
     discount > 0 ? `Discount: ${formatUsd(discount)}${couponCode ? ` (${couponCode})` : ""}` : "",
     `Status: ${payLabel}`,
     `Booking reference: #${bookingId}`,
-    qrImageDataUrl ? "Your entry QR code is attached and shown in this email." : "",
+    qrImageUrl ? "Your entry QR code is shown in this email." : "",
+    ...accountTextLines,
     "",
     `View event: ${eventUrl}`,
     `My bookings: ${dashboardUrl("/dashboard/user")}`,
@@ -352,22 +366,31 @@ function buildBookingConfirmationEmail({
   if (discount > 0) {
     rows.push({ label: "You saved", value: `${formatUsd(discount)}${couponCode ? ` · ${couponCode}` : ""}` });
   }
+  if (guestAccount?.created && guestAccount?.email) {
+    rows.push({ label: "My Hub email", value: guestAccount.email });
+  }
+
+  const setPasswordUrl = guestAccount?.setPasswordUrl || null;
 
   const html = buildLayout({
     preheader: `Booking confirmed for ${eventTitle || "your event"}.`,
     eyebrow: "Booking confirmed",
     title: "You're all set for the show",
-    subtitle: qrImageDataUrl
+    subtitle: qrImageUrl
       ? `Hi ${safeName}, your tickets are confirmed. Show the QR code below at the venue for entry.`
-      : `Hi ${safeName}, we've reserved your tickets. Bring this confirmation to My Hub anytime.`,
+      : guestAccount?.created
+        ? `Hi ${safeName}, your tickets are confirmed. Create a password to access My Hub and your bookings anytime.`
+        : `Hi ${safeName}, we've reserved your tickets. Bring this confirmation to My Hub anytime.`,
     headerTone: "violet",
     ticketBlocks: ticketBlocks || [],
     rows,
-    qrImageDataUrl,
+    qrImageUrl,
     qrCaption: "Scan at entry · keep this email handy",
-    ctaLabel: "View my bookings",
-    ctaUrl: dashboardUrl("/dashboard/user"),
-    footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
+    ctaLabel: setPasswordUrl ? "Create your password" : "View my bookings",
+    ctaUrl: setPasswordUrl || dashboardUrl("/dashboard/user"),
+    footerNote: setPasswordUrl
+      ? `Need help? Contact ${BRAND_SUPPORT_EMAIL}. This password link is personal — do not share it.`
+      : `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
   });
 
   return { subject, text, html };

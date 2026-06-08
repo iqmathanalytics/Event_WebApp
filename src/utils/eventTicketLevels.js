@@ -159,6 +159,20 @@ function getCheckoutTicketLevels(event) {
   return [];
 }
 
+function resolveEventListPrice(event, referenceDate = new Date()) {
+  const levels = parseTicketLevelsFromEvent(event);
+  const active = filterActiveTicketLevelsForCheckout(levels, referenceDate);
+  if (active.length > 0) {
+    return Math.min(...active.map((l) => l.price));
+  }
+  const mode = String(event?.ticket_sales_mode || "external").toLowerCase();
+  if (mode === "platform" && levels.length > 0) {
+    return null;
+  }
+  const price = Number(event?.price);
+  return Number.isFinite(price) && price >= 0 ? price : 0;
+}
+
 function sanitizeTicketLevelsForSave(input, { platformMode = false } = {}) {
   const levels = normalizeTicketLevelsInput(input);
   if (!platformMode) {
@@ -167,10 +181,16 @@ function sanitizeTicketLevelsForSave(input, { platformMode = false } = {}) {
   if (!levels.length) {
     return { levels: [], json: null, displayPrice: 0 };
   }
+  const active = filterActiveTicketLevelsForCheckout(levels);
+  const displayPrice = active.length
+    ? Math.min(...active.map((l) => l.price))
+    : levels.length
+      ? null
+      : 0;
   return {
     levels,
     json: JSON.stringify(levels),
-    displayPrice: Math.min(...levels.map((l) => l.price))
+    displayPrice
   };
 }
 
@@ -289,6 +309,7 @@ module.exports = {
   parseValidUpto,
   isTicketLevelSaleActive,
   filterActiveTicketLevelsForCheckout,
+  resolveEventListPrice,
   enrichTicketLevelAvailability,
   normalizeTicketLevelsInput,
   parseTicketLevelsFromEvent,

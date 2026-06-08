@@ -15,6 +15,13 @@ const createFavorite = asyncHandler(async (req, res) => {
 });
 
 const getFavorites = asyncHandler(async (req, res) => {
+  if (!req.user?.id) {
+    return res.status(200).json({
+      success: true,
+      data: []
+    });
+  }
+
   const rows = await favoriteService.fetchFavorites({
     userId: req.user.id,
     listingType: req.validated.query.listing_type

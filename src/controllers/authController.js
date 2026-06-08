@@ -57,11 +57,33 @@ const googleRegisterUser = asyncHandler(async (req, res) => {
   });
 });
 
+const validateSetPasswordToken = asyncHandler(async (req, res) => {
+  const passwordSetService = require("../services/passwordSetService");
+  const data = await passwordSetService.validatePasswordSetupToken(req.validated.query.token);
+  res.status(200).json({
+    success: true,
+    data
+  });
+});
+
+const completeSetPassword = asyncHandler(async (req, res) => {
+  const passwordSetService = require("../services/passwordSetService");
+  const { token, password } = req.validated.body;
+  const result = await passwordSetService.completePasswordSetup({ rawToken: token, password });
+  res.status(200).json({
+    success: true,
+    message: "Password saved. You're signed in.",
+    data: result
+  });
+});
+
 module.exports = {
   register,
   loginUser,
   loginStaff,
   refreshToken,
   googleLoginUser,
-  googleRegisterUser
+  googleRegisterUser,
+  validateSetPasswordToken,
+  completeSetPassword
 };

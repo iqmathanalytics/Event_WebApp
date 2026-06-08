@@ -12,6 +12,7 @@ const {
   resolveGuestEventBookingPricing,
   dispatchBookingConfirmationEmail
 } = require("./bookingService");
+const { ensureGuestUserAccount } = require("./guestAccountService");
 
 const PAYMENT_HOLD_EXTENSION_MINUTES = 30;
 const PI_POLL_ATTEMPTS = 20;
@@ -263,6 +264,19 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
 
   const holdToken = payload.coupon_hold_token || null;
 
+  let guestAccount = null;
+  let bookingUserId = checkout.user_id;
+  if (isGuestCheckout) {
+    guestAccount = await ensureGuestUserAccount({
+      name: pricing.userName,
+      email: pricing.userEmail,
+      phone: pricing.userPhone
+    });
+    if (guestAccount?.userId) {
+      bookingUserId = guestAccount.userId;
+    }
+  }
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -271,7 +285,7 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
       {
         event_id: payload.event_id,
         organizer_id: pricing.organizerId,
-        user_id: isGuestCheckout ? null : checkout.user_id,
+        user_id: isGuestCheckout ? bookingUserId : checkout.user_id,
         is_guest_booking: isGuestCheckout,
         name: pricing.userName,
         email: pricing.userEmail,
@@ -324,7 +338,14 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
       checkInCode,
       payload,
       pricing,
-      paymentStatus: "paid"
+      paymentStatus: "paid",
+      guestAccount: guestAccount?.created
+        ? {
+            created: true,
+            email: guestAccount.email,
+            setPasswordUrl: guestAccount.setPasswordUrl
+          }
+        : null
     }).catch(() => {});
 
     return {

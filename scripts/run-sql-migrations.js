@@ -49,6 +49,7 @@ const FILES = [
   "event_booking_stripe.sql",
   "event_guest_bookings.sql",
   "booking_check_in_qr.sql",
+  "user_password_set_tokens.sql",
   "event_checkout_payments_guest.sql",
   "listing_public_slugs.sql",
   "event_total_seats.sql",

@@ -10,6 +10,7 @@ import { getEventSortDate } from "../utils/eventSchedule";
 import useAuth from "../hooks/useAuth";
 import PremiumLockOverlay from "./PremiumLockOverlay";
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
+import { resolveEventListPrice } from "../utils/eventTicketLevels";
 
 function EventCard({
   item,
@@ -46,6 +47,7 @@ function EventCard({
     ? item.galleryImages.map((url) => String(url || "").trim()).find(Boolean) || ""
     : "";
   const eventImage = String(item.image || "").trim() || fallbackGalleryImage;
+  const listPrice = resolveEventListPrice(item);
 
   const openEvent = (e) => {
     e?.preventDefault?.();
@@ -179,7 +181,7 @@ function EventCard({
 
         <div className={`mt-auto flex shrink-0 items-center justify-between gap-2 ${isLanding ? "pt-2" : "pt-1"}`}>
           <span className="text-xs font-bold text-slate-900 sm:text-sm">
-            Tickets from {formatCurrency(item.price)}
+            {listPrice != null ? `Tickets from ${formatCurrency(listPrice)}` : "See ticket options"}
           </span>
           {locked ? (
             <button

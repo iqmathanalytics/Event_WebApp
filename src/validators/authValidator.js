@@ -95,9 +95,28 @@ const googleUserSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const validateSetPasswordTokenSchema = z.object({
+  body: z.object({}).passthrough(),
+  query: z.object({
+    token: z.string().min(16).max(256)
+  }),
+  params: z.object({}).passthrough()
+});
+
+const completeSetPasswordSchema = z.object({
+  body: z.object({
+    token: z.string().min(16).max(256),
+    password: z.string().min(8).max(128)
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
   refreshTokenSchema,
-  googleUserSchema
+  googleUserSchema,
+  validateSetPasswordTokenSchema,
+  completeSetPasswordSchema
 };

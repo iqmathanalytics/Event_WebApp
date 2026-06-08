@@ -375,5 +375,6 @@ module.exports = {
   login,
   loginWithGoogleIdToken,
   registerWithGoogleIdToken,
-  refreshAccessToken
+  refreshAccessToken,
+  tokensForUser
 };

@@ -29,3 +29,13 @@ export async function registerWithGoogle(idToken) {
   const response = await api.post("/auth/google/register", { idToken });
   return response.data;
 }
+
+export async function validateSetPasswordToken(token) {
+  const response = await api.get("/auth/set-password/validate", { params: { token } });
+  return response.data;
+}
+
+export async function completeSetPassword(payload) {
+  const response = await api.post("/auth/set-password", payload);
+  return response.data;
+}

@@ -12,6 +12,7 @@ import DealsPage from "./pages/DealsPage";
 import LoginPage from "./pages/LoginPage";
 import StaffLoginPage from "./pages/StaffLoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import SetPasswordPage from "./pages/SetPasswordPage";
 import UserDashboardPage from "./pages/UserDashboardPage";
 import UserSubmissionsPage from "./pages/UserSubmissionsPage";
 import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
@@ -50,6 +51,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/admin" element={<StaffLoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/set-password" element={<SetPasswordPage />} />
             <Route
               path="/complete-signup"
               element={

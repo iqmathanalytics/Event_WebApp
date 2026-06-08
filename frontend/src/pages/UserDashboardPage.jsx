@@ -63,7 +63,6 @@ function UserDashboardPage() {
     refreshToken,
     login,
     canPostDeals,
-    isOrganizer,
     canSellPlatformTickets,
     refreshSession
   } = useAuth();
@@ -790,14 +789,6 @@ function UserDashboardPage() {
             >
               {hasRegisteredDealer ? "Edit business profile" : "Business profile"}
             </button>
-            {isOrganizer ? (
-              <Link
-                to="/dashboard/organizer"
-                className="inline-flex items-center justify-center rounded-xl border border-emerald-300/50 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-white ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30"
-              >
-                Organizer dashboard
-              </Link>
-            ) : null}
             <button
               type="button"
               onClick={openInfluencerSpotlightModal}
@@ -989,14 +980,6 @@ function UserDashboardPage() {
           >
             {businessProfileCta.label}
           </button>
-          {isOrganizer ? (
-            <Link
-              to="/dashboard/organizer"
-              className="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 shadow-sm transition hover:bg-emerald-100/90"
-            >
-              Organizer dashboard
-            </Link>
-          ) : null}
         </div>
       </section>
 
