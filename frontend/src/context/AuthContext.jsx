@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { invalidateNewsletterStatusCache } from "../services/newsletterService";
 import { refreshAccessToken } from "../services/authService";
 import { fetchMyProfile } from "../services/userService";
+import { bootstrapAuthSession } from "../utils/authSession";
 
 const AuthContext = createContext(null);
 
@@ -26,8 +27,37 @@ export function AuthProvider({ children }) {
   const [accessToken, setAccessToken] = useState(localStorage.getItem("accessToken"));
   const [refreshToken, setRefreshToken] = useState(localStorage.getItem("refreshToken"));
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [authReady, setAuthReady] = useState(
+    () => !localStorage.getItem("accessToken") && !localStorage.getItem("refreshToken")
+  );
   const logoutOnceRef = useRef(false);
   const lastSessionRefreshAt = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    void bootstrapAuthSession().then((session) => {
+      if (!alive) {
+        return;
+      }
+      if (session.accessToken) {
+        setAccessToken(session.accessToken);
+      } else if (!session.ok) {
+        setAccessToken(null);
+        setRefreshToken(null);
+        setUser(null);
+      }
+      if (session.refreshToken) {
+        setRefreshToken(session.refreshToken);
+      }
+      if (session.user) {
+        setUser(session.user);
+      }
+      setAuthReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (accessToken) {
@@ -190,6 +220,7 @@ export function AuthProvider({ children }) {
       user,
       accessToken,
       refreshToken,
+      authReady,
       isAuthenticated: Boolean(accessToken && user),
       isAdmin: user?.role === "admin",
       isOrganizer: Boolean(user?.organizer_enabled) || user?.role === "organizer",
@@ -204,7 +235,7 @@ export function AuthProvider({ children }) {
       invalidateSession,
       isLoggingOut
     }),
-    [user, accessToken, refreshToken, isLoggingOut, refreshSession, invalidateSession]
+    [user, accessToken, refreshToken, authReady, isLoggingOut, refreshSession, invalidateSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

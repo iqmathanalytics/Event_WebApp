@@ -192,7 +192,7 @@ function AnalyticsGeoMap({ countries = [] }) {
     return (
       <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white">
         <p className="border-b border-slate-100 px-4 py-2 text-xs font-medium text-slate-600">
-          Hover a state to see visitor counts
+          All-time visitors by state — hover for counts
         </p>
         <MapTooltip hover={hover} />
         <ComposableMap
@@ -247,7 +247,7 @@ function AnalyticsGeoMap({ countries = [] }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white">
       <p className="border-b border-slate-100 px-4 py-2 text-xs font-medium text-slate-600">
-        Hover a country to see visitor counts
+        All-time visitors by country — hover for counts
       </p>
       <MapTooltip hover={hover} />
       <ComposableMap projectionConfig={{ scale: 140 }} width={800} height={360} style={{ width: "100%", height: "auto" }}>

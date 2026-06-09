@@ -194,9 +194,81 @@ async function listAllUsers() {
   return rows;
 }
 
+async function safeDeleteQuery(conn, sql, params = []) {
+  try {
+    await conn.query(sql, params);
+  } catch (err) {
+    if (err?.code === "ER_NO_SUCH_TABLE" || err?.code === "ER_BAD_FIELD_ERROR") {
+      return;
+    }
+    throw err;
+  }
+}
+
 async function deleteUserById(id) {
-  const [result] = await pool.query("DELETE FROM users WHERE id = ?", [id]);
-  return result.affectedRows > 0;
+  const userId = Number(id);
+  if (!Number.isFinite(userId) || userId < 1) {
+    return false;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [eventRows] = await conn.query("SELECT id FROM events WHERE organizer_id = ?", [userId]);
+    const organizerEventIds = eventRows.map((row) => row.id);
+
+    if (organizerEventIds.length > 0) {
+      const placeholders = organizerEventIds.map(() => "?").join(", ");
+      await safeDeleteQuery(
+        conn,
+        `DELETE FROM event_checkout_payments WHERE event_id IN (${placeholders})`,
+        organizerEventIds
+      );
+    }
+
+    await safeDeleteQuery(conn, "DELETE FROM event_checkout_payments WHERE user_id = ?", [userId]);
+    await safeDeleteQuery(
+      conn,
+      "UPDATE event_bookings SET checked_in_by = NULL WHERE checked_in_by = ?",
+      [userId]
+    );
+    await safeDeleteQuery(conn, "UPDATE events SET reviewed_by = NULL WHERE reviewed_by = ?", [userId]);
+    await safeDeleteQuery(
+      conn,
+      "UPDATE platform_ticket_access_requests SET reviewed_by = NULL WHERE reviewed_by = ?",
+      [userId]
+    );
+    await safeDeleteQuery(
+      conn,
+      "UPDATE admin_notifications SET target_admin_id = NULL WHERE target_admin_id = ?",
+      [userId]
+    );
+    await safeDeleteQuery(conn, "DELETE FROM dealer_profiles WHERE created_by = ?", [userId]);
+    await safeDeleteQuery(conn, "DELETE FROM user_onboarding_profiles WHERE user_id = ?", [userId]);
+    await safeDeleteQuery(conn, "DELETE FROM user_password_set_tokens WHERE user_id = ?", [userId]);
+    await safeDeleteQuery(
+      conn,
+      "UPDATE newsletter_subscribers SET user_id = NULL WHERE user_id = ?",
+      [userId]
+    );
+    await safeDeleteQuery(conn, "UPDATE influencers SET created_by = NULL WHERE created_by = ?", [userId]);
+    await safeDeleteQuery(conn, "UPDATE deals SET created_by = NULL WHERE created_by = ?", [userId]);
+    await safeDeleteQuery(conn, "UPDATE services SET provider_user_id = NULL WHERE provider_user_id = ?", [
+      userId
+    ]);
+    await safeDeleteQuery(conn, "DELETE FROM favorites WHERE user_id = ?", [userId]);
+    await conn.query("DELETE FROM events WHERE organizer_id = ?", [userId]);
+
+    const [result] = await conn.query("DELETE FROM users WHERE id = ?", [userId]);
+    await conn.commit();
+    return result.affectedRows > 0;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 }
 
 module.exports = {

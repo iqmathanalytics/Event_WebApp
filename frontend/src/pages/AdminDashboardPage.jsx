@@ -62,6 +62,7 @@ import {
 } from "../utils/eventTicketLevels";
 import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import useAuth from "../hooks/useAuth";
 import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
 import { formatEventDuration } from "../utils/format";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
@@ -238,6 +239,7 @@ function getNotificationEntityLabel(entityType) {
 }
 
 function AdminDashboardPage() {
+  const { authReady } = useAuth();
   const { cities } = useCityFilter();
   const [activeSection, setActiveSection] = useState("overview");
   const [stats, setStats] = useState({});
@@ -540,6 +542,9 @@ function AdminDashboardPage() {
   };
 
   useEffect(() => {
+    if (!authReady) {
+      return;
+    }
     loadAnalytics();
     if (activeSection === "bookings") {
       loadBookings();
@@ -557,11 +562,14 @@ function AdminDashboardPage() {
       loadListings();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection, listingType, teamRole, appliedFilters, bookingFilters, commTab, newsletterPage, contactPage]);
+  }, [authReady, activeSection, listingType, teamRole, appliedFilters, bookingFilters, commTab, newsletterPage, contactPage]);
 
   useEffect(() => {
+    if (!authReady) {
+      return;
+    }
     loadNotifications();
-  }, []);
+  }, [authReady]);
 
   useEffect(() => {
     const intervalMs = 15000;
@@ -1246,10 +1254,15 @@ function AdminDashboardPage() {
     if (!confirmed) {
       return;
     }
-    await deleteAdminUser(userId);
-    await loadUsers();
-    setAdminMessage("User deleted successfully.");
-    window.setTimeout(() => setAdminMessage(""), 3000);
+    try {
+      await deleteAdminUser(userId);
+      await loadUsers();
+      setAdminMessage("User deleted successfully.");
+      window.setTimeout(() => setAdminMessage(""), 3000);
+    } catch (err) {
+      setAdminMessage(err?.response?.data?.message || "Could not delete this user.");
+      window.setTimeout(() => setAdminMessage(""), 5000);
+    }
   };
 
   const handleActivate = async (userId) => {

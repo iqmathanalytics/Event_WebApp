@@ -815,41 +815,73 @@ async function getEventTrafficSources(eventId, limit = 12) {
 }
 
 async function getEventGeoBreakdown(eventId, limit = 250) {
-  const response = await runReport({
-    dimensions: ["country", "region", "city"],
-    metrics: ["activeUsers", VIEW_METRIC],
-    dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
-    dimensionFilter: eventPageViewFilter(eventId),
-    limit,
-    orderBys: [{ desc: true, metric: { metricName: "activeUsers" } }]
-  });
+  const cacheKey = `geo:${eventId}:${limit}`;
+  return cachedRequest(cacheKey, CACHE_TTL_MS, async () => {
+    const [mapResponse, cityResponse] = await Promise.all([
+      runReport({
+        dimensions: ["country", "region"],
+        metrics: ["activeUsers"],
+        dateRanges: [{ startDate: "2020-01-01", endDate: "today" }],
+        dimensionFilter: eventPageViewFilter(eventId),
+        limit,
+        orderBys: [{ desc: true, metric: { metricName: "activeUsers" } }]
+      }),
+      runReport({
+        dimensions: ["country", "region", "city"],
+        metrics: [VIEW_METRIC],
+        dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
+        dimensionFilter: eventPageViewFilter(eventId),
+        limit,
+        orderBys: [{ desc: true, metric: { metricName: VIEW_METRIC } }]
+      })
+    ]);
 
-  if (!response?.rows?.length) {
-    return { countries: [], cities: [] };
-  }
-
-  const countries = [];
-  const cities = [];
-
-  for (const row of response.rows) {
-    const country = parseDimensionValue(row, 0);
-    const region = parseDimensionValue(row, 1);
-    const city = parseDimensionValue(row, 2);
-    const users = parseMetricValue(row, 0);
-    const views = parseMetricValue(row, 1);
-    if (country) {
-      countries.push({ country, region, users, views });
+    const countries = [];
+    for (const row of mapResponse?.rows || []) {
+      const country = parseDimensionValue(row, 0);
+      const region = parseDimensionValue(row, 1);
+      const users = parseMetricValue(row, 0);
+      if (country && users > 0) {
+        countries.push({ country, region, users, views: users });
+      }
     }
-    if (city && city !== "(not set)") {
-      cities.push({
-        city: region ? `${city}, ${region}` : city,
-        country,
-        views
+
+    const cities = [];
+    for (const row of cityResponse?.rows || []) {
+      const country = parseDimensionValue(row, 0);
+      const region = parseDimensionValue(row, 1);
+      const city = parseDimensionValue(row, 2);
+      const views = parseMetricValue(row, 0);
+      if (city && city !== "(not set)") {
+        cities.push({
+          city: region ? `${city}, ${region}` : city,
+          country,
+          views
+        });
+      }
+    }
+
+    if (!countries.length) {
+      const fallback = await runReport({
+        dimensions: ["country", "region"],
+        metrics: ["activeUsers"],
+        dateRanges: [{ startDate: "2020-01-01", endDate: "today" }],
+        dimensionFilter: eventPagePathFilter(eventId),
+        limit,
+        orderBys: [{ desc: true, metric: { metricName: "activeUsers" } }]
       });
+      for (const row of fallback?.rows || []) {
+        const country = parseDimensionValue(row, 0);
+        const region = parseDimensionValue(row, 1);
+        const users = parseMetricValue(row, 0);
+        if (country && users > 0) {
+          countries.push({ country, region, users, views: users });
+        }
+      }
     }
-  }
 
-  return { countries, cities };
+    return { countries, cities };
+  });
 }
 
 async function getEventDeviceBreakdown(eventId) {

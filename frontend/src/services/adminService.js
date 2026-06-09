@@ -102,7 +102,10 @@ export async function fetchAdminEventInsights(eventId, { hourlyDate } = {}) {
   if (hourlyDate) {
     params.hourly_date = hourlyDate;
   }
-  const response = await api.get(`/admin/events/${eventId}/insights`, { params });
+  const response = await api.get(`/admin/events/${eventId}/insights`, {
+    params,
+    timeout: 90_000
+  });
   return response.data;
 }
 

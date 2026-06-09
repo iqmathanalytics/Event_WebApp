@@ -24,6 +24,8 @@ const { publicBookingQrImageUrl } = require("../utils/bookingQr");
 const { sendTransactionalEmail } = require("../utils/emailIntegrations");
 const {
   buildBookingConfirmationEmail,
+  buildOrganizerBookingNotificationEmail,
+  buildWelcomeEmail,
   ticketBlocksFromCart
 } = require("../utils/transactionalEmailTemplates");
 const { isExclusiveDealEvent } = require("../utils/exclusiveDealEvent");
@@ -332,7 +334,119 @@ async function resolveGuestEventBookingPricing({ payload }) {
   });
 }
 
-async function dispatchBookingConfirmationEmail({
+function bookingEmailContext({ bookingId, checkInCode, payload, pricing, paymentStatus }) {
+  const event = pricing.event;
+  const guestName = payload.name?.trim() || pricing.userName;
+  const guestEmail = String(payload.email?.trim() || pricing.userEmail || pricing.user?.email || "").trim();
+  const guestPhone = String(pricing.userPhone || payload.phone || "").trim();
+  const status = String(paymentStatus || "paid").toLowerCase();
+  let qrImageUrl = null;
+  if (checkInCode && (status === "paid" || status === "free")) {
+    qrImageUrl = publicBookingQrImageUrl(checkInCode);
+  }
+  const ticketBlocks = ticketBlocksFromCart(pricing.ticketCart, pricing.totalDays);
+  return {
+    event,
+    guestName,
+    guestEmail,
+    guestPhone,
+    qrImageUrl,
+    ticketBlocks,
+    paymentStatus: paymentStatus || "paid"
+  };
+}
+
+async function dispatchBookingConfirmationEmail(ctx) {
+  const { event, guestName, guestEmail, qrImageUrl, ticketBlocks, paymentStatus } = ctx;
+  if (!guestEmail || !ctx.bookingId || !event) {
+    return;
+  }
+
+  const mail = buildBookingConfirmationEmail({
+    guestName,
+    eventTitle: event.title,
+    event,
+    bookingId: ctx.bookingId,
+    selectedDates: ctx.pricing.selectedDates,
+    totalDays: ctx.pricing.totalDays,
+    attendeeCount: ctx.pricing.attendeeCount,
+    ticketBlocks,
+    subtotalAmount: ctx.pricing.subtotalAmount,
+    discountAmount: ctx.pricing.discountAmount,
+    totalAmount: ctx.pricing.totalAmount,
+    couponCode: ctx.pricing.couponCode,
+    paymentStatus,
+    qrImageUrl
+  });
+
+  await sendTransactionalEmail({
+    to: guestEmail,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html
+  }).catch(() => {});
+}
+
+async function dispatchGuestWelcomeEmail({ guestAccount, guestName }) {
+  if (!guestAccount?.created || !guestAccount.email || !guestAccount.temporaryPassword) {
+    return;
+  }
+  const firstName = String(guestName || "there").trim().split(/\s+/)[0] || "there";
+  const mail = buildWelcomeEmail({
+    firstName,
+    guestCheckout: true,
+    loginEmail: guestAccount.email,
+    temporaryPassword: guestAccount.temporaryPassword
+  });
+  await sendTransactionalEmail({
+    to: guestAccount.email,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html
+  }).catch(() => {});
+}
+
+async function dispatchOrganizerBookingNotificationEmail(ctx) {
+  const { event, guestName, guestEmail, guestPhone, ticketBlocks, paymentStatus } = ctx;
+  const organizerId = ctx.pricing.organizerId;
+  if (!organizerId || !ctx.bookingId || !event) {
+    return;
+  }
+  const organizer = await findUserById(organizerId);
+  const organizerEmail = String(organizer?.email || "").trim();
+  if (!organizerEmail) {
+    return;
+  }
+
+  const mail = buildOrganizerBookingNotificationEmail({
+    organizerName: organizer.name,
+    eventTitle: event.title,
+    event,
+    bookingId: ctx.bookingId,
+    guestName,
+    guestEmail,
+    guestPhone,
+    selectedDates: ctx.pricing.selectedDates,
+    totalDays: ctx.pricing.totalDays,
+    attendeeCount: ctx.pricing.attendeeCount,
+    ticketBlocks,
+    subtotalAmount: ctx.pricing.subtotalAmount,
+    discountAmount: ctx.pricing.discountAmount,
+    totalAmount: ctx.pricing.totalAmount,
+    couponCode: ctx.pricing.couponCode,
+    paymentStatus,
+    isGuestBooking: Boolean(ctx.pricing.isGuest)
+  });
+
+  await sendTransactionalEmail({
+    to: organizerEmail,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html
+  }).catch(() => {});
+}
+
+async function dispatchBookingEmails({
   bookingId,
   checkInCode,
   payload,
@@ -340,44 +454,20 @@ async function dispatchBookingConfirmationEmail({
   paymentStatus,
   guestAccount = null
 }) {
-  const event = pricing.event;
-  const recipient = String(
-    payload.email?.trim() || pricing.userEmail || pricing.user?.email || ""
-  ).trim();
-  if (!recipient || !bookingId || !event) {
-    return;
-  }
-
-  const status = String(paymentStatus || "paid").toLowerCase();
-  let qrImageUrl = null;
-  if (checkInCode && (status === "paid" || status === "free")) {
-    qrImageUrl = publicBookingQrImageUrl(checkInCode);
-  }
-
-  const mail = buildBookingConfirmationEmail({
-    guestName: payload.name?.trim() || pricing.userName,
-    eventTitle: event.title,
-    event,
+  const ctx = {
     bookingId,
-    selectedDates: pricing.selectedDates,
-    totalDays: pricing.totalDays,
-    attendeeCount: pricing.attendeeCount,
-    ticketBlocks: ticketBlocksFromCart(pricing.ticketCart, pricing.totalDays),
-    subtotalAmount: pricing.subtotalAmount,
-    discountAmount: pricing.discountAmount,
-    totalAmount: pricing.totalAmount,
-    couponCode: pricing.couponCode,
-    paymentStatus: paymentStatus || "paid",
-    qrImageUrl,
-    guestAccount
-  });
+    checkInCode,
+    payload,
+    pricing,
+    ...bookingEmailContext({ bookingId, checkInCode, payload, pricing, paymentStatus })
+  };
 
-  await sendTransactionalEmail({
-    to: recipient,
-    subject: mail.subject,
-    text: mail.text,
-    html: mail.html
-  }).catch(() => {});
+  await dispatchBookingConfirmationEmail(ctx);
+  await dispatchGuestWelcomeEmail({
+    guestAccount,
+    guestName: ctx.guestName
+  });
+  await dispatchOrganizerBookingNotificationEmail(ctx);
 }
 
 async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta }) {
@@ -452,19 +542,13 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
 
     await conn.commit();
 
-    await dispatchBookingConfirmationEmail({
+    await dispatchBookingEmails({
       bookingId,
       checkInCode,
       payload,
       pricing,
       paymentStatus: payment_status,
-      guestAccount: guestAccount?.created
-        ? {
-            created: true,
-            email: guestAccount.email,
-            setPasswordUrl: guestAccount.setPasswordUrl
-          }
-        : null
+      guestAccount: guestAccount?.created ? guestAccount : null
     }).catch(() => {});
 
     return {
@@ -576,6 +660,7 @@ async function fetchUserBookings({ userId }) {
 module.exports = {
   resolveEventBookingPricing,
   resolveGuestEventBookingPricing,
+  dispatchBookingEmails,
   dispatchBookingConfirmationEmail,
   createEventBooking,
   createGuestEventBooking,

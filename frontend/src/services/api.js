@@ -55,6 +55,63 @@ const refreshClient = axios.create({
 });
 let refreshPromise = null;
 
+function decodeJwtExpSec(token) {
+  if (!token) {
+    return 0;
+  }
+  try {
+    const part = token.split(".")[1];
+    if (!part) {
+      return 0;
+    }
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = JSON.parse(atob(normalized));
+    return Number(json.exp) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function refreshAccessTokenFromStorage() {
+  const storedRefreshToken = localStorage.getItem("refreshToken");
+  if (!storedRefreshToken) {
+    throw new Error("No refresh token");
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = refreshClient
+      .post("/auth/refresh-token", { refreshToken: storedRefreshToken })
+      .then((response) => response?.data?.data)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  const refreshedAuth = await refreshPromise;
+  if (!refreshedAuth?.accessToken || !refreshedAuth?.refreshToken || !refreshedAuth?.user) {
+    throw new Error("Invalid refresh response");
+  }
+
+  localStorage.setItem("accessToken", refreshedAuth.accessToken);
+  localStorage.setItem("refreshToken", refreshedAuth.refreshToken);
+  localStorage.setItem("user", JSON.stringify(refreshedAuth.user));
+  return refreshedAuth.accessToken;
+}
+
+export async function ensureAccessTokenFresh({ force = false } = {}) {
+  const storedRefreshToken = localStorage.getItem("refreshToken");
+  const accessToken = localStorage.getItem("accessToken");
+  if (!storedRefreshToken) {
+    return accessToken;
+  }
+  const expSec = decodeJwtExpSec(accessToken);
+  const expiresSoon = !accessToken || expSec * 1000 < Date.now() + 120_000;
+  if (!force && !expiresSoon) {
+    return accessToken;
+  }
+  return refreshAccessTokenFromStorage();
+}
+
 function redirectToLogin() {
   if (typeof window === "undefined" || !window.location) {
     return;
@@ -72,7 +129,18 @@ function clearAuthStorage() {
   localStorage.removeItem("user");
 }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
+  const skipRefresh =
+    Boolean(config.optionalAuth) ||
+    Boolean(config.skipAuthRefresh) ||
+    String(config.url || "").includes("/auth/refresh-token");
+  if (!skipRefresh && localStorage.getItem("refreshToken")) {
+    try {
+      await ensureAccessTokenFresh();
+    } catch {
+      /* 401 handler may recover; do not block the request */
+    }
+  }
   const token = localStorage.getItem("accessToken");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -105,23 +173,12 @@ api.interceptors.response.use(
       }
 
       try {
-        if (!refreshPromise) {
-          refreshPromise = refreshClient
-            .post("/auth/refresh-token", { refreshToken: storedRefreshToken })
-            .then((response) => response?.data?.data)
-            .finally(() => {
-              refreshPromise = null;
-            });
-        }
-
-        const refreshedAuth = await refreshPromise;
-        if (!refreshedAuth?.accessToken || !refreshedAuth?.refreshToken || !refreshedAuth?.user) {
-          throw new Error("Invalid refresh response");
-        }
-
-        localStorage.setItem("accessToken", refreshedAuth.accessToken);
-        localStorage.setItem("refreshToken", refreshedAuth.refreshToken);
-        localStorage.setItem("user", JSON.stringify(refreshedAuth.user));
+        await refreshAccessTokenFromStorage();
+        const refreshedAuth = {
+          accessToken: localStorage.getItem("accessToken"),
+          refreshToken: localStorage.getItem("refreshToken"),
+          user: JSON.parse(localStorage.getItem("user") || "null")
+        };
 
         originalRequest.__isRetryRequest = true;
         originalRequest.headers = originalRequest.headers || {};

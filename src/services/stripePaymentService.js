@@ -10,7 +10,7 @@ const { findEventById } = require("../models/eventModel");
 const {
   resolveEventBookingPricing,
   resolveGuestEventBookingPricing,
-  dispatchBookingConfirmationEmail
+  dispatchBookingEmails
 } = require("./bookingService");
 const { ensureGuestUserAccount } = require("./guestAccountService");
 
@@ -333,19 +333,13 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
 
     await conn.commit();
 
-    await dispatchBookingConfirmationEmail({
+    await dispatchBookingEmails({
       bookingId,
       checkInCode,
       payload,
       pricing,
       paymentStatus: "paid",
-      guestAccount: guestAccount?.created
-        ? {
-            created: true,
-            email: guestAccount.email,
-            setPasswordUrl: guestAccount.setPasswordUrl
-          }
-        : null
+      guestAccount: guestAccount?.created ? guestAccount : null
     }).catch(() => {});
 
     return {

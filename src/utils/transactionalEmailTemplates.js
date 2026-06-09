@@ -203,25 +203,56 @@ function buildLayout({
 </html>`;
 }
 
-function buildWelcomeEmail({ firstName, signedUpWithGoogle = false }) {
+function buildWelcomeEmail({
+  firstName,
+  signedUpWithGoogle = false,
+  guestCheckout = false,
+  loginEmail = null,
+  temporaryPassword = null
+}) {
   const safeFirstName = String(firstName || "there").trim() || "there";
   const subject = `Welcome to ${BRAND_NAME}, ${safeFirstName}!`;
-  const signupLine = signedUpWithGoogle
-    ? "Your account is ready — you signed up with Google and can start exploring right away."
-    : "Your account is ready — sign in anytime to discover events and book tickets on-site.";
 
-  const text = [
+  const signupLine = guestCheckout && temporaryPassword
+    ? "We created a My Hub account from your guest booking. Use the login details below to view your tickets anytime."
+    : signedUpWithGoogle
+      ? "Your account is ready — you signed up with Google and can start exploring right away."
+      : "Your account is ready — sign in anytime to discover events and book tickets on-site.";
+
+  const textLines = [
     `Hi ${safeFirstName},`,
     "",
     `Welcome to ${BRAND_NAME} — ${BRAND_TAGLINE}.`,
     signupLine,
-    "",
+    ""
+  ];
+  if (guestCheckout && loginEmail && temporaryPassword) {
+    textLines.push(
+      `Sign in: ${dashboardUrl("/login")}`,
+      `Email: ${loginEmail}`,
+      `Temporary password: ${temporaryPassword}`,
+      "",
+      "Please change your password after signing in.",
+      ""
+    );
+  }
+  textLines.push(
     `Explore events: ${dashboardUrl("/events")}`,
     `Your dashboard: ${dashboardUrl("/dashboard/user")}`,
     "",
     "See you inside,",
     `${BRAND_NAME} Team`
-  ].join("\n");
+  );
+
+  const rows = [
+    { label: "Account", value: "Active" },
+    ...(guestCheckout && loginEmail ? [{ label: "Login email", value: loginEmail }] : []),
+    ...(guestCheckout && temporaryPassword
+      ? [{ label: "Temporary password", value: temporaryPassword }]
+      : []),
+    { label: "Sign-in", value: signedUpWithGoogle ? "Google" : "Email & password" },
+    { label: "Support", value: BRAND_SUPPORT_EMAIL }
+  ];
 
   const html = buildLayout({
     preheader: `Welcome to ${BRAND_NAME}. Your account is active.`,
@@ -232,19 +263,19 @@ function buildWelcomeEmail({ firstName, signedUpWithGoogle = false }) {
     highlights: [
       "Browse curated events, deals, and creator spotlights",
       "Book platform tickets in a few taps when events sell on-site",
-      "Save favorites and manage bookings from My Hub"
+      guestCheckout
+        ? "Sign in to My Hub to see bookings from your guest checkout"
+        : "Save favorites and manage bookings from My Hub"
     ],
-    rows: [
-      { label: "Account", value: "Active" },
-      { label: "Sign-in", value: signedUpWithGoogle ? "Google" : "Email & password" },
-      { label: "Support", value: BRAND_SUPPORT_EMAIL }
-    ],
-    ctaLabel: `Explore ${BRAND_NAME}`,
-    ctaUrl: dashboardUrl("/events"),
-    footerNote: `Questions? Reply to this email or write to ${BRAND_SUPPORT_EMAIL}. If you didn't create this account, contact us right away.`
+    rows,
+    ctaLabel: guestCheckout ? "Sign in to My Hub" : `Explore ${BRAND_NAME}`,
+    ctaUrl: guestCheckout ? dashboardUrl("/login") : dashboardUrl("/events"),
+    footerNote: guestCheckout
+      ? `Change your temporary password after signing in. Questions? ${BRAND_SUPPORT_EMAIL}`
+      : `Questions? Reply to this email or write to ${BRAND_SUPPORT_EMAIL}. If you didn't create this account, contact us right away.`
   });
 
-  return { subject, text, html };
+  return { subject, text: textLines.join("\n"), html };
 }
 
 function buildApprovalEmail({ listingType, recipientName, title, details, reviewNote }) {
@@ -310,8 +341,7 @@ function buildBookingConfirmationEmail({
   totalAmount,
   couponCode,
   paymentStatus,
-  qrImageUrl = null,
-  guestAccount = null
+  qrImageUrl = null
 }) {
   const safeName = String(guestName || "there").trim() || "there";
   const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "See your booking";
@@ -321,18 +351,6 @@ function buildBookingConfirmationEmail({
   const totalLine = formatUsd(totalAmount);
   const discount = Number(discountAmount) || 0;
   const payLabel = paymentStatusLabel(paymentStatus);
-
-  const accountTextLines =
-    guestAccount?.created && guestAccount?.setPasswordUrl
-      ? [
-          "",
-          "Your My Hub account is ready.",
-          `Create your password: ${guestAccount.setPasswordUrl}`,
-          "This secure link expires in 72 hours."
-        ]
-      : guestAccount?.email && !guestAccount?.created
-        ? ["", `Already have an account? Sign in at ${dashboardUrl("/login")} with ${guestAccount.email}.`]
-        : [];
 
   const text = [
     `Hi ${safeName},`,
@@ -346,7 +364,6 @@ function buildBookingConfirmationEmail({
     `Status: ${payLabel}`,
     `Booking reference: #${bookingId}`,
     qrImageUrl ? "Your entry QR code is shown in this email." : "",
-    ...accountTextLines,
     "",
     `View event: ${eventUrl}`,
     `My bookings: ${dashboardUrl("/dashboard/user")}`,
@@ -366,11 +383,6 @@ function buildBookingConfirmationEmail({
   if (discount > 0) {
     rows.push({ label: "You saved", value: `${formatUsd(discount)}${couponCode ? ` · ${couponCode}` : ""}` });
   }
-  if (guestAccount?.created && guestAccount?.email) {
-    rows.push({ label: "My Hub email", value: guestAccount.email });
-  }
-
-  const setPasswordUrl = guestAccount?.setPasswordUrl || null;
 
   const html = buildLayout({
     preheader: `Booking confirmed for ${eventTitle || "your event"}.`,
@@ -378,19 +390,100 @@ function buildBookingConfirmationEmail({
     title: "You're all set for the show",
     subtitle: qrImageUrl
       ? `Hi ${safeName}, your tickets are confirmed. Show the QR code below at the venue for entry.`
-      : guestAccount?.created
-        ? `Hi ${safeName}, your tickets are confirmed. Create a password to access My Hub and your bookings anytime.`
-        : `Hi ${safeName}, we've reserved your tickets. Bring this confirmation to My Hub anytime.`,
+      : `Hi ${safeName}, your tickets are confirmed. Keep this email for your records.`,
     headerTone: "violet",
     ticketBlocks: ticketBlocks || [],
     rows,
     qrImageUrl,
     qrCaption: "Scan at entry · keep this email handy",
-    ctaLabel: setPasswordUrl ? "Create your password" : "View my bookings",
-    ctaUrl: setPasswordUrl || dashboardUrl("/dashboard/user"),
-    footerNote: setPasswordUrl
-      ? `Need help? Contact ${BRAND_SUPPORT_EMAIL}. This password link is personal — do not share it.`
-      : `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
+    ctaLabel: "View my bookings",
+    ctaUrl: dashboardUrl("/dashboard/user"),
+    footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
+  });
+
+  return { subject, text, html };
+}
+
+function buildOrganizerBookingNotificationEmail({
+  organizerName,
+  eventTitle,
+  event,
+  bookingId,
+  guestName,
+  guestEmail,
+  guestPhone,
+  selectedDates,
+  totalDays,
+  attendeeCount,
+  ticketBlocks,
+  subtotalAmount,
+  discountAmount,
+  totalAmount,
+  couponCode,
+  paymentStatus,
+  isGuestBooking = false
+}) {
+  const safeOrganizer = String(organizerName || "there").trim() || "there";
+  const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "—";
+  const subject = `New booking — ${eventTitle || "your event"} · ${BRAND_NAME}`;
+  const totalLine = formatUsd(totalAmount);
+  const discount = Number(discountAmount) || 0;
+  const payLabel = paymentStatusLabel(paymentStatus);
+  const guestLabel = String(guestName || "Guest").trim() || "Guest";
+
+  const text = [
+    `Hi ${safeOrganizer},`,
+    "",
+    `You have a new ticket booking on ${BRAND_NAME}.`,
+    `Event: ${eventTitle || "Event"}`,
+    `Guest: ${guestLabel}`,
+    `Email: ${guestEmail || "—"}`,
+    guestPhone ? `Phone: ${guestPhone}` : "",
+    `Show date(s): ${datesLabel}`,
+    `Tickets: ${attendeeCount || 0}`,
+    `Total: ${totalLine}`,
+    discount > 0 ? `Discount: ${formatUsd(discount)}${couponCode ? ` (${couponCode})` : ""}` : "",
+    `Status: ${payLabel}`,
+    `Booking reference: #${bookingId}`,
+    isGuestBooking ? "Booked via guest checkout." : "",
+    "",
+    `Organizer dashboard: ${dashboardUrl("/dashboard/organizer")}`,
+    "",
+    `${BRAND_NAME} Team`
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const rows = [
+    { label: "Booking ref", value: `#${bookingId}` },
+    { label: "Status", value: payLabel },
+    { label: "Guest", value: guestLabel },
+    { label: "Guest email", value: guestEmail || "—" },
+    ...(guestPhone ? [{ label: "Guest phone", value: guestPhone }] : []),
+    { label: "Event", value: eventTitle || "Event" },
+    { label: "Show date(s)", value: datesLabel },
+    { label: "Tickets", value: String(attendeeCount || 0) },
+    ...(totalDays > 1 ? [{ label: "Show days", value: String(totalDays) }] : []),
+    { label: "Total", value: totalLine }
+  ];
+  if (discount > 0) {
+    rows.push({ label: "Discount", value: `${formatUsd(discount)}${couponCode ? ` · ${couponCode}` : ""}` });
+  }
+  if (isGuestBooking) {
+    rows.push({ label: "Checkout", value: "Guest checkout" });
+  }
+
+  const html = buildLayout({
+    preheader: `New booking for ${eventTitle || "your event"}.`,
+    eyebrow: "New booking",
+    title: "Someone just booked your event",
+    subtitle: `Hi ${safeOrganizer}, a guest completed checkout for ${eventTitle || "your event"}. Details are below.`,
+    headerTone: "emerald",
+    ticketBlocks: ticketBlocks || [],
+    rows,
+    ctaLabel: "Open organizer dashboard",
+    ctaUrl: dashboardUrl("/dashboard/organizer"),
+    footerNote: `Manage bookings and analytics from your organizer dashboard. Questions? ${BRAND_SUPPORT_EMAIL}`
   });
 
   return { subject, text, html };
@@ -569,6 +662,7 @@ module.exports = {
   buildWelcomeEmail,
   buildApprovalEmail,
   buildBookingConfirmationEmail,
+  buildOrganizerBookingNotificationEmail,
   buildContactAdminEmail,
   buildPlatformTicketRequestAdminEmail,
   buildPlatformTicketRequestUserEmail,

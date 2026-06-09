@@ -700,16 +700,40 @@ async function activateAccount(userId) {
   }
 }
 
+function isForeignKeyViolation(err) {
+  return (
+    err?.code === "ER_ROW_IS_REFERENCED" ||
+    err?.code === "ER_ROW_IS_REFERENCED_2" ||
+    err?.errno === 1451 ||
+    err?.errno === 1217
+  );
+}
+
 async function removeUserAccount(userId) {
   if (Number(userId) === 1) {
     throw new ApiError(400, "Master admin account cannot be deleted");
   }
   const target = await findUserById(userId);
-  const deleted = await deleteUserById(userId);
-  if (!deleted) {
+  if (!target) {
     throw new ApiError(404, "User not found");
   }
-  await deleteSubscriberByEmail(target?.email).catch(() => {});
+
+  try {
+    const deleted = await deleteUserById(userId);
+    if (!deleted) {
+      throw new ApiError(404, "User not found");
+    }
+  } catch (err) {
+    if (isForeignKeyViolation(err)) {
+      throw new ApiError(
+        409,
+        "This user still has linked records that could not be removed automatically. Try deactivating the account instead."
+      );
+    }
+    throw err;
+  }
+
+  await deleteSubscriberByEmail(target.email).catch(() => {});
 }
 
 async function updateTeamUserCapabilities({ userId, capabilities }) {

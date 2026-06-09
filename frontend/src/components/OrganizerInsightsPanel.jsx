@@ -88,6 +88,8 @@ export default function OrganizerInsightsPanel({
   const [hourlyDate, setHourlyDate] = useState(null);
   const hourlyDateRef = useRef(null);
   hourlyDateRef.current = hourlyDate;
+  const insightsRequestIdRef = useRef(0);
+  const prevBookingsCountRef = useRef(organizerBookings.length);
 
   const fetchInsights = fetchEventInsightsFn || fetchOrganizerEventInsights;
   const skipEventPicker = Boolean(fixedEventId) || embedded;
@@ -111,38 +113,57 @@ export default function OrganizerInsightsPanel({
   }, [fixedEventId]);
 
   const loadInsights = useCallback(
-    async ({ silent = false, hourlyDate: hourlyDateOverride } = {}) => {
-      const eventId = fixedEventId || selectedEventId;
+    async ({ silent = false, hourlyDate: hourlyDateOverride, eventId: eventIdOverride } = {}) => {
+      const eventId = eventIdOverride || fixedEventId || loadedEventId || selectedEventId;
       if (!eventId) {
         setInsights(null);
         return;
       }
+
+      let requestId = insightsRequestIdRef.current;
       if (!silent) {
+        requestId += 1;
+        insightsRequestIdRef.current = requestId;
         setLoadingInsights(true);
+        setError("");
       }
-      setError("");
+
       try {
         const dateParam = hourlyDateOverride ?? hourlyDateRef.current ?? undefined;
         const res = await fetchInsights(eventId, {
           hourlyDate: dateParam
         });
+        if (requestId !== insightsRequestIdRef.current) {
+          return;
+        }
         setInsights(res?.data || null);
         const selected = res?.data?.traffic?.hourly_chart?.selected_date;
         if (selected) {
           setHourlyDate(hourlyDateOverride ?? selected);
         }
+        if (!silent) {
+          setError("");
+        }
       } catch (err) {
+        if (requestId !== insightsRequestIdRef.current) {
+          return;
+        }
         if (!silent) {
           setInsights(null);
+          const isTimeout = err?.code === "ECONNABORTED";
+          setError(
+            isTimeout
+              ? "Analytics is taking longer than usual. Please try Load analytics again."
+              : err?.response?.data?.message || "Could not load analytics for this event."
+          );
         }
-        setError(err?.response?.data?.message || "Could not load analytics for this event.");
       } finally {
-        if (!silent) {
+        if (!silent && requestId === insightsRequestIdRef.current) {
           setLoadingInsights(false);
         }
       }
     },
-    [fixedEventId, selectedEventId, fetchInsights]
+    [fixedEventId, loadedEventId, selectedEventId, fetchInsights]
   );
 
   useEffect(() => {
@@ -187,7 +208,11 @@ export default function OrganizerInsightsPanel({
     if (!loadedEventId || loadedEventId !== selectedEventId) {
       return;
     }
-    void loadInsights({ silent: true });
+    if (prevBookingsCountRef.current === organizerBookings.length) {
+      return;
+    }
+    prevBookingsCountRef.current = organizerBookings.length;
+    void loadInsights({ silent: true, eventId: loadedEventId });
   }, [organizerBookings.length, loadedEventId, selectedEventId, loadInsights]);
 
   const filteredEvents = useMemo(() => {
@@ -369,15 +394,17 @@ export default function OrganizerInsightsPanel({
     if (!selectedEventId) {
       return;
     }
+    const eventId = selectedEventId;
     setError("");
-    setLoadedEventId(selectedEventId);
-    void loadInsights();
+    setLoadedEventId(eventId);
+    void loadInsights({ eventId });
   };
 
   const handleRefreshAnalytics = () => {
     void loadSummary();
-    if (autoLoadInsights || loadedEventId) {
-      void loadInsights();
+    const eventId = autoLoadInsights ? fixedEventId || selectedEventId : loadedEventId;
+    if (eventId) {
+      void loadInsights({ eventId });
     }
   };
 
@@ -789,7 +816,7 @@ export default function OrganizerInsightsPanel({
           {activeTab === "geo" ? (
             <SectionCard
               title="Visitor geography"
-              hint="Where your audience is located (last 30 days). Hover the map for state or country counts."
+              hint="All-time unique visitors by location. Hover the map for state or country counts."
             >
               <AnalyticsGeoMap countries={countryData} />
             </SectionCard>
