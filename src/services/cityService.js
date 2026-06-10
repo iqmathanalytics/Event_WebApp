@@ -178,10 +178,6 @@ async function ensureOthersCitySeeded() {
 async function fetchCities({ q, limit } = {}) {
   await ensureAppMetroCitiesSeeded();
   await ensureOthersCitySeeded();
-  if (String(process.env.CITY_SYNC_FULL_US || "").toLowerCase() === "true") {
-    await syncUSCitiesIfStale();
-  }
-
   const query = String(q || "").trim();
   const { listDropdownCities } = require("../models/cityModel");
   let rows = await listDropdownCities({ q: query, limit });
@@ -209,7 +205,7 @@ async function listAdminDropdownCities() {
   await ensureAppMetroCitiesSeeded();
   await ensureOthersCitySeeded();
   const { listDropdownCities } = require("../models/cityModel");
-  const rows = await listDropdownCities({ limit: 200 });
+  const rows = await listDropdownCities();
   return rows.map((item) => ({
     id: item.id,
     name: item.name,

@@ -45,8 +45,7 @@ function formatCityOptionLabel(row) {
 }
 
 /**
- * City dropdowns use `useCityFilter()` (loaded from `/meta/cities` with real DB ids).
- * Rows are filtered by `slug` so homonyms (e.g. Dallas GA) never appear.
+ * City dropdowns use `useCityFilter()` — `/meta/cities` returns admin-managed metros only.
  */
 export function orderAllowedCities(rows) {
   return (rows || [])

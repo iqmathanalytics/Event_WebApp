@@ -18,7 +18,7 @@ export function CityFilterProvider({ children }) {
     (async () => {
       try {
         setCitiesLoading(true);
-        const res = await fetchCities({ limit: 200 });
+        const res = await fetchCities();
         const rows = Array.isArray(res?.data) ? res.data : [];
         const ordered = orderAllowedCities(rows);
         if (!cancelled) {

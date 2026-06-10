@@ -92,8 +92,8 @@ async function listActiveCities({ q = "", limit = 5000 }) {
   return rows;
 }
 
-async function listDropdownCities({ q = "", limit = 500 } = {}) {
-  const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 1000));
+async function listDropdownCities({ q = "", limit = 64 } = {}) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 64, 128));
   const query = String(q || "").trim();
   if (query) {
     const [rows] = await pool.query(
