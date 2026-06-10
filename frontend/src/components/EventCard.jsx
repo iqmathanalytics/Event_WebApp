@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FiHeart, FiImage } from "react-icons/fi";
+import { FiHeart } from "react-icons/fi";
 import { formatCurrency, formatDateUS, formatTime12Hour } from "../utils/format";
 import { trackEventClick } from "../services/eventService";
 import { trackEventListingClick } from "../utils/googleAnalytics";
 import { eventDetailPath } from "../utils/listingPaths";
 import { getEventSortDate } from "../utils/eventSchedule";
 import useAuth from "../hooks/useAuth";
+import ListingCardImage from "./ListingCardImage";
 import PremiumLockOverlay from "./PremiumLockOverlay";
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 import { resolveEventListPrice } from "../utils/eventTicketLevels";
@@ -111,34 +112,7 @@ function EventCard({
             </span>
           </div>
         ) : null}
-        {eventImage ? (
-          <>
-            <img
-              src={eventImage}
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 via-transparent to-slate-900/10" />
-            <img
-              src={eventImage}
-              alt={item.title}
-              loading="lazy"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-              className="relative h-full w-full object-contain"
-            />
-          </>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500">
-            <div className="flex flex-col items-center gap-1">
-              <div className="grid h-12 w-12 place-content-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200">
-                <FiImage className="h-5 w-5" />
-              </div>
-              <p className="text-xs font-semibold">No event image</p>
-            </div>
-          </div>
-        )}
+        <ListingCardImage src={eventImage} alt={item.title} emptyLabel="No event image" />
       </button>
       <div className={`flex flex-1 flex-col p-3 sm:p-4 ${isLanding ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
         <div className="flex items-center justify-between gap-1.5">

@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -26,7 +26,7 @@ import {
   BookingStripeRefCell
 } from "../components/BookingPaymentTableCells";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
-import OrganizerInsightsPanel from "../components/OrganizerInsightsPanel";
+const OrganizerInsightsPanel = lazy(() => import("../components/OrganizerInsightsPanel"));
 import EventTicketLevelsEditor from "../components/EventTicketLevelsEditor";
 import {
   parseTicketLevelsFromEvent,
@@ -813,11 +813,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="space-y-4"
             >
-              <OrganizerInsightsPanel
-                events={rows}
-                refreshKey={analyticsRefreshKey}
-                organizerBookings={overviewBookings}
-              />
+              <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                <OrganizerInsightsPanel
+                  events={rows}
+                  refreshKey={analyticsRefreshKey}
+                  organizerBookings={overviewBookings}
+                />
+              </Suspense>
             </motion.section>
           ) : null}
 
@@ -1132,11 +1134,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="space-y-4"
             >
-              <OrganizerInsightsPanel
-                events={rows}
-                refreshKey={analyticsRefreshKey}
-                organizerBookings={overviewBookings}
-              />
+              <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                <OrganizerInsightsPanel
+                  events={rows}
+                  refreshKey={analyticsRefreshKey}
+                  organizerBookings={overviewBookings}
+                />
+              </Suspense>
             </motion.section>
           ) : null}
 

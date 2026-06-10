@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
@@ -47,7 +47,7 @@ import {
   updateAdminEventListed,
   fetchAdminEventInsights
 } from "../services/adminService";
-import OrganizerInsightsPanel from "../components/OrganizerInsightsPanel";
+const OrganizerInsightsPanel = lazy(() => import("../components/OrganizerInsightsPanel"));
 import EventBookingsTable from "../components/EventBookingsTable";
 import AdminPlatformTicketRequestsPanel from "../components/AdminPlatformTicketRequestsPanel";
 import { downloadBlob } from "../utils/fileDownload";
@@ -3590,11 +3590,13 @@ function AdminDashboardPage() {
               editingListing &&
               normalizeEventTicketSalesMode(editForm.ticket_sales_mode) === "platform" ? (
                 <div className="mt-5 border-t border-slate-200 pt-5">
-                  <OrganizerInsightsPanel
-                    fixedEventId={String(editingListing.id)}
-                    embedded
-                    fetchEventInsightsFn={fetchAdminEventInsights}
-                  />
+                  <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                    <OrganizerInsightsPanel
+                      fixedEventId={String(editingListing.id)}
+                      embedded
+                      fetchEventInsightsFn={fetchAdminEventInsights}
+                    />
+                  </Suspense>
                 </div>
               ) : null}
             </div>
@@ -4279,11 +4281,13 @@ function AdminDashboardPage() {
               {viewListingType === "events" ? (
                 resolveEventTicketSalesMode(viewListing) === "platform" && viewEventTab === "sales" ? (
                 <div className="space-y-6">
-                  <OrganizerInsightsPanel
-                    fixedEventId={String(viewListing.id)}
-                    embedded
-                    fetchEventInsightsFn={fetchAdminEventInsights}
-                  />
+                  <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                    <OrganizerInsightsPanel
+                      fixedEventId={String(viewListing.id)}
+                      embedded
+                      fetchEventInsightsFn={fetchAdminEventInsights}
+                    />
+                  </Suspense>
                   <div>
                     <h4 className="mb-2 text-sm font-semibold text-slate-900">Bookings</h4>
                     <p className="mb-3 text-xs text-slate-500">

@@ -4,6 +4,7 @@ import { FaFacebookF } from "react-icons/fa";
 import { Instagram, Youtube } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { influencerDetailPath } from "../utils/listingPaths";
+import ListingCardImage from "./ListingCardImage";
 
 /** Fixed height for the stats row so every card aligns in the carousel/grid. */
 const REACH_STATS_ROW_CLASS = "h-[5.25rem]";
@@ -176,34 +177,12 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
           isLanding ? "h-44" : "h-40 sm:h-44"
         }`}
       >
-        {item.image ? (
-          <>
-            <img
-              src={item.image}
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 via-transparent to-slate-900/10" />
-            <img
-              src={item.image}
-              alt={item.name}
-              loading="lazy"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-              className="relative h-full w-full object-contain"
-            />
-          </>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500">
-            <div className="flex flex-col items-center gap-1">
-              <div className="grid h-12 w-12 place-content-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200">
-                <FiUser className="h-5 w-5" />
-              </div>
-              <p className="text-xs font-semibold">No profile image</p>
-            </div>
-          </div>
-        )}
+        <ListingCardImage
+          src={item.image}
+          alt={item.name}
+          emptyLabel="No profile image"
+          placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500"
+        />
       </div>
 
       <div className={`flex flex-1 flex-col p-3 sm:p-4 ${isLanding ? "gap-1.5" : "gap-2"}`}>

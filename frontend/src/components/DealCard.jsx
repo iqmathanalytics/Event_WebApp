@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { formatCurrency } from "../utils/format";
 import { motion } from "framer-motion";
-import { FiHeart, FiImage } from "react-icons/fi";
+import { FiHeart } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { trackDealClick } from "../services/listingService";
 import { dealDetailPath } from "../utils/listingPaths";
+import ListingCardImage from "./ListingCardImage";
 import PremiumLockOverlay from "./PremiumLockOverlay";
 
 function resolveOfferChip(item) {
@@ -111,34 +112,7 @@ function DealCard({
             </span>
           </div>
         ) : null}
-        {item.image ? (
-          <>
-            <img
-              src={item.image}
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 via-transparent to-slate-900/10" />
-            <img
-              src={item.image}
-              alt={item.title}
-              loading="lazy"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-              className="relative h-full w-full object-contain"
-            />
-          </>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500">
-            <div className="flex flex-col items-center gap-1">
-              <div className="grid h-12 w-12 place-content-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200">
-                <FiImage className="h-5 w-5" />
-              </div>
-              <p className="text-xs font-semibold">No deal image</p>
-            </div>
-          </div>
-        )}
+        <ListingCardImage src={item.image} alt={item.title} emptyLabel="No deal image" />
       </div>
       <div className={`flex flex-1 flex-col p-3 sm:p-4 ${isLanding ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
         <div className="flex items-start justify-between gap-1.5">

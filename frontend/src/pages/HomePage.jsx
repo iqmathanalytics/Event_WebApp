@@ -15,6 +15,7 @@ import LandingCarouselSlot from "../components/LandingCarouselSlot";
 import HeroSlideshow from "../components/HeroSlideshow";
 import HeroEventBadge from "../components/HeroEventBadge";
 import LandingSplash from "../components/LandingSplash";
+import LazyMount from "../components/LazyMount";
 import { fetchFeaturedEvents } from "../services/eventService";
 import { fetchDeals, fetchInfluencers, trackInfluencerClick } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
@@ -106,11 +107,11 @@ function HomePage() {
         setLoadingEvents(true);
         let response = await fetchFeaturedEvents({
           city: selectedCity || undefined,
-          limit: 60
+          limit: 24
         });
         const initialRows = response?.data || [];
         if (selectedCity && initialRows.length === 0) {
-          response = await fetchFeaturedEvents({ limit: 60 });
+          response = await fetchFeaturedEvents({ limit: 24 });
           if (active) {
             setSelectedCity("");
           }
@@ -362,6 +363,7 @@ function HomePage() {
             ))
           : landingEvents.map((item) => (
               <LandingCarouselSlot key={item.id} grid>
+                <LazyMount>
                 <EventCard
                   variant="landing"
                   item={{
@@ -395,6 +397,7 @@ function HomePage() {
                     })
                   }
                 />
+                </LazyMount>
               </LandingCarouselSlot>
             ))}
       </DiscoverySectionCarousel>
@@ -411,6 +414,7 @@ function HomePage() {
                 const socialLinks = parseInfluencerSocialLinks(item.social_links);
                 return (
                 <LandingCarouselSlot key={item.id} grid>
+                  <LazyMount>
                   <InfluencerCard
                     variant="landing"
                     item={{
@@ -436,6 +440,7 @@ function HomePage() {
                       })
                     }
                   />
+                  </LazyMount>
                 </LandingCarouselSlot>
                 );
               })
@@ -454,6 +459,7 @@ function HomePage() {
           : landingDeals.length > 0
             ? landingDeals.map((item) => (
                 <LandingCarouselSlot key={item.id} grid>
+                  <LazyMount>
                   <DealCard
                     variant="landing"
                     item={{
@@ -482,6 +488,7 @@ function HomePage() {
                       })
                     }
                   />
+                  </LazyMount>
                 </LandingCarouselSlot>
               ))
             : (

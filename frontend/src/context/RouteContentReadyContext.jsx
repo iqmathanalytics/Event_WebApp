@@ -45,20 +45,23 @@ function waitForFonts() {
 }
 
 /** Cap so a broken link or lazy cliff does not block the overlay indefinitely. */
-const MAIN_IMAGE_WAIT_CAP_MS = 8000;
+const MAIN_IMAGE_WAIT_CAP_MS = 4000;
+const MAX_SPLASH_IMAGES = 6;
 
 function collectMainImages() {
   const main = document.querySelector("main");
   if (!main) {
     return [];
   }
-  return Array.from(main.querySelectorAll("img[src]")).filter((img) => {
-    if (img.closest("[data-route-splash-ignore]") || img.hasAttribute("data-route-splash-ignore")) {
-      return false;
-    }
-    const src = String(img.getAttribute("src") || "").trim();
-    return Boolean(src);
-  });
+  return Array.from(main.querySelectorAll("img[src]"))
+    .filter((img) => {
+      if (img.closest("[data-route-splash-ignore]") || img.hasAttribute("data-route-splash-ignore")) {
+        return false;
+      }
+      const src = String(img.getAttribute("src") || "").trim();
+      return Boolean(src);
+    })
+    .slice(0, MAX_SPLASH_IMAGES);
 }
 
 /** Eager images + lazy images that are in/near the viewport (skip off-screen lazy grid cards). */
@@ -72,7 +75,7 @@ function imageShouldGateSplash(img) {
   const r = img.getBoundingClientRect();
   const vh = window.innerHeight || 0;
   const vw = window.innerWidth || 0;
-  const margin = 240;
+  const margin = 80;
   return r.bottom >= -margin && r.top <= vh + margin && r.right >= -margin && r.left <= vw + margin;
 }
 
