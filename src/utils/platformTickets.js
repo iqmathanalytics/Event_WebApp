@@ -1,4 +1,6 @@
-const PLATFORM_TICKETS_REQUEST_EMAIL = "tickets@bookmytickets.us";
+const { BRAND_SUPPORT_EMAIL } = require("./brandEmail");
+
+const PLATFORM_TICKETS_REQUEST_EMAIL = BRAND_SUPPORT_EMAIL;
 
 module.exports = {
   PLATFORM_TICKETS_REQUEST_EMAIL

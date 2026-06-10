@@ -34,7 +34,7 @@ import {
   validateBookingContactNames
 } from "../utils/bookingContact";
 import { getEventAvailableDates, normalizeDateList } from "../utils/eventSchedule";
-import { BRAND_NAME } from "../constants/brand";
+import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "../constants/brand";
 import EventTicketCart from "./EventTicketCart";
 import { trackBookingCompleteTiers } from "../utils/googleAnalytics";
 import { maxTicketsForBooking } from "../utils/eventSeats";
@@ -833,7 +833,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         const apiMessage = err?.response?.data?.message;
         setError(
           apiMessage ||
-            "Payment went through but we could not save your booking. Contact support with your receipt."
+            `Payment went through but we could not save your booking. Contact ${BRAND_SUPPORT_EMAIL} with your receipt.`
         );
         setPaymentModalOpen(false);
         setStep("confirm");

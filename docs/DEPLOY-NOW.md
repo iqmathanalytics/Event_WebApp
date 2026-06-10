@@ -33,7 +33,7 @@ This writes `deploy/milesweb-api.env` and builds `frontend/dist/`.
 |--------|--------|
 | Google OAuth | Authorized origins: `https://bookmytickets.us`, `https://www.bookmytickets.us` |
 | Stripe | Live keys in MilesWeb `.env`; live webhook `https://www.bookmytickets.us/api/webhooks/stripe` — see `docs/STRIPE-LIVE-WEBHOOK.md` |
-| Brevo | Sender `tickets@bookmytickets.us` verified |
+| Brevo | Sender `howdy@bookmytickets.us` verified |
 | GA4 | `VITE_GA_MEASUREMENT_ID` in build; service account has Viewer on property |
 
 ## 5. Smoke test

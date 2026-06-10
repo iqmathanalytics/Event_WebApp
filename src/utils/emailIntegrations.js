@@ -22,7 +22,7 @@ function warnMailchimpConfig(reason) {
 function getBrevoConfig() {
   const apiKey = String(process.env.BREVO_API_KEY || "").trim();
   const fromEmail = String(
-    process.env.BREVO_FROM_EMAIL || process.env.SENDGRID_FROM_EMAIL || "tickets@bookmytickets.us"
+    process.env.BREVO_FROM_EMAIL || process.env.SENDGRID_FROM_EMAIL || "howdy@bookmytickets.us"
   ).trim();
   const fromName = String(process.env.BREVO_FROM_NAME || process.env.SENDGRID_FROM_NAME || "Book My Tickets").trim();
   return { apiKey, fromEmail, fromName };

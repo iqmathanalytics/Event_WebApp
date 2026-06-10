@@ -1,6 +1,6 @@
 const BRAND_NAME = "Book My Tickets";
 const BRAND_TAGLINE = "Your city's event guide";
-const BRAND_SUPPORT_EMAIL = "tickets@bookmytickets.us";
+const BRAND_SUPPORT_EMAIL = "howdy@bookmytickets.us";
 
 function appBaseUrl() {
   const raw = process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || "https://bookmytickets.us";

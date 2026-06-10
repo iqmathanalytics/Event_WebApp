@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { FiArrowRight, FiMail } from "react-icons/fi";
 import { FaFacebookF } from "react-icons/fa";
 import { Instagram, Youtube } from "lucide-react";
-import { BRAND_SOCIAL_LINKS } from "../constants/brand";
+import { BRAND_SOCIAL_LINKS, BRAND_SUPPORT_EMAIL } from "../constants/brand";
 
 const SOCIAL_BUTTONS = [
   {
@@ -76,7 +76,14 @@ function Footer() {
               ))}
             </div>
           </div>
-          <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+            <a
+              href={`mailto:${BRAND_SUPPORT_EMAIL}`}
+              className="inline-flex items-center gap-1.5 transition hover:text-slate-900"
+            >
+              <FiMail className="h-3.5 w-3.5" aria-hidden />
+              {BRAND_SUPPORT_EMAIL}
+            </a>
             <Link to="/newsletter" className="transition hover:text-slate-900">
               City Newsletter
             </Link>

@@ -27,12 +27,12 @@ Never commit this key to git. Add it in Render / MilesWeb / local `.env` only.
 | Field | Value |
 |--------|--------|
 | **Name** | Book My Tickets |
-| **Email** | `tickets@bookmytickets.us` |
+| **Email** | `howdy@bookmytickets.us` |
 
-In Brevo: **Senders & IP → Senders** → add and verify **`tickets@bookmytickets.us`** (SPF, DKIM for `bookmytickets.us`).
+In Brevo: **Senders & IP → Senders** → add and verify **`howdy@bookmytickets.us`** (SPF, DKIM for `bookmytickets.us`).
 
 ```env
-BREVO_FROM_EMAIL=tickets@bookmytickets.us
+BREVO_FROM_EMAIL=howdy@bookmytickets.us
 BREVO_FROM_NAME=Book My Tickets
 ```
 

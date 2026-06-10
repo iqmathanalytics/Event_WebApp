@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiAlertCircle, FiCheck, FiLoader, FiSend } from "react-icons/fi";
+import { BRAND_SUPPORT_EMAIL } from "../constants/brand";
 import { CONTACT_SUBJECT_OPTIONS } from "../constants/contactSubjects";
 import { submitContactMessage } from "../services/contactService";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
@@ -63,7 +64,12 @@ function ContactPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">Contact</p>
           <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight">We’re here to help</h1>
           <p className="mt-2 text-sm leading-relaxed text-white/75">
-            Partnerships, support, feedback—send a message and we’ll reply within one business day.
+            Partnerships, support, feedback—send a message and we’ll reply within one business day. You can also email us
+            at{" "}
+            <a href={`mailto:${BRAND_SUPPORT_EMAIL}`} className="font-semibold text-white underline decoration-white/40">
+              {BRAND_SUPPORT_EMAIL}
+            </a>
+            .
           </p>
         </section>
 
@@ -199,7 +205,15 @@ function ContactPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Contact</p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">We’re here to help</h1>
           <p className="mx-auto max-w-xl text-base leading-relaxed text-slate-600 sm:mx-0">
-            Send us a message—partnerships, support, or feedback. We typically reply within one business day.
+            Send us a message—partnerships, support, or feedback. We typically reply within one business day, or reach us
+            directly at{" "}
+            <a
+              href={`mailto:${BRAND_SUPPORT_EMAIL}`}
+              className="font-semibold text-brand-700 underline decoration-brand-200 hover:text-brand-800"
+            >
+              {BRAND_SUPPORT_EMAIL}
+            </a>
+            .
           </p>
         </header>
 
