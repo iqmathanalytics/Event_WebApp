@@ -3,7 +3,7 @@ import { absoluteListingUrl, eventDetailPath } from "../utils/listingPaths";
 import ShareListingButton from "../components/ShareListingButton";
 import ListingFavoriteButton from "../components/ListingFavoriteButton";
 import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FiCalendar, FiClock, FiMapPin, FiUser, FiYoutube } from "react-icons/fi";
 import { CheckCircle, Clock, Globe, Mic, Users } from "lucide-react";
@@ -17,8 +17,9 @@ import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import EventDetailBanner from "../components/EventDetailBanner";
 import GuestPromoVideoCard from "../components/GuestPromoVideoCard";
-import EventTicketCheckoutPanel from "../components/EventTicketCheckoutPanel";
 import EventAirbnbBookingShell from "../components/EventAirbnbBookingShell";
+
+const EventTicketCheckoutPanel = lazy(() => import("../components/EventTicketCheckoutPanel"));
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 import { parsePromoVideoUrls } from "../utils/youtubeVideo";
 
@@ -434,7 +435,15 @@ function EventDetailsPage() {
 
         <aside className="lg:sticky lg:top-24 lg:z-10 lg:self-start">
           {ticketSalesMode === "platform" && (isAuthenticated || !isYayDealEvent) ? (
-            <EventTicketCheckoutPanel event={event} guestMode={!isAuthenticated} />
+            <Suspense
+              fallback={
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-soft">
+                  Loading checkout…
+                </div>
+              }
+            >
+              <EventTicketCheckoutPanel event={event} guestMode={!isAuthenticated} />
+            </Suspense>
           ) : (
             <EventAirbnbBookingShell
               event={event}

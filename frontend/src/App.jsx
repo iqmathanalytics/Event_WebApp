@@ -4,20 +4,12 @@ import MainLayout from "./layouts/MainLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import HomePage from "./pages/HomePage";
 import EventsPage from "./pages/EventsPage";
-import EventDetailsPage from "./pages/EventDetailsPage";
-import DealDetailsPage from "./pages/DealDetailsPage";
 import InfluencersPage from "./pages/InfluencersPage";
-import InfluencerDetailsPage from "./pages/InfluencerDetailsPage";
 import DealsPage from "./pages/DealsPage";
 import LoginPage from "./pages/LoginPage";
 import StaffLoginPage from "./pages/StaffLoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import SetPasswordPage from "./pages/SetPasswordPage";
-import UserDashboardPage from "./pages/UserDashboardPage";
-import UserSubmissionsPage from "./pages/UserSubmissionsPage";
-import OrganizerDashboardPage from "./pages/OrganizerDashboardPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-const AdminVerifyTicketPage = lazy(() => import("./pages/AdminVerifyTicketPage"));
 import ContactPage from "./pages/ContactPage";
 import NewsletterPage from "./pages/NewsletterPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -28,6 +20,19 @@ import AnimatedBackground from "./components/AnimatedBackground";
 import LogoutOverlay from "./components/LogoutOverlay";
 import NavigationProgress from "./components/NavigationProgress";
 import ScrollToTop from "./components/ScrollToTop";
+
+const EventDetailsPage = lazy(() => import("./pages/EventDetailsPage"));
+const DealDetailsPage = lazy(() => import("./pages/DealDetailsPage"));
+const InfluencerDetailsPage = lazy(() => import("./pages/InfluencerDetailsPage"));
+const UserDashboardPage = lazy(() => import("./pages/UserDashboardPage"));
+const UserSubmissionsPage = lazy(() => import("./pages/UserSubmissionsPage"));
+const OrganizerDashboardPage = lazy(() => import("./pages/OrganizerDashboardPage"));
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
+const AdminVerifyTicketPage = lazy(() => import("./pages/AdminVerifyTicketPage"));
+
+function RouteFallback({ label = "Loading…" }) {
+  return <p className="py-10 text-center text-sm text-slate-500">{label}</p>;
+}
 
 function App() {
   return (
@@ -41,11 +46,32 @@ function App() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/events" element={<EventsPage />} />
-            <Route path="/events/:slug" element={<EventDetailsPage />} />
+            <Route
+              path="/events/:slug"
+              element={
+                <Suspense fallback={<RouteFallback label="Loading event…" />}>
+                  <EventDetailsPage />
+                </Suspense>
+              }
+            />
             <Route path="/influencers" element={<InfluencersPage />} />
-            <Route path="/influencers/:slug" element={<InfluencerDetailsPage />} />
+            <Route
+              path="/influencers/:slug"
+              element={
+                <Suspense fallback={<RouteFallback label="Loading profile…" />}>
+                  <InfluencerDetailsPage />
+                </Suspense>
+              }
+            />
             <Route path="/deals" element={<DealsPage />} />
-            <Route path="/deals/:slug" element={<DealDetailsPage />} />
+            <Route
+              path="/deals/:slug"
+              element={
+                <Suspense fallback={<RouteFallback label="Loading deal…" />}>
+                  <DealDetailsPage />
+                </Suspense>
+              }
+            />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/newsletter" element={<NewsletterPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -69,8 +95,22 @@ function App() {
               </UserRoute>
             }
           >
-            <Route path="/dashboard/user" element={<UserDashboardPage />} />
-            <Route path="/dashboard/user/submissions" element={<UserSubmissionsPage />} />
+            <Route
+              path="/dashboard/user"
+              element={
+                <Suspense fallback={<RouteFallback label="Loading dashboard…" />}>
+                  <UserDashboardPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/dashboard/user/submissions"
+              element={
+                <Suspense fallback={<RouteFallback label="Loading submissions…" />}>
+                  <UserSubmissionsPage />
+                </Suspense>
+              }
+            />
           </Route>
 
           <Route
@@ -81,7 +121,14 @@ function App() {
               </OrganizerRoute>
             }
           >
-            <Route index element={<OrganizerDashboardPage />} />
+            <Route
+              index
+              element={
+                <Suspense fallback={<RouteFallback label="Loading organizer dashboard…" />}>
+                  <OrganizerDashboardPage />
+                </Suspense>
+              }
+            />
           </Route>
 
           <Route
@@ -91,15 +138,18 @@ function App() {
               </AdminRoute>
             }
           >
-            <Route path="/dashboard/admin" element={<AdminDashboardPage />} />
+            <Route
+              path="/dashboard/admin"
+              element={
+                <Suspense fallback={<RouteFallback label="Loading admin dashboard…" />}>
+                  <AdminDashboardPage />
+                </Suspense>
+              }
+            />
             <Route
               path="/dashboard/admin/verify-ticket"
               element={
-                <Suspense
-                  fallback={
-                    <p className="py-8 text-center text-sm text-slate-500">Loading ticket scanner…</p>
-                  }
-                >
+                <Suspense fallback={<RouteFallback label="Loading ticket scanner…" />}>
                   <AdminVerifyTicketPage />
                 </Suspense>
               }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Ticket } from "lucide-react";
 import {
@@ -10,7 +10,7 @@ import {
   createGuestBookingPaymentIntent
 } from "../services/bookingService";
 import { confirmBookingPaymentWithRetry } from "../utils/confirmBookingPaymentWithRetry";
-import StripePaymentModal from "./StripePaymentModal";
+const StripePaymentModal = lazy(() => import("./StripePaymentModal"));
 import StripePaymentReturnRelay from "./StripePaymentReturnRelay";
 import BookingSuccessAnimation from "./BookingSuccessAnimation";
 import {
@@ -1012,17 +1012,21 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   if (step === "confirm") {
     return (
       <>
-      <StripePaymentModal
-        open={paymentModalOpen}
-        clientSecret={paymentClientSecret}
-        publishableKey={paymentPublishableKey}
-        paymentIntentId={paymentIntentId}
-        eventId={eventId}
-        totalLabel={formatCurrency(totalAmount)}
-        onClose={onPaymentModalClose}
-        onError={(msg) => setError(msg)}
-        onSuccess={(piId) => void onPaymentSuccess(piId)}
-      />
+      {paymentModalOpen ? (
+        <Suspense fallback={null}>
+          <StripePaymentModal
+            open={paymentModalOpen}
+            clientSecret={paymentClientSecret}
+            publishableKey={paymentPublishableKey}
+            paymentIntentId={paymentIntentId}
+            eventId={eventId}
+            totalLabel={formatCurrency(totalAmount)}
+            onClose={onPaymentModalClose}
+            onError={(msg) => setError(msg)}
+            onSuccess={(piId) => void onPaymentSuccess(piId)}
+          />
+        </Suspense>
+      ) : null}
       <CheckoutCard pill="Review your booking" seatBar={seatBar}>
         <div className="mb-5">
           <PriceTotals

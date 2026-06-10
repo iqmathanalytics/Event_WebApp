@@ -1,73 +1,54 @@
-const IMAGE_CACHE = "bookmytickets-images-v2";
-const APP_CACHE = "bookmytickets-app-v1";
-const IMAGE_CACHE_MAX_ENTRIES = 120;
+const STATIC_CACHE = "bookmytickets-static-v3";
+
+/** Same-origin branding only — avoids double-fetching API/CDN assets. */
+function isBrandStaticImage(request) {
+  if (request.method !== "GET") {
+    return false;
+  }
+  try {
+    const url = new URL(request.url);
+    if (url.origin !== self.location.origin) {
+      return false;
+    }
+    return url.pathname.startsWith("/branding/") && /\.(png|jpe?g|webp|gif|avif|svg)$/i.test(url.pathname);
+  } catch (_err) {
+    return false;
+  }
+}
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(APP_CACHE));
-  self.skipWaiting();
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(
-        keys
-          .filter((key) => key !== IMAGE_CACHE && key !== APP_CACHE)
-          .map((key) => caches.delete(key))
-      );
+      await Promise.all(keys.filter((key) => key !== STATIC_CACHE).map((key) => caches.delete(key)));
       await self.clients.claim();
     })()
   );
 });
 
-function isImageRequest(request) {
-  if (request.destination === "image") {
-    return true;
-  }
-  try {
-    const url = new URL(request.url);
-    return /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(url.pathname);
-  } catch (_err) {
-    return false;
-  }
-}
-
-async function trimImageCache(cache) {
-  const keys = await cache.keys();
-  if (keys.length <= IMAGE_CACHE_MAX_ENTRIES) {
-    return;
-  }
-  const overflow = keys.length - IMAGE_CACHE_MAX_ENTRIES;
-  await Promise.all(keys.slice(0, overflow).map((key) => cache.delete(key)));
-}
-
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET" || !isImageRequest(request)) {
+  if (!isBrandStaticImage(request)) {
     return;
   }
 
   event.respondWith(
     (async () => {
-      const cache = await caches.open(IMAGE_CACHE);
-      const cached = await cache.match(request, { ignoreVary: true });
+      const cache = await caches.open(STATIC_CACHE);
+      const cached = await cache.match(request);
       if (cached) {
         return cached;
       }
 
-      try {
-        const response = await fetch(request);
-        if (response && (response.ok || response.type === "opaque")) {
-          cache.put(request, response.clone()).then(() => trimImageCache(cache));
-        }
-        return response;
-      } catch (err) {
-        if (cached) {
-          return cached;
-        }
-        throw err;
+      const response = await fetch(request);
+      if (response && response.ok) {
+        cache.put(request, response.clone());
       }
+      return response;
     })()
   );
 });

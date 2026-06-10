@@ -1,5 +1,8 @@
 import api, { postKeepalive } from "./api";
 import { encodePublicListingParam } from "../utils/listingPaths";
+import { buildCacheKey, cachedClientFetch, isAuthenticatedClient } from "../utils/clientCache";
+
+const PUBLIC_LIST_CACHE_TTL_MS = 3 * 60 * 1000;
 
 export async function fetchEvents(params = {}) {
   const response = await api.get("/events", { params });
@@ -7,8 +10,18 @@ export async function fetchEvents(params = {}) {
 }
 
 export async function fetchFeaturedEvents(params = {}) {
-  const response = await api.get("/events/featured", { params });
-  return response.data;
+  const cacheKey = buildCacheKey("events:featured", {
+    ...params,
+    auth: isAuthenticatedClient() ? "1" : "0"
+  });
+  return cachedClientFetch(
+    cacheKey,
+    async () => {
+      const response = await api.get("/events/featured", { params });
+      return response.data;
+    },
+    { ttlMs: PUBLIC_LIST_CACHE_TTL_MS }
+  );
 }
 
 export async function fetchEventById(slugOrId) {

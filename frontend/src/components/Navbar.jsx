@@ -198,7 +198,11 @@ function Navbar({
               ref={headerLogoRef}
               src={BRAND_HEADER_LOGO_URL}
               alt="Book My Tickets"
+              width={220}
+              height={60}
               loading="eager"
+              decoding="async"
+              fetchPriority="high"
               className="h-12 w-auto max-w-[min(52vw,220px)] object-contain sm:h-[3.75rem] sm:max-w-[min(48vw,260px)]"
               initial={false}
               animate={{

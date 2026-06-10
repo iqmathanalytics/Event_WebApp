@@ -13,10 +13,16 @@ const {
   influencerGalleryUploadSchema,
   fetchInfluencerGallerySchema
 } = require("../validators/influencerValidator");
+const { publicCacheMiddleware } = require("../middleware/publicCacheMiddleware");
 
 const router = express.Router();
 
-router.get("/", validateRequest(fetchInfluencersSchema), influencerController.fetchInfluencers);
+router.get(
+  "/",
+  validateRequest(fetchInfluencersSchema),
+  publicCacheMiddleware({ maxAge: 180, staleWhileRevalidate: 600 }),
+  influencerController.fetchInfluencers
+);
 router.get(
   "/my-submissions",
   authMiddleware,

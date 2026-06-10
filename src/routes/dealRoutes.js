@@ -13,6 +13,7 @@ const {
   editOwnDealSchema,
   trackDealAnalyticsSchema
 } = require("../validators/dealValidator");
+const { publicCacheMiddleware } = require("../middleware/publicCacheMiddleware");
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.get(
   "/",
   optionalAuthMiddleware,
   validateRequest(fetchDealsSchema),
+  publicCacheMiddleware({ maxAge: 180, staleWhileRevalidate: 600 }),
   dealController.fetchDeals
 );
 router.get(

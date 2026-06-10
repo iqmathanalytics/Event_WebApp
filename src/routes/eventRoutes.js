@@ -19,6 +19,7 @@ const {
 const {
   organizerEventInsightsSchema
 } = require("../validators/eventAnalyticsValidator");
+const { publicCacheMiddleware } = require("../middleware/publicCacheMiddleware");
 
 const router = express.Router();
 
@@ -27,6 +28,7 @@ router.get(
   "/featured",
   optionalAuthMiddleware,
   validateRequest(fetchFeaturedEventsSchema),
+  publicCacheMiddleware({ maxAge: 180, staleWhileRevalidate: 600 }),
   eventController.fetchFeaturedEvents
 );
 router.post(

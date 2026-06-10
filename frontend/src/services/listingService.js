@@ -1,14 +1,34 @@
 import api, { postKeepalive } from "./api";
 import { encodePublicListingParam } from "../utils/listingPaths";
+import { buildCacheKey, cachedClientFetch, isAuthenticatedClient } from "../utils/clientCache";
+
+const PUBLIC_LIST_CACHE_TTL_MS = 3 * 60 * 1000;
 
 export async function fetchInfluencers(params = {}) {
-  const response = await api.get("/influencers", { params });
-  return response.data;
+  const cacheKey = buildCacheKey("influencers", params);
+  return cachedClientFetch(
+    cacheKey,
+    async () => {
+      const response = await api.get("/influencers", { params });
+      return response.data;
+    },
+    { ttlMs: PUBLIC_LIST_CACHE_TTL_MS }
+  );
 }
 
 export async function fetchDeals(params = {}) {
-  const response = await api.get("/deals", { params });
-  return response.data;
+  const cacheKey = buildCacheKey("deals", {
+    ...params,
+    auth: isAuthenticatedClient() ? "1" : "0"
+  });
+  return cachedClientFetch(
+    cacheKey,
+    async () => {
+      const response = await api.get("/deals", { params });
+      return response.data;
+    },
+    { ttlMs: PUBLIC_LIST_CACHE_TTL_MS }
+  );
 }
 
 export async function fetchDealById(slugOrId) {
