@@ -53,6 +53,8 @@ const FILES = [
   "event_checkout_payments_guest.sql",
   "listing_public_slugs.sql",
   "event_total_seats.sql",
+  "event_seatsio.sql",
+  "event_seatsio_keys.sql",
   "users_role_mobile_migration.sql",
   "events_additional_fields.sql",
   "events_location_fields.sql",

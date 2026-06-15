@@ -55,8 +55,14 @@ Website (main domain document root):
   • Rebuild after every change to frontend/.env
 
 Database (once per environment):
-  • npm run db:migrate
+  • npm run db:migrate              (local TiDB)
+  • npm run db:migrate:production   (production TiDB — includes event_seatsio.sql)
   • npm run db:backfill-slugs
+
+Reserved seating (Seats.io):
+  • Set SEATSIO_SECRET_KEY + SEATSIO_WORKSPACE_KEY + SEATSIO_REGION in API .env
+  • Do not swap secret vs workspace keys (see .env.production.example)
+  • Organizer: platform event → Reserved seating → Design chart → Publish → Save
 
 Full guide: docs/MILESWEB-DEPLOY.md
 Quick list: docs/PRODUCTION-CHECKLIST.md

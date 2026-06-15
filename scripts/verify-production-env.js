@@ -28,6 +28,9 @@ const RECOMMENDED = [
   { key: "CLOUDINARY_CLOUD_NAME", hint: "Image uploads" },
   { key: "STRIPE_SECRET_KEY", hint: "Platform ticket checkout" },
   { key: "STRIPE_WEBHOOK_SECRET", hint: "Stripe webhooks at /webhooks/stripe" },
+  { key: "SEATSIO_SECRET_KEY", hint: "Reserved seating — server API (not workspace key)" },
+  { key: "SEATSIO_WORKSPACE_KEY", hint: "Reserved seating — public chart embed key" },
+  { key: "SEATSIO_REGION", hint: "Seats.io region: na, eu, sa, or oc" },
   { key: "GA4_PROPERTY_ID", hint: "Organizer Insights" },
   { key: "GA_SERVICE_ACCOUNT_JSON", hint: "GA4 Data API" },
   { key: "CSC_API_KEY", hint: "US city catalog sync" }

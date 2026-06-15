@@ -5,6 +5,13 @@ const ticketItemSchema = z.object({
   quantity: z.coerce.number().int().min(0).max(50)
 });
 
+const selectedSeatSchema = z.object({
+  label: z.string().min(1).max(80),
+  category: z.coerce.number().int().min(1).max(50).optional(),
+  category_label: z.string().max(120).optional(),
+  price: z.coerce.number().min(0).optional()
+});
+
 const guestContactFields = {
   first_name: z.string().trim().min(1, "First name is required").max(60),
   last_name: z.string().trim().min(1, "Last name is required").max(60),
@@ -36,9 +43,21 @@ const createBookingSchema = z.object({
       .max(25)
       .regex(/^[0-9+()\-\s]+$/, "Phone can include digits, spaces, +, -, and parentheses")
       .optional(),
-    coupon_hold_token: z.string().uuid().optional()
+    coupon_hold_token: z.string().uuid().optional(),
+    seatsio_hold_token: z.string().trim().min(1).max(128).optional(),
+    selected_seats: z.array(selectedSeatSchema).max(20).optional()
   })
     .superRefine((data, ctx) => {
+      if (data.selected_seats?.length) {
+        if (!data.seatsio_hold_token) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["seatsio_hold_token"],
+            message: "Seat hold expired. Please select seats again."
+          });
+        }
+        return;
+      }
       const itemTotal = (data.ticket_items || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
       if (data.ticket_items?.length) {
         if (itemTotal < 1) {
@@ -87,9 +106,21 @@ const guestCreateBookingSchema = z.object({
       ticket_items: z.array(ticketItemSchema).max(20).optional(),
       booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       selected_dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(366).optional(),
-      ...guestContactFields
+      ...guestContactFields,
+      seatsio_hold_token: z.string().trim().min(1).max(128).optional(),
+      selected_seats: z.array(selectedSeatSchema).max(20).optional()
     })
     .superRefine((data, ctx) => {
+      if (data.selected_seats?.length) {
+        if (!data.seatsio_hold_token) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["seatsio_hold_token"],
+            message: "Seat hold expired. Please select seats again."
+          });
+        }
+        return;
+      }
       const itemTotal = (data.ticket_items || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
       if (data.ticket_items?.length) {
         if (itemTotal < 1) {

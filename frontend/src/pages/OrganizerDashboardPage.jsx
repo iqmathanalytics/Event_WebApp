@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
 import { FiCalendar, FiInfo, FiMapPin } from "react-icons/fi";
+import { LayoutGrid } from "lucide-react";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
 import { categories } from "../utils/filterOptions";
@@ -26,6 +27,8 @@ import {
   BookingStripeRefCell
 } from "../components/BookingPaymentTableCells";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
+import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
+import { SEATING_MODES, normalizeSeatingMode } from "../utils/seatingMode";
 const OrganizerInsightsPanel = lazy(() => import("../components/OrganizerInsightsPanel"));
 import EventTicketLevelsEditor from "../components/EventTicketLevelsEditor";
 import {
@@ -65,7 +68,8 @@ const initialForm = {
   event_highlights: [],
   is_yay_deal_event: false,
   deal_event_discount_code: "",
-  ticket_levels: []
+  ticket_levels: [],
+  seating_mode: SEATING_MODES.GENERAL
 };
 
 /**
@@ -241,6 +245,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     Boolean(editingEvent) && resolveEventTicketSalesMode(editingEvent) === "platform";
   const showPlatformTicketOptions = canSellPlatformTickets || editingPlatformEvent;
   const [saving, setSaving] = useState(false);
+  const [seatingModalOpen, setSeatingModalOpen] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [overviewBookings, setOverviewBookings] = useState([]);
   const [bookingRows, setBookingRows] = useState([]);
@@ -332,7 +337,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         event.is_yay_deal_event === true ||
         String(event.is_yay_deal_event || "") === "1",
       deal_event_discount_code: event.deal_event_discount_code || "",
-      ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event))
+      ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event)),
+      seating_mode: normalizeSeatingMode(event.seating_mode)
     });
     setIsFormOpen(true);
   };
@@ -484,16 +490,22 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         throw new Error("Please enter your external ticket page URL.");
       }
       if (resolvedTicketMode === "platform") {
-        const seats = Number(form.total_seats);
-        if (!Number.isFinite(seats) || seats < 1) {
-          throw new Error("Enter total seats available for on-site ticket booking (at least 1).");
-        }
-        if (seats > 50000) {
-          throw new Error("Total seats cannot exceed 50,000.");
+        const reservedSeating = normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED;
+        if (!reservedSeating) {
+          const seats = Number(form.total_seats);
+          if (!Number.isFinite(seats) || seats < 1) {
+            throw new Error("Enter total seats available for on-site ticket booking (at least 1).");
+          }
+          if (seats > 50000) {
+            throw new Error("Total seats cannot exceed 50,000.");
+          }
         }
         const levels = serializeTicketLevelsForApi(form.ticket_levels);
         if (!levels.length) {
           throw new Error("Add at least one ticket level for on-site sales (name and price).");
+        }
+        if (reservedSeating && !editingEvent?.id) {
+          throw new Error("Save the event first, then open Design seating chart to configure reserved seating.");
         }
       }
       if (form.is_yay_deal_event && !String(form.deal_event_discount_code || "").trim()) {
@@ -554,7 +566,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         city_id: Number(form.city_id),
         category_id: Number(form.category_id),
         ticket_sales_mode: resolvedTicketMode,
-        total_seats: resolvedTicketMode === "platform" ? Number(form.total_seats) : undefined,
+        seating_mode:
+          resolvedTicketMode === "platform" ? normalizeSeatingMode(form.seating_mode) : SEATING_MODES.GENERAL,
+        total_seats:
+          resolvedTicketMode === "platform" &&
+          normalizeSeatingMode(form.seating_mode) !== SEATING_MODES.RESERVED
+            ? Number(form.total_seats)
+            : undefined,
         image_url: imageUrl,
         gallery_image_urls: galleryUrls,
         promo_video_urls: promoVideoUrls,
@@ -1901,6 +1919,66 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </FormField>
               ) : (
                 <>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:col-span-2">
+                    <p className="text-sm font-semibold text-slate-900">Seating type</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      General admission uses quantity pickers. Reserved seating opens an interactive seat map for
+                      buyers.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
+                        <input
+                          type="radio"
+                          name="seating_mode"
+                          checked={normalizeSeatingMode(form.seating_mode) === SEATING_MODES.GENERAL}
+                          onChange={() =>
+                            setForm((prev) => ({ ...prev, seating_mode: SEATING_MODES.GENERAL }))
+                          }
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">General admission</span>
+                          <span className="block text-xs text-slate-500">Guests pick ticket quantities by tier.</span>
+                        </span>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
+                        <input
+                          type="radio"
+                          name="seating_mode"
+                          checked={normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED}
+                          onChange={() =>
+                            setForm((prev) => ({ ...prev, seating_mode: SEATING_MODES.RESERVED }))
+                          }
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">Reserved seating</span>
+                          <span className="block text-xs text-slate-500">Guests choose specific seats on a chart.</span>
+                        </span>
+                      </label>
+                    </div>
+                    {normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          disabled={!editingEvent?.id}
+                          onClick={() => setSeatingModalOpen(true)}
+                          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          <LayoutGrid className="h-4 w-4" />
+                          Design seating chart
+                        </button>
+                        {!editingEvent?.id ? (
+                          <p className="text-xs text-amber-800">Save the event first, then design the chart.</p>
+                        ) : editingEvent?.seatsio_event_key ? (
+                          <p className="text-xs text-emerald-700">Seating chart linked.</p>
+                        ) : (
+                          <p className="text-xs text-slate-500">Chart not saved yet.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  {normalizeSeatingMode(form.seating_mode) !== SEATING_MODES.RESERVED ? (
                   <FormField
                     label="Total seats available"
                     hint="Maximum tickets guests can book on this site across all reservations. Booked seats update automatically."
@@ -1919,10 +1997,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       placeholder="e.g. 200"
                     />
                   </FormField>
+                  ) : null}
+                  {normalizeSeatingMode(form.seating_mode) !== SEATING_MODES.RESERVED ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
                     Guests book through checkout on the public event page once approved. Seat count includes confirmed
                     bookings and short-term coupon holds.
                   </div>
+                  ) : null}
                 </>
               )}
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:col-span-2">
@@ -2257,6 +2338,26 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         open={postSubmitFeedback != null}
         title={postSubmitFeedback?.title ?? ""}
         description={postSubmitFeedback?.description ?? ""}
+      />
+
+      <OrganizerSeatingDesignerModal
+        open={seatingModalOpen}
+        onClose={() => setSeatingModalOpen(false)}
+        eventId={editingEvent?.id}
+        eventTitle={editingEvent?.title || form.title}
+        onSaved={(saved) => {
+          setEditingEvent((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  seating_mode: saved?.seating_mode || SEATING_MODES.RESERVED,
+                  seatsio_chart_key: saved?.chart_key || prev.seatsio_chart_key,
+                  seatsio_event_key: saved?.event_key || prev.seatsio_event_key
+                }
+              : prev
+          );
+          loadEvents();
+        }}
       />
     </>
   );

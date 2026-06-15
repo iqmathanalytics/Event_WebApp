@@ -3,6 +3,7 @@ const { resolveListingIdFromParam } = require("../utils/listingSlug");
 const { setPublicSlug } = require("./listingSlugModel");
 const { normalizeDateList } = require("../utils/eventSchedule");
 const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
+const { normalizeSeatingMode } = require("../utils/seatingMode");
 const { parseTotalSeats } = require("../utils/eventSeats");
 const {
   parseTicketLevelsFromEvent,
@@ -70,6 +71,7 @@ function normalizeEventRow(row) {
     isListedRaw === undefined || isListedRaw === null ? true : Number(isListedRaw) !== 0;
   const ticket_levels = parseTicketLevelsFromEvent(row);
   const ticket_sales_mode = normalizeTicketSalesMode(readTicketSalesModeRaw(row));
+  const seating_mode = normalizeSeatingMode(row.seating_mode);
   const listPrice = resolveEventListPrice({
     ...row,
     ticket_sales_mode,
@@ -80,6 +82,7 @@ function normalizeEventRow(row) {
     ...row,
     is_listed,
     ticket_sales_mode,
+    seating_mode,
     ticket_levels,
     price: listPrice != null ? listPrice : row.price,
     event_highlights: parseHighlights(row.event_highlights),
@@ -385,7 +388,8 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "is_yay_deal_event",
     "deal_event_discount_code",
     "ticket_levels",
-    "ticket_levels_json"
+    "ticket_levels_json",
+    "seating_mode"
   ];
 
   const entries = Object.entries(updates)
@@ -433,6 +437,9 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         const levels = normalizeTicketLevelsInput(value);
         const json = levels.length ? JSON.stringify(levels) : null;
         return ["ticket_levels_json", json];
+      }
+      if (key === "seating_mode") {
+        return [key, normalizeSeatingMode(value)];
       }
       return [key, value];
     });

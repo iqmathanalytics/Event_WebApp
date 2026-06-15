@@ -59,6 +59,16 @@ import {
   saveEventCheckoutDraft
 } from "../utils/eventCheckoutDraft";
 import { applyTransactionFee } from "../utils/transactionFee";
+import GuestSeatSelectionModal from "./seating/GuestSeatSelectionModal";
+import { fetchPublicSeatingChart, releaseSeatsioHold } from "../services/seatingService";
+import { isReservedSeating } from "../utils/seatingMode";
+import {
+  SEATSIO_HOLD_MINUTES,
+  buildCartFromSelectedSeats,
+  buildTicketItemsFromSelectedSeats,
+  groupSelectedSeatsForDisplay,
+  seatHoldExpiresAtFromNow
+} from "../utils/seatSelection";
 
 function toggleDateInList(list, date) {
   const set = new Set(list);
@@ -85,14 +95,36 @@ function buildBookingPayload({
   lastName,
   email,
   phone,
-  couponHold
+  couponHold,
+  reservedSeating = false,
+  seatsioHoldToken = "",
+  selectedSeats = []
 }) {
   const sortedDates = normalizeDateList(selectedDates);
-  const ticket_items = buildTicketItemsPayload(levels, ticketCart);
-  const attendee_count = cartTicketCount(ticketCart);
   const first = String(firstName || "").trim();
   const last = String(lastName || "").trim();
   const name = formatBookingContactName({ firstName: first, lastName: last });
+
+  if (reservedSeating && selectedSeats.length) {
+    return {
+      event_id: Number(eventId),
+      attendee_count: selectedSeats.length,
+      ticket_items: buildTicketItemsFromSelectedSeats(selectedSeats, levels),
+      selected_dates: sortedDates,
+      booking_date: sortedDates[0],
+      first_name: first || undefined,
+      last_name: last || undefined,
+      name: name || undefined,
+      email: email.trim() || undefined,
+      phone: phone.trim() || undefined,
+      coupon_hold_token: couponHold?.holdToken || undefined,
+      seatsio_hold_token: seatsioHoldToken || undefined,
+      selected_seats: selectedSeats
+    };
+  }
+
+  const ticket_items = buildTicketItemsPayload(levels, ticketCart);
+  const attendee_count = cartTicketCount(ticketCart);
   return {
     event_id: Number(eventId),
     attendee_count,
@@ -168,13 +200,26 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const userId = user?.id ?? user?.userId;
   const checkoutUserId = guestMode ? "guest" : userId;
   const eventId = event?.id;
+  const reservedSeating = isReservedSeating(event);
   const availableDates = useMemo(() => getEventAvailableDates(event), [event]);
   const scheduleType = event?.schedule_type || "single";
 
   const [selectedDates, setSelectedDates] = useState([]);
   const ticketLevels = useMemo(() => getCheckoutTicketLevels(event), [event]);
   const [ticketCart, setTicketCart] = useState(() => createEmptyCart(getCheckoutTicketLevels(event)));
-  const attendeeCount = useMemo(() => cartTicketCount(ticketCart), [ticketCart]);
+  const [seatModalOpen, setSeatModalOpen] = useState(false);
+  const [seatingChartConfig, setSeatingChartConfig] = useState(null);
+  const [seatsioHoldToken, setSeatsioHoldToken] = useState("");
+  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [seatHoldExpiresAt, setSeatHoldExpiresAt] = useState(null);
+  const [seatHoldCountdown, setSeatHoldCountdown] = useState("");
+  const [seatingEventKey, setSeatingEventKey] = useState("");
+  const attendeeCount = useMemo(() => {
+    if (reservedSeating) {
+      return selectedSeats.length;
+    }
+    return cartTicketCount(ticketCart);
+  }, [reservedSeating, selectedSeats.length, ticketCart]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -375,6 +420,92 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     setPhone(String(user?.mobile_number || "").trim());
   }, [user, guestMode]);
 
+  useEffect(() => {
+    if (reservedSeating && selectedSeats.length) {
+      setTicketCart(buildCartFromSelectedSeats(selectedSeats, ticketLevels));
+    }
+  }, [reservedSeating, selectedSeats, ticketLevels]);
+
+  const clearSeatHold = useCallback(
+    async ({ expired = false } = {}) => {
+      const token = seatsioHoldToken;
+      const labels = selectedSeats.map((seat) => seat.label).filter(Boolean);
+      const eventKey = seatingEventKey || seatingChartConfig?.event_key;
+      if (token && eventKey && labels.length) {
+        try {
+          await releaseSeatsioHold(eventId, { eventKey, holdToken: token, labels });
+        } catch (_err) {
+          /* seats.io may already have released the hold */
+        }
+      }
+      setSeatsioHoldToken("");
+      setSelectedSeats([]);
+      setSeatHoldExpiresAt(null);
+      setSeatHoldCountdown("");
+      setTicketCart(createEmptyCart(ticketLevels));
+      if (expired) {
+        setError(`Your seat hold expired after ${SEATSIO_HOLD_MINUTES} minutes. Please select seats again.`);
+      }
+    },
+    [
+      seatsioHoldToken,
+      selectedSeats,
+      seatingEventKey,
+      seatingChartConfig?.event_key,
+      eventId,
+      ticketLevels
+    ]
+  );
+
+  useEffect(() => {
+    if (!reservedSeating || !eventId) {
+      return;
+    }
+    fetchPublicSeatingChart(eventId)
+      .then((config) => {
+        setSeatingChartConfig(config);
+        setSeatingEventKey(config?.event_key || "");
+      })
+      .catch(() => {
+        /* chart may not be ready yet */
+      });
+  }, [reservedSeating, eventId]);
+
+  useEffect(() => {
+    if (!seatHoldExpiresAt || !seatsioHoldToken) {
+      setSeatHoldCountdown("");
+      return undefined;
+    }
+    let expiredHandled = false;
+    const tick = () => {
+      const ms = seatHoldExpiresAt - Date.now();
+      if (ms <= 0) {
+        if (!expiredHandled) {
+          expiredHandled = true;
+          setSeatHoldCountdown("");
+          void clearSeatHold({ expired: true });
+        }
+        return;
+      }
+      setSeatHoldCountdown(formatHoldCountdown(ms));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [seatHoldExpiresAt, seatsioHoldToken, clearSeatHold]);
+
+  const openSeatSelectionModal = async () => {
+    setError("");
+    try {
+      const config = await fetchPublicSeatingChart(eventId);
+      setSeatingChartConfig(config);
+      setSeatingEventKey(config?.event_key || "");
+      setSeatModalOpen(true);
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not load the seating chart.");
+    }
+  };
+
   const contactName = useMemo(
     () => formatBookingContactName({ firstName, lastName }),
     [firstName, lastName]
@@ -395,6 +526,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   });
 
   const sortedSelected = useMemo(() => normalizeDateList(selectedDates), [selectedDates]);
+  const reservedSeatGroups = useMemo(
+    () => groupSelectedSeatsForDisplay(selectedSeats, ticketLevels),
+    [selectedSeats, ticketLevels]
+  );
 
   const gridLeftTitle = scheduleType === "single" ? "Date" : "Starts";
   const gridRightTitle = scheduleType === "single" ? "Time" : "Ends";
@@ -643,7 +778,11 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (!ticketLevels.length) {
       return "No ticket types are available to book for this event right now.";
     }
-    if (!Number.isFinite(attendeeCount) || attendeeCount < 1) {
+    if (reservedSeating) {
+      if (!selectedSeats.length || !seatsioHoldToken) {
+        return "Choose your seats on the seating chart to continue.";
+      }
+    } else if (!Number.isFinite(attendeeCount) || attendeeCount < 1) {
       return "Select at least one ticket.";
     }
     if (attendeeCount > ticketCap) {
@@ -677,6 +816,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     ticketLevels.length,
     guestMode,
     firstName,
+    reservedSeating,
+    selectedSeats.length,
+    seatsioHoldToken,
     lastName,
     email,
     userId
@@ -776,7 +918,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       lastName,
       email,
       phone,
-      couponHold
+      couponHold,
+      reservedSeating,
+      seatsioHoldToken,
+      selectedSeats
     });
 
     try {
@@ -1056,17 +1201,29 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             </p>
             <div>
               <span className="text-slate-500">Tickets: </span>
-              <ul className="mt-1 space-y-0.5">
-                {buildTicketItemsPayload(ticketLevels, ticketCart).map((row) => {
-                  const level = ticketLevels.find((l) => l.id === row.level_id);
-                  return (
-                    <li key={row.level_id}>
-                      {level?.name || "Ticket"} × {row.quantity}
-                    </li>
-                  );
-                })}
+              <ul className="mt-1 space-y-1">
+                {reservedSeating && selectedSeats.length
+                  ? reservedSeatGroups.map((group) => (
+                      <li key={group.levelId}>
+                        <span className="font-medium text-slate-800">
+                          {group.levelName} × {group.seatLabels.length}
+                        </span>
+                        <span className="block text-xs text-slate-600">{group.seatLabels.join(", ")}</span>
+                      </li>
+                    ))
+                  : buildTicketItemsPayload(ticketLevels, ticketCart).map((row) => {
+                      const level = ticketLevels.find((l) => l.id === row.level_id);
+                      return (
+                        <li key={row.level_id}>
+                          {level?.name || "Ticket"} × {row.quantity}
+                        </li>
+                      );
+                    })}
               </ul>
             </div>
+            {reservedSeating && seatHoldCountdown ? (
+              <p className="text-xs font-medium text-amber-800">Seats held for {seatHoldCountdown}</p>
+            ) : null}
             <p>
               <span className="text-slate-500">Contact: </span>
               {contactName || "—"} · {email || "—"}
@@ -1110,6 +1267,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }
 
   return (
+    <>
     <CheckoutCard seatBar={seatBar}>
       <div className="mb-5">
         <PriceTotals
@@ -1140,7 +1298,57 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           </div>
         </div>
         <div className="border-t border-slate-200/90 bg-gradient-to-b from-slate-100/60 via-white to-amber-50/30 px-3.5 pb-3.5 pt-4">
-          {ticketLevels.length ? (
+          {reservedSeating ? (
+            <div className="space-y-3">
+              {selectedSeats.length ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {selectedSeats.length} seat{selectedSeats.length === 1 ? "" : "s"} selected
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                        {reservedSeatGroups.map((group) => (
+                          <li key={group.levelId}>
+                            <span className="font-medium">{group.levelName}</span>
+                            <span className="text-slate-500"> ({group.seatLabels.length}) — </span>
+                            {group.seatLabels.join(", ")}
+                          </li>
+                        ))}
+                      </ul>
+                      {seatHoldCountdown ? (
+                        <p className="mt-2 text-xs font-semibold text-amber-800">
+                          Seats held for {seatHoldCountdown}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Seats are held for about {SEATSIO_HOLD_MINUTES} minutes while you complete checkout.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void clearSeatHold()}
+                      className="shrink-0 text-xs font-semibold text-rose-700 hover:text-rose-900"
+                    >
+                      Release hold
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-sm text-slate-600">
+                  Open the seating chart to pick your seats.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={openSeatSelectionModal}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400"
+              >
+                {selectedSeats.length ? "Change seats on chart" : "Choose seats on chart"}
+              </button>
+            </div>
+          ) : ticketLevels.length ? (
             <>
               <EventTicketCart
                 eventId={eventId}
@@ -1284,5 +1492,23 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </p>
       ) : null}
     </CheckoutCard>
+    <GuestSeatSelectionModal
+      open={seatModalOpen}
+      onClose={() => setSeatModalOpen(false)}
+      eventTitle={event?.title}
+      chartConfig={seatingChartConfig}
+      maxSeats={maxTickets > 0 ? maxTickets : 20}
+      totalDays={totalDays}
+      onConfirm={({ holdToken, selectedSeats: seats }) => {
+        setSeatsioHoldToken(holdToken);
+        setSelectedSeats(seats);
+        setSeatHoldExpiresAt(seatHoldExpiresAtFromNow());
+        if (seatingChartConfig?.event_key) {
+          setSeatingEventKey(seatingChartConfig.event_key);
+        }
+        setSeatModalOpen(false);
+      }}
+    />
+  </>
   );
 }

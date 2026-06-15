@@ -8,7 +8,7 @@ Use this with [MILESWEB-DEPLOY.md](./MILESWEB-DEPLOY.md).
 - [ ] Run `npm install`
 - [ ] Run `npm run verify:production` (or `node scripts/verify-production-env.js`)
 - [ ] Set `PRODUCTION_DB_*` in `.env` (TiDB Cloud production cluster)
-- [ ] Run `npm run db:migrate:production` (TiDB schema — not MilesWeb MySQL)
+- [ ] Run `npm run db:migrate:production` (TiDB schema — includes `event_seatsio.sql` + repair migration)
 - [ ] Run `npm run db:backfill-slugs` (if slugs missing)
 - [ ] Copy `frontend/.env.production.example` → `frontend/.env`
 - [ ] Set `VITE_API_BASE_URL=https://api.YOURDOMAIN.com/api` (match mPanel proxy)
@@ -47,6 +47,9 @@ Use this with [MILESWEB-DEPLOY.md](./MILESWEB-DEPLOY.md).
 - [ ] **Brevo** — sender domain verified
 - [ ] **Cloudinary** — production folder
 - [ ] **GA4** — property timezone = `APP_TIMEZONE`; service account Viewer on property
+- [ ] **Seats.io** (reserved seating) — `SEATSIO_SECRET_KEY`, `SEATSIO_WORKSPACE_KEY`, `SEATSIO_REGION` on API server
+  - Secret key ≠ workspace key ([workspace settings](https://app.seats.io/workspace-settings))
+  - Region must match your Seats.io account (usually `na`)
 
 ## Smoke test after deploy
 
@@ -55,6 +58,7 @@ Use this with [MILESWEB-DEPLOY.md](./MILESWEB-DEPLOY.md).
 - [ ] Events list + event detail
 - [ ] Image upload (organizer)
 - [ ] Platform checkout (if enabled) — test mode off only when ready
+- [ ] Reserved seating — organizer designs chart; buyer selects seats on event page
 - [ ] Organizer Insights shows GA data (after traffic)
 - [ ] Contact form email
 

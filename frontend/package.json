@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@react-oauth/google": "^0.12.2",
+    "@seatsio/seatsio-react": "^15.29.0",
     "@stripe/react-stripe-js": "^6.5.0",
     "@stripe/stripe-js": "^9.7.0",
     "axios": "^1.8.4",

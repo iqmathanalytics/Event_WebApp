@@ -110,7 +110,7 @@ function HeroSlideImage({ slide, shouldLoad, isFirst }) {
       alt={slide.title}
       loading={isFirst ? "eager" : "lazy"}
       decoding="async"
-      fetchPriority={isFirst ? "high" : "low"}
+      fetchpriority={isFirst ? "high" : "low"}
       className="hero-slide-image h-full w-full object-cover"
     />
   );

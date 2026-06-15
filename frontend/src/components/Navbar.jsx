@@ -202,7 +202,7 @@ function Navbar({
               height={60}
               loading="eager"
               decoding="async"
-              fetchPriority="high"
+              fetchpriority="high"
               className="h-12 w-auto max-w-[min(52vw,220px)] object-contain sm:h-[3.75rem] sm:max-w-[min(48vw,260px)]"
               initial={false}
               animate={{

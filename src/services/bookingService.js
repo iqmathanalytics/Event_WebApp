@@ -5,6 +5,8 @@ const { findUserById } = require("../models/userModel");
 const { getEventAvailableDates, normalizeDateList } = require("../utils/eventSchedule");
 const { requiresStripePayment } = require("../utils/money");
 const couponService = require("./couponService");
+const seatsioService = require("./seatsioService");
+const { isReservedSeating } = require("../utils/seatingMode");
 const {
   createBooking,
   listBookingsByOrganizer,
@@ -248,15 +250,37 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
   const totalDays = selectedDates.length;
   let cart;
   let guests;
-  try {
-    ({ cart, attendeeCount: guests } = resolveBookingCart(eventWithLevels, payload));
-  } catch (err) {
-    throw new ApiError(400, err.message || "Invalid ticket selection.");
+  const reservedSeating = isReservedSeating(eventWithLevels);
+
+  if (reservedSeating) {
+    const holdToken = String(payload.seatsio_hold_token || "").trim();
+    const selectedSeats = Array.isArray(payload.selected_seats) ? payload.selected_seats : [];
+    if (!holdToken || !selectedSeats.length) {
+      throw new ApiError(400, "Select seats on the seating chart to continue.");
+    }
+    if (!eventWithLevels.seatsio_event_key) {
+      throw new ApiError(400, "Seating chart is not configured for this event.");
+    }
+    const built = seatsioService.buildCartFromSelectedSeats(
+      selectedSeats,
+      eventWithLevels.ticket_levels || [],
+      totalDays
+    );
+    cart = built.cart;
+    guests = built.attendeeCount;
+    payload._seatsio_hold_token = holdToken;
+    payload._selected_seats = selectedSeats;
+  } else {
+    try {
+      ({ cart, attendeeCount: guests } = resolveBookingCart(eventWithLevels, payload));
+    } catch (err) {
+      throw new ApiError(400, err.message || "Invalid ticket selection.");
+    }
+    const reservedSeats = await countReservedSeatsForEvent(payload.event_id, {
+      excludeHoldToken: payload.coupon_hold_token || null
+    });
+    assertSeatsAvailableForBooking(eventWithLevels, guests, reservedSeats);
   }
-  const reservedSeats = await countReservedSeatsForEvent(payload.event_id, {
-    excludeHoldToken: payload.coupon_hold_token || null
-  });
-  assertSeatsAvailableForBooking(eventWithLevels, guests, reservedSeats);
 
   let subtotalAmount = computeCartSubtotal(cart, totalDays);
   let discountAmount = 0;
@@ -308,7 +332,9 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     totalAmount,
     couponId,
     couponCode,
-    holdToken
+    holdToken,
+    seatsioHoldToken: payload._seatsio_hold_token || null,
+    selectedSeats: payload._selected_seats || null
   };
 }
 
@@ -526,11 +552,22 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
         stripe_charge_id: paymentMeta?.stripe_charge_id || null,
         amount_paid_cents: paymentMeta?.amount_paid_cents ?? null,
         currency: paymentMeta?.currency || "usd",
-        paid_at: paymentMeta?.paid_at || new Date()
+        paid_at: paymentMeta?.paid_at || new Date(),
+        seatsio_hold_token: pricing.seatsioHoldToken || null,
+        selected_seats_json: pricing.selectedSeats || null
       },
       conn
     );
     const bookingId = created.id;
+
+    if (pricing.seatsioHoldToken && pricing.selectedSeats?.length) {
+      await seatsioService.bookSeatsForCheckout({
+        event: pricing.event,
+        holdToken: pricing.seatsioHoldToken,
+        selectedSeats: pricing.selectedSeats,
+        bookingId
+      });
+    }
     const checkInCode = created.check_in_code;
 
     if (holdToken && pricing.couponId && userId) {

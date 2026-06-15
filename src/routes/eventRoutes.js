@@ -88,6 +88,7 @@ router.delete(
   validateRequest(deleteOwnEventSchema),
   eventController.deleteOwnEvent
 );
+router.use("/:id/seating", require("./seatingRoutes"));
 router.patch(
   "/:id/approve",
   authMiddleware,

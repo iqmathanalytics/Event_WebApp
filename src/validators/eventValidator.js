@@ -55,6 +55,7 @@ const submitEventBodySchema = z
     /** Required on create so we never infer "external" from a stale ticket_link when mode was omitted. */
     ticket_sales_mode: z.preprocess(coerceTicketSalesModeBodyInput, ticketSalesModeEnum),
     total_seats: z.coerce.number().int().min(1).max(50000).optional(),
+    seating_mode: z.enum(["general", "reserved"]).optional(),
     ticket_link: optionalTicketLinkUrl(1000),
     image_url: z.string().url().optional(),
     gallery_image_urls: galleryImageUrlsSchema,
@@ -110,13 +111,16 @@ const submitEventBodySchema = z
       }
     }
     if (ticketMode === "platform") {
-      const seats = Number(data.total_seats);
-      if (!Number.isFinite(seats) || seats < 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["total_seats"],
-          message: "Total seats is required for on-site ticket booking (at least 1)"
-        });
+      const reserved = String(data.seating_mode || "general").toLowerCase() === "reserved";
+      if (!reserved) {
+        const seats = Number(data.total_seats);
+        if (!Number.isFinite(seats) || seats < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["total_seats"],
+            message: "Total seats is required for on-site ticket booking (at least 1)"
+          });
+        }
       }
     }
   });
@@ -203,6 +207,7 @@ const editOwnEventBodySchema = z
     category_id: z.coerce.number().int().positive().optional(),
     ticket_sales_mode: z.preprocess(coerceTicketSalesModeBodyInput, ticketSalesModeEnum.optional()),
     total_seats: z.coerce.number().int().min(1).max(50000).optional(),
+    seating_mode: z.enum(["general", "reserved"]).optional(),
     ticket_link: optionalTicketLinkUrl(1000),
     image_url: z.string().url().optional(),
     gallery_image_urls: galleryImageUrlsSchema,
