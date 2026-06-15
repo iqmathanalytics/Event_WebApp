@@ -114,6 +114,85 @@ async function publishChartForEvent(client, chartKey) {
   }
 }
 
+function buildSeatsioEventKey(eventId, chartKey) {
+  const env = process.env.NODE_ENV === "production" ? "p" : "d";
+  const chartPart = String(chartKey || "")
+    .replace(/-/g, "")
+    .slice(0, 12);
+  return `bmt-${env}-e${eventId}-${chartPart}`;
+}
+
+function buildLegacySeatsioEventKey(eventId) {
+  return `bmt-event-${eventId}`;
+}
+
+async function retrieveSeatsioEvent(client, eventKey) {
+  if (!eventKey) {
+    return null;
+  }
+  try {
+    return await client.events.retrieve(eventKey);
+  } catch (err) {
+    const code = seatsioErrorCode(err);
+    if (code === "EVENT_NOT_FOUND" || err?.status === 404) {
+      return null;
+    }
+    throwSeatsioError(err, "Could not load seating event.");
+  }
+}
+
+/**
+ * A Seats.io event is permanently tied to one chart. When the organizer creates or
+ * switches charts, we must create/link an event for the current chart_key — not reuse
+ * an old event key that still points at a previous layout (e.g. from local dev).
+ */
+async function syncSeatsioEventForChart(event, chartKey) {
+  const client = getClient();
+  const resolvedChartKey = chartKey || event.seatsio_chart_key;
+  if (!resolvedChartKey) {
+    throw new ApiError(400, "Seating chart not configured.");
+  }
+
+  await publishChartForEvent(client, resolvedChartKey);
+
+  const expectedKey = buildSeatsioEventKey(event.id, resolvedChartKey);
+  const candidateKeys = [
+    event.seatsio_event_key,
+    expectedKey,
+    buildLegacySeatsioEventKey(event.id)
+  ].filter(Boolean);
+  const uniqueCandidates = [...new Set(candidateKeys)];
+
+  for (const key of uniqueCandidates) {
+    const seatsioEvent = await retrieveSeatsioEvent(client, key);
+    if (seatsioEvent?.chartKey === resolvedChartKey) {
+      if (event.seatsio_event_key !== key) {
+        await updateEventSeatingKeys(event.id, { seatsio_event_key: key });
+      }
+      return key;
+    }
+  }
+
+  try {
+    const seatsioEvent = await client.events.create(resolvedChartKey, {
+      key: expectedKey
+    });
+    const eventKey = seatsioEvent.key || expectedKey;
+    await updateEventSeatingKeys(event.id, { seatsio_event_key: eventKey });
+    return eventKey;
+  } catch (err) {
+    const code = seatsioErrorCode(err);
+    if (code === "EVENT_KEY_ALREADY_EXISTS") {
+      const existing = await retrieveSeatsioEvent(client, expectedKey);
+      if (existing?.chartKey === resolvedChartKey) {
+        await updateEventSeatingKeys(event.id, { seatsio_event_key: expectedKey });
+        return expectedKey;
+      }
+    }
+    throwSeatsioError(err, "Could not link seating chart to this event.");
+  }
+}
+
 async function ensureChartForEvent(event) {
   if (event.seatsio_chart_key) {
     return event.seatsio_chart_key;
@@ -125,25 +204,11 @@ async function ensureChartForEvent(event) {
 }
 
 async function ensureSeatsioEventForPlatformEvent(event) {
-  if (event.seatsio_event_key) {
-    return event.seatsio_event_key;
-  }
-  const chartKey = await ensureChartForEvent(event);
-  const client = getClient();
-  await publishChartForEvent(client, chartKey);
-  let seatsioEvent;
-  try {
-    seatsioEvent = await client.events.create(chartKey, {
-      key: `bmt-event-${event.id}`
-    });
-  } catch (err) {
-    const code = seatsioErrorCode(err);
-    if (code === "EVENT_KEY_ALREADY_EXISTS") {
-      return `bmt-event-${event.id}`;
-    }
-    throwSeatsioError(err, "Could not link seating chart to this event.");
-  }
-  const eventKey = seatsioEvent.key || `bmt-event-${event.id}`;
+  const chartKey = event.seatsio_chart_key || (await ensureChartForEvent(event));
+  const eventKey = await syncSeatsioEventForChart(
+    { ...event, seatsio_chart_key: chartKey },
+    chartKey
+  );
   await updateEventSeatingKeys(event.id, {
     seatsio_event_key: eventKey,
     seating_mode: "reserved"
@@ -194,10 +259,10 @@ async function saveOrganizerSeatingConfig(eventId, organizerId, payload) {
 
     let eventKey = event.seatsio_event_key;
     if (seatingMode === "reserved") {
-      eventKey = await ensureSeatsioEventForPlatformEvent({
-        ...event,
-        seatsio_chart_key: chartKey
-      });
+      eventKey = await syncSeatsioEventForChart(
+        { ...event, seatsio_chart_key: chartKey },
+        chartKey
+      );
     }
 
     await updateEventSeatingKeys(eventId, {
@@ -225,21 +290,23 @@ async function getPublicSeatingChart(eventId) {
   if (!isSeatsioConfigured()) {
     throw new ApiError(503, "Reserved seating is not available.");
   }
-  const event = await findEventById(eventId);
+  let event = await findEventById(eventId);
   if (!event || event.status !== "approved") {
     throw new ApiError(404, "Event not found");
   }
   if (!isReservedSeating(event)) {
     throw new ApiError(400, "This event does not use reserved seating.");
   }
-  if (!event.seatsio_event_key) {
+  if (!event.seatsio_chart_key && !event.seatsio_event_key) {
     throw new ApiError(404, "Seating chart not configured for this event.");
   }
+  const eventKey = await syncSeatsioEventForChart(event, event.seatsio_chart_key);
+  event = await findEventById(eventId);
   return {
     event_id: Number(eventId),
     workspace_key: getWorkspaceKey(),
     region: publicRegion(),
-    event_key: event.seatsio_event_key,
+    event_key: eventKey,
     chart_key: event.seatsio_chart_key,
     pricing: buildPricingFromTicketLevels(event.ticket_levels || []),
     max_selected_objects: 20
