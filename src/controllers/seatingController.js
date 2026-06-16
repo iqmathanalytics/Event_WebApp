@@ -27,7 +27,11 @@ async function saveOrganizerSeatingConfig(req, res, next) {
 
 async function getPublicSeatingChart(req, res, next) {
   try {
-    const data = await seatsioService.getPublicSeatingChart(req.params.id);
+    const prepareHold =
+      req.query.prepare_hold === "1" ||
+      req.query.prepare_hold === "true" ||
+      req.query.prepare_hold === true;
+    const data = await seatsioService.getPublicSeatingChart(req.params.id, { prepareHold });
     res.json(data);
   } catch (err) {
     next(err);

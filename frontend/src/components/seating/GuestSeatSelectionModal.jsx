@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ticket } from "lucide-react";
 import { SeatsioSeatingChart } from "@seatsio/seatsio-react";
 import SeatingModalShell from "./SeatingModalShell";
@@ -27,6 +27,19 @@ export default function GuestSeatSelectionModal({
   const holdTokenRef = useRef("");
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [holdToken, setHoldToken] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      chartRef.current = null;
+      holdTokenRef.current = "";
+      setSelectedSeats([]);
+      setHoldToken("");
+      return;
+    }
+    holdTokenRef.current = chartConfig?.hold_token || "";
+    setHoldToken(chartConfig?.hold_token || "");
+    setSelectedSeats([]);
+  }, [open, chartConfig?.event_key, chartConfig?.hold_token]);
 
   const subtotal = useMemo(() => {
     const perDay = selectedSeats.reduce((sum, seat) => sum + Number(seat.price || 0), 0);
@@ -108,12 +121,14 @@ export default function GuestSeatSelectionModal({
       size="full"
     >
       <div className="h-[min(68vh,640px)] p-2 sm:p-3">
-        {chartConfig?.workspace_key && chartConfig?.event_key ? (
+        {chartConfig?.workspace_key && chartConfig?.event_key && chartConfig?.hold_token ? (
           <SeatsioSeatingChart
+            key={`${chartConfig.event_key}:${chartConfig.hold_token}`}
             workspaceKey={chartConfig.workspace_key}
             event={chartConfig.event_key}
             region={chartConfig.region || "na"}
-            session="continue"
+            session="manual"
+            holdToken={chartConfig.hold_token}
             pricing={pricing}
             priceFormatter={(price) => formatCurrency(price)}
             maxSelectedObjects={maxSeats}
@@ -121,15 +136,17 @@ export default function GuestSeatSelectionModal({
               chartRef.current = chart;
             }}
             onSessionInitialized={({ token }) => {
-              holdTokenRef.current = token;
-              setHoldToken(token);
+              holdTokenRef.current = token || chartConfig.hold_token;
+              setHoldToken(token || chartConfig.hold_token);
             }}
             onObjectSelected={syncSelection}
             onObjectDeselected={syncSelection}
           />
         ) : (
           <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-600">
-            Seating chart is not available for this event yet.
+            {chartConfig?.event_key
+              ? "Starting seat selection session…"
+              : "Seating chart is not available for this event yet."}
           </div>
         )}
       </div>

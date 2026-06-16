@@ -497,9 +497,13 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const openSeatSelectionModal = async () => {
     setError("");
     try {
-      const config = await fetchPublicSeatingChart(eventId);
+      const config = await fetchPublicSeatingChart(eventId, { prepareHold: true });
       setSeatingChartConfig(config);
       setSeatingEventKey(config?.event_key || "");
+      if (!config?.hold_token) {
+        setError("Could not start seat selection. Please try again.");
+        return;
+      }
       setSeatModalOpen(true);
     } catch (err) {
       setError(err.response?.data?.message || "Could not load the seating chart.");

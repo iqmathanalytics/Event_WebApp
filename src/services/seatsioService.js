@@ -21,8 +21,59 @@ function isSeatsioConfigured() {
   return Boolean(process.env.SEATSIO_SECRET_KEY && process.env.SEATSIO_WORKSPACE_KEY);
 }
 
+const SEATSIO_HOLD_MINUTES = 15;
+
+let cachedWorkspacePublicKey = null;
+
 function getWorkspaceKey() {
   return String(process.env.SEATSIO_WORKSPACE_KEY || "").trim();
+}
+
+async function resolveWorkspacePublicKey(client) {
+  if (cachedWorkspacePublicKey) {
+    return cachedWorkspacePublicKey;
+  }
+
+  const configured = getWorkspaceKey();
+  if (configured) {
+    try {
+      const workspace = await client.workspaces.retrieve(configured);
+      if (workspace?.key) {
+        cachedWorkspacePublicKey = workspace.key;
+        return workspace.key;
+      }
+    } catch (_err) {
+      /* configured public key may not match the secret workspace */
+    }
+  }
+
+  const probe = await client.holdTokens.create(SEATSIO_HOLD_MINUTES);
+  if (probe?.workspaceKey) {
+    cachedWorkspacePublicKey = probe.workspaceKey;
+    return probe.workspaceKey;
+  }
+
+  if (configured) {
+    return configured;
+  }
+
+  throw new ApiError(
+    503,
+    "Seats.io workspace is misconfigured. Check SEATSIO_SECRET_KEY and SEATSIO_WORKSPACE_KEY."
+  );
+}
+
+async function createBuyerHoldSession(client) {
+  const token = await client.holdTokens.create(SEATSIO_HOLD_MINUTES);
+  const workspaceKey = token?.workspaceKey || (await resolveWorkspacePublicKey(client));
+  if (!token?.holdToken) {
+    throw new ApiError(502, "Could not start a seat selection session.");
+  }
+  return {
+    hold_token: token.holdToken,
+    workspace_key: workspaceKey,
+    hold_expires_at: token.expiresAt || null
+  };
 }
 
 function getClient() {
@@ -157,8 +208,8 @@ async function syncSeatsioEventForChart(event, chartKey) {
 
   const expectedKey = buildSeatsioEventKey(event.id, resolvedChartKey);
   const candidateKeys = [
-    event.seatsio_event_key,
     expectedKey,
+    event.seatsio_event_key,
     buildLegacySeatsioEventKey(event.id)
   ].filter(Boolean);
   const uniqueCandidates = [...new Set(candidateKeys)];
@@ -286,7 +337,7 @@ async function saveOrganizerSeatingConfig(eventId, organizerId, payload) {
   }
 }
 
-async function getPublicSeatingChart(eventId) {
+async function getPublicSeatingChart(eventId, { prepareHold = false } = {}) {
   if (!isSeatsioConfigured()) {
     throw new ApiError(503, "Reserved seating is not available.");
   }
@@ -302,15 +353,34 @@ async function getPublicSeatingChart(eventId) {
   }
   const eventKey = await syncSeatsioEventForChart(event, event.seatsio_chart_key);
   event = await findEventById(eventId);
-  return {
+
+  const client = getClient();
+  const seatsioEvent = await retrieveSeatsioEvent(client, eventKey);
+  if (!seatsioEvent) {
+    throw new ApiError(
+      404,
+      "Seating chart is not ready yet. Ask the organizer to publish and save the chart again."
+    );
+  }
+
+  const payload = {
     event_id: Number(eventId),
-    workspace_key: getWorkspaceKey(),
+    workspace_key: await resolveWorkspacePublicKey(client),
     region: publicRegion(),
     event_key: eventKey,
     chart_key: event.seatsio_chart_key,
     pricing: buildPricingFromTicketLevels(event.ticket_levels || []),
     max_selected_objects: 20
   };
+
+  if (prepareHold) {
+    const holdSession = await createBuyerHoldSession(client);
+    payload.hold_token = holdSession.hold_token;
+    payload.workspace_key = holdSession.workspace_key;
+    payload.hold_expires_at = holdSession.hold_expires_at;
+  }
+
+  return payload;
 }
 
 async function bookSeatsForCheckout({ event, holdToken, selectedSeats, bookingId }) {
