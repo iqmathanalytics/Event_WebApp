@@ -10,11 +10,9 @@ export async function saveOrganizerSeatingConfig(eventId, payload) {
   return data;
 }
 
-/** Buyer chart + server hold token (always use session=manual in the chart). */
+/** Buyer chart config. Hold tokens are created in the browser (session=start). */
 export async function fetchPublicSeatingChart(eventId) {
-  const { data } = await api.get(`/events/${eventId}/seating/chart`, {
-    params: { session: "1" }
-  });
+  const { data } = await api.get(`/events/${eventId}/seating/chart`);
   return data;
 }
 

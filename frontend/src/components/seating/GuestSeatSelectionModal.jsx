@@ -27,53 +27,75 @@ export default function GuestSeatSelectionModal({
 }) {
   const chartRef = useRef(null);
   const holdTokenRef = useRef("");
-  const [session, setSession] = useState(null);
+  const loadGenerationRef = useRef(0);
+  const [chartConfig, setChartConfig] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [holdToken, setHoldToken] = useState("");
   const [chartEpoch, setChartEpoch] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const loadSession = useCallback(async () => {
-    if (!eventId) {
-      return;
+  useEffect(() => {
+    if (!open || !eventId) {
+      chartRef.current = null;
+      holdTokenRef.current = "";
+      setChartConfig(null);
+      setSelectedSeats([]);
+      setHoldToken("");
+      setLoadError("");
+      setLoading(false);
+      return undefined;
     }
+
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    let cancelled = false;
+
     setLoading(true);
     setLoadError("");
-    setSession(null);
+    setChartConfig(null);
     setSelectedSeats([]);
     setHoldToken("");
     holdTokenRef.current = "";
     clearSeatsioBrowserSession();
-    try {
-      const config = await fetchPublicSeatingChart(eventId);
-      if (!config?.workspace_key || !config?.event_key || !config?.hold_token) {
-        throw new Error("Seating session is incomplete. Ask the organizer to save the chart again.");
-      }
-      setSession(config);
-      holdTokenRef.current = config.hold_token;
-      setHoldToken(config.hold_token);
-      setChartEpoch((value) => value + 1);
-    } catch (err) {
-      setLoadError(err.response?.data?.message || err.message || "Could not load the seating chart.");
-    } finally {
-      setLoading(false);
-    }
-  }, [eventId]);
 
-  useEffect(() => {
-    if (open && eventId) {
-      void loadSession();
-      return;
-    }
-    chartRef.current = null;
+    fetchPublicSeatingChart(eventId)
+      .then((config) => {
+        if (cancelled || generation !== loadGenerationRef.current) {
+          return;
+        }
+        if (!config?.workspace_key || !config?.event_key) {
+          throw new Error("Seating chart is incomplete. Ask the organizer to publish and save the chart.");
+        }
+        clearSeatsioBrowserSession();
+        setChartConfig(config);
+        setChartEpoch((value) => value + 1);
+      })
+      .catch((err) => {
+        if (cancelled || generation !== loadGenerationRef.current) {
+          return;
+        }
+        setLoadError(err.response?.data?.message || err.message || "Could not load the seating chart.");
+      })
+      .finally(() => {
+        if (!cancelled && generation === loadGenerationRef.current) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, eventId, reloadKey]);
+
+  const restartChartSession = useCallback(() => {
+    clearSeatsioBrowserSession();
     holdTokenRef.current = "";
-    setSession(null);
-    setSelectedSeats([]);
     setHoldToken("");
-    setLoadError("");
-    setLoading(false);
-  }, [open, eventId, loadSession]);
+    setSelectedSeats([]);
+    setChartEpoch((value) => value + 1);
+  }, []);
 
   const subtotal = useMemo(() => {
     const perDay = selectedSeats.reduce((sum, seat) => sum + Number(seat.price || 0), 0);
@@ -94,11 +116,11 @@ export default function GuestSeatSelectionModal({
   }, []);
 
   const pricing = useMemo(() => {
-    return (session?.pricing || []).map((row) => ({
+    return (chartConfig?.pricing || []).map((row) => ({
       category: row.category,
       price: Number(row.price) || 0
     }));
-  }, [session]);
+  }, [chartConfig]);
 
   const canConfirm = Boolean(holdToken && selectedSeats.length);
 
@@ -134,7 +156,7 @@ export default function GuestSeatSelectionModal({
             onConfirm?.({
               holdToken: holdTokenRef.current || holdToken,
               selectedSeats,
-              eventKey: session?.event_key || ""
+              eventKey: chartConfig?.event_key || ""
             })
           }
           className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
@@ -166,21 +188,23 @@ export default function GuestSeatSelectionModal({
             <p className="text-sm text-rose-700">{loadError}</p>
             <button
               type="button"
-              onClick={() => void loadSession()}
+              onClick={() => {
+                setLoadError("");
+                setReloadKey((value) => value + 1);
+              }}
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
             >
               Try again
             </button>
           </div>
         ) : null}
-        {!loading && !loadError && session?.workspace_key && session?.event_key && session?.hold_token ? (
+        {!loading && !loadError && chartConfig?.workspace_key && chartConfig?.event_key ? (
           <SeatsioSeatingChart
-            key={`${session.event_key}:${session.hold_token}:${chartEpoch}`}
-            workspaceKey={session.workspace_key}
-            event={session.event_key}
-            region={session.region || "na"}
-            session="manual"
-            holdToken={session.hold_token}
+            key={`${chartConfig.event_key}:${chartEpoch}`}
+            workspaceKey={chartConfig.workspace_key}
+            event={chartConfig.event_key}
+            region={chartConfig.region || "na"}
+            session="start"
             pricing={pricing}
             priceFormatter={(price) => formatCurrency(price)}
             maxSelectedObjects={maxSeats}
@@ -188,13 +212,14 @@ export default function GuestSeatSelectionModal({
               chartRef.current = chart;
             }}
             onSessionInitialized={({ token }) => {
-              const resolved = token || session.hold_token;
-              holdTokenRef.current = resolved;
-              setHoldToken(resolved);
+              if (!token) {
+                return;
+              }
+              holdTokenRef.current = token;
+              setHoldToken(token);
             }}
             onHoldTokenExpired={() => {
-              setLoadError("Your seat hold expired. Starting a fresh session…");
-              void loadSession();
+              restartChartSession();
             }}
             onObjectSelected={syncSelection}
             onObjectDeselected={syncSelection}
