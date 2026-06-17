@@ -10,9 +10,10 @@ export async function saveOrganizerSeatingConfig(eventId, payload) {
   return data;
 }
 
-export async function fetchPublicSeatingChart(eventId, { prepareHold = false } = {}) {
+/** Buyer chart + server hold token (always use session=manual in the chart). */
+export async function fetchPublicSeatingChart(eventId) {
   const { data } = await api.get(`/events/${eventId}/seating/chart`, {
-    params: prepareHold ? { prepare_hold: "1" } : undefined
+    params: { session: "1" }
   });
   return data;
 }

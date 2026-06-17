@@ -383,6 +383,10 @@ async function getPublicSeatingChart(eventId, { prepareHold = false } = {}) {
   return payload;
 }
 
+async function getBuyerSeatingSession(eventId) {
+  return getPublicSeatingChart(eventId, { prepareHold: true });
+}
+
 async function bookSeatsForCheckout({ event, holdToken, selectedSeats, bookingId }) {
   if (!isReservedSeating(event) || !event.seatsio_event_key) {
     return null;
@@ -426,6 +430,7 @@ module.exports = {
   getOrganizerDesignerConfig,
   saveOrganizerSeatingConfig,
   getPublicSeatingChart,
+  getBuyerSeatingSession,
   bookSeatsForCheckout,
   releaseSeatHold,
   ensureSeatsioEventForPlatformEvent

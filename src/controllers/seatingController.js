@@ -30,8 +30,12 @@ async function getPublicSeatingChart(req, res, next) {
     const prepareHold =
       req.query.prepare_hold === "1" ||
       req.query.prepare_hold === "true" ||
-      req.query.prepare_hold === true;
-    const data = await seatsioService.getPublicSeatingChart(req.params.id, { prepareHold });
+      req.query.prepare_hold === true ||
+      req.query.session === "1" ||
+      req.query.session === "true";
+    const data = prepareHold
+      ? await seatsioService.getBuyerSeatingSession(req.params.id)
+      : await seatsioService.getPublicSeatingChart(req.params.id, { prepareHold: false });
     res.json(data);
   } catch (err) {
     next(err);

@@ -3,6 +3,8 @@ import { Ticket } from "lucide-react";
 import { SeatsioSeatingChart } from "@seatsio/seatsio-react";
 import SeatingModalShell from "./SeatingModalShell";
 import { formatCurrency } from "../../utils/format";
+import { fetchPublicSeatingChart } from "../../services/seatingService";
+import { clearSeatsioBrowserSession } from "../../utils/seatsioBrowserSession";
 
 function mapSelectedObject(object) {
   return {
@@ -17,29 +19,61 @@ export default function GuestSeatSelectionModal({
   open,
   onClose,
   onConfirm,
+  eventId,
   eventTitle,
-  chartConfig = null,
   maxSeats = 20,
   totalDays = 1,
   submitting = false
 }) {
   const chartRef = useRef(null);
   const holdTokenRef = useRef("");
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [holdToken, setHoldToken] = useState("");
+  const [chartEpoch, setChartEpoch] = useState(0);
 
-  useEffect(() => {
-    if (!open) {
-      chartRef.current = null;
-      holdTokenRef.current = "";
-      setSelectedSeats([]);
-      setHoldToken("");
+  const loadSession = useCallback(async () => {
+    if (!eventId) {
       return;
     }
-    holdTokenRef.current = chartConfig?.hold_token || "";
-    setHoldToken(chartConfig?.hold_token || "");
+    setLoading(true);
+    setLoadError("");
+    setSession(null);
     setSelectedSeats([]);
-  }, [open, chartConfig?.event_key, chartConfig?.hold_token]);
+    setHoldToken("");
+    holdTokenRef.current = "";
+    clearSeatsioBrowserSession();
+    try {
+      const config = await fetchPublicSeatingChart(eventId);
+      if (!config?.workspace_key || !config?.event_key || !config?.hold_token) {
+        throw new Error("Seating session is incomplete. Ask the organizer to save the chart again.");
+      }
+      setSession(config);
+      holdTokenRef.current = config.hold_token;
+      setHoldToken(config.hold_token);
+      setChartEpoch((value) => value + 1);
+    } catch (err) {
+      setLoadError(err.response?.data?.message || err.message || "Could not load the seating chart.");
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId]);
+
+  useEffect(() => {
+    if (open && eventId) {
+      void loadSession();
+      return;
+    }
+    chartRef.current = null;
+    holdTokenRef.current = "";
+    setSession(null);
+    setSelectedSeats([]);
+    setHoldToken("");
+    setLoadError("");
+    setLoading(false);
+  }, [open, eventId, loadSession]);
 
   const subtotal = useMemo(() => {
     const perDay = selectedSeats.reduce((sum, seat) => sum + Number(seat.price || 0), 0);
@@ -60,11 +94,11 @@ export default function GuestSeatSelectionModal({
   }, []);
 
   const pricing = useMemo(() => {
-    return (chartConfig?.pricing || []).map((row) => ({
+    return (session?.pricing || []).map((row) => ({
       category: row.category,
       price: Number(row.price) || 0
     }));
-  }, [chartConfig]);
+  }, [session]);
 
   const canConfirm = Boolean(holdToken && selectedSeats.length);
 
@@ -99,7 +133,8 @@ export default function GuestSeatSelectionModal({
           onClick={() =>
             onConfirm?.({
               holdToken: holdTokenRef.current || holdToken,
-              selectedSeats
+              selectedSeats,
+              eventKey: session?.event_key || ""
             })
           }
           className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
@@ -121,14 +156,31 @@ export default function GuestSeatSelectionModal({
       size="full"
     >
       <div className="h-[min(68vh,640px)] p-2 sm:p-3">
-        {chartConfig?.workspace_key && chartConfig?.event_key && chartConfig?.hold_token ? (
+        {loading ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-600">
+            Loading seating chart…
+          </div>
+        ) : null}
+        {!loading && loadError ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="text-sm text-rose-700">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void loadSession()}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+        {!loading && !loadError && session?.workspace_key && session?.event_key && session?.hold_token ? (
           <SeatsioSeatingChart
-            key={`${chartConfig.event_key}:${chartConfig.hold_token}`}
-            workspaceKey={chartConfig.workspace_key}
-            event={chartConfig.event_key}
-            region={chartConfig.region || "na"}
+            key={`${session.event_key}:${session.hold_token}:${chartEpoch}`}
+            workspaceKey={session.workspace_key}
+            event={session.event_key}
+            region={session.region || "na"}
             session="manual"
-            holdToken={chartConfig.hold_token}
+            holdToken={session.hold_token}
             pricing={pricing}
             priceFormatter={(price) => formatCurrency(price)}
             maxSelectedObjects={maxSeats}
@@ -136,19 +188,18 @@ export default function GuestSeatSelectionModal({
               chartRef.current = chart;
             }}
             onSessionInitialized={({ token }) => {
-              holdTokenRef.current = token || chartConfig.hold_token;
-              setHoldToken(token || chartConfig.hold_token);
+              const resolved = token || session.hold_token;
+              holdTokenRef.current = resolved;
+              setHoldToken(resolved);
+            }}
+            onHoldTokenExpired={() => {
+              setLoadError("Your seat hold expired. Starting a fresh session…");
+              void loadSession();
             }}
             onObjectSelected={syncSelection}
             onObjectDeselected={syncSelection}
           />
-        ) : (
-          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-600">
-            {chartConfig?.event_key
-              ? "Starting seat selection session…"
-              : "Seating chart is not available for this event yet."}
-          </div>
-        )}
+        ) : null}
       </div>
     </SeatingModalShell>
   );

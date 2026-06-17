@@ -60,7 +60,7 @@ import {
 } from "../utils/eventCheckoutDraft";
 import { applyTransactionFee } from "../utils/transactionFee";
 import GuestSeatSelectionModal from "./seating/GuestSeatSelectionModal";
-import { fetchPublicSeatingChart, releaseSeatsioHold } from "../services/seatingService";
+import { releaseSeatsioHold } from "../services/seatingService";
 import { isReservedSeating } from "../utils/seatingMode";
 import {
   SEATSIO_HOLD_MINUTES,
@@ -208,7 +208,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const ticketLevels = useMemo(() => getCheckoutTicketLevels(event), [event]);
   const [ticketCart, setTicketCart] = useState(() => createEmptyCart(getCheckoutTicketLevels(event)));
   const [seatModalOpen, setSeatModalOpen] = useState(false);
-  const [seatingChartConfig, setSeatingChartConfig] = useState(null);
   const [seatsioHoldToken, setSeatsioHoldToken] = useState("");
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [seatHoldExpiresAt, setSeatHoldExpiresAt] = useState(null);
@@ -430,7 +429,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     async ({ expired = false } = {}) => {
       const token = seatsioHoldToken;
       const labels = selectedSeats.map((seat) => seat.label).filter(Boolean);
-      const eventKey = seatingEventKey || seatingChartConfig?.event_key;
+      const eventKey = seatingEventKey;
       if (token && eventKey && labels.length) {
         try {
           await releaseSeatsioHold(eventId, { eventKey, holdToken: token, labels });
@@ -451,25 +450,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       seatsioHoldToken,
       selectedSeats,
       seatingEventKey,
-      seatingChartConfig?.event_key,
       eventId,
       ticketLevels
     ]
   );
-
-  useEffect(() => {
-    if (!reservedSeating || !eventId) {
-      return;
-    }
-    fetchPublicSeatingChart(eventId)
-      .then((config) => {
-        setSeatingChartConfig(config);
-        setSeatingEventKey(config?.event_key || "");
-      })
-      .catch(() => {
-        /* chart may not be ready yet */
-      });
-  }, [reservedSeating, eventId]);
 
   useEffect(() => {
     if (!seatHoldExpiresAt || !seatsioHoldToken) {
@@ -494,20 +478,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     return () => clearInterval(id);
   }, [seatHoldExpiresAt, seatsioHoldToken, clearSeatHold]);
 
-  const openSeatSelectionModal = async () => {
+  const openSeatSelectionModal = () => {
     setError("");
-    try {
-      const config = await fetchPublicSeatingChart(eventId, { prepareHold: true });
-      setSeatingChartConfig(config);
-      setSeatingEventKey(config?.event_key || "");
-      if (!config?.hold_token) {
-        setError("Could not start seat selection. Please try again.");
-        return;
-      }
-      setSeatModalOpen(true);
-    } catch (err) {
-      setError(err.response?.data?.message || "Could not load the seating chart.");
-    }
+    setSeatModalOpen(true);
   };
 
   const contactName = useMemo(
@@ -1499,17 +1472,15 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     <GuestSeatSelectionModal
       open={seatModalOpen}
       onClose={() => setSeatModalOpen(false)}
+      eventId={eventId}
       eventTitle={event?.title}
-      chartConfig={seatingChartConfig}
       maxSeats={maxTickets > 0 ? maxTickets : 20}
       totalDays={totalDays}
-      onConfirm={({ holdToken, selectedSeats: seats }) => {
+      onConfirm={({ holdToken, selectedSeats: seats, eventKey }) => {
         setSeatsioHoldToken(holdToken);
         setSelectedSeats(seats);
         setSeatHoldExpiresAt(seatHoldExpiresAtFromNow());
-        if (seatingChartConfig?.event_key) {
-          setSeatingEventKey(seatingChartConfig.event_key);
-        }
+        setSeatingEventKey(eventKey || "");
         setSeatModalOpen(false);
       }}
     />
