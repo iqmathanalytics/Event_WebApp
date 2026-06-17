@@ -1,4 +1,4 @@
-import api from "./api";
+import api, { optionalAuthRequest } from "./api";
 
 export async function fetchOrganizerSeatingDesigner(eventId) {
   const { data } = await api.get(`/events/${eventId}/seating/designer`);
@@ -13,7 +13,9 @@ export async function saveOrganizerSeatingConfig(eventId, payload) {
 /** Buyer chart + server-side hold session (chart uses session=none; holds via API). */
 export async function fetchPublicSeatingChart(eventId) {
   const { data } = await api.get(`/events/${eventId}/seating/chart`, {
-    params: { session: "1" }
+    params: { session: "1" },
+    timeout: 30000,
+    ...optionalAuthRequest
   });
   return data;
 }

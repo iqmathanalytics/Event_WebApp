@@ -41,9 +41,12 @@ export default function GuestSeatSelectionModal({
   const chartRef = useRef(null);
   const heldLabelsRef = useRef([]);
   const holdTokenRef = useRef("");
+  const eventKeyRef = useRef("");
+  const eventIdRef = useRef(eventId);
   const syncInFlightRef = useRef(false);
   const loadGenerationRef = useRef(0);
   const skipReleaseOnCloseRef = useRef(false);
+
   const [chartConfig, setChartConfig] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -52,25 +55,29 @@ export default function GuestSeatSelectionModal({
   const [syncingHold, setSyncingHold] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const releaseAllHeldSeats = useCallback(async () => {
+  eventIdRef.current = eventId;
+
+  const releaseHeldSeats = useCallback(async () => {
     const labels = [...heldLabelsRef.current];
     const token = holdTokenRef.current;
-    const eventKey = chartConfig?.event_key;
+    const eventKey = eventKeyRef.current;
+    const currentEventId = eventIdRef.current;
     heldLabelsRef.current = [];
-    if (!labels.length || !token || !eventKey || !eventId) {
+    if (!labels.length || !token || !eventKey || !currentEventId) {
       return;
     }
     try {
-      await releaseSeatsioHold(eventId, { eventKey, holdToken: token, labels });
+      await releaseSeatsioHold(currentEventId, { eventKey, holdToken: token, labels });
     } catch (_err) {
       /* seats may already be released */
     }
-  }, [chartConfig?.event_key, eventId]);
+  }, []);
 
   useEffect(() => {
     if (!open || !eventId) {
       chartRef.current = null;
       holdTokenRef.current = "";
+      eventKeyRef.current = "";
       heldLabelsRef.current = [];
       setChartConfig(null);
       setSelectedSeats([]);
@@ -91,6 +98,7 @@ export default function GuestSeatSelectionModal({
     setSelectedSeats([]);
     setHoldToken("");
     holdTokenRef.current = "";
+    eventKeyRef.current = "";
     heldLabelsRef.current = [];
     clearSeatsioBrowserSession();
 
@@ -103,6 +111,7 @@ export default function GuestSeatSelectionModal({
           throw new Error("Seating session is incomplete. Ask the organizer to publish and save the chart.");
         }
         holdTokenRef.current = config.hold_token;
+        eventKeyRef.current = config.event_key;
         setHoldToken(config.hold_token);
         setChartConfig(config);
       })
@@ -121,40 +130,45 @@ export default function GuestSeatSelectionModal({
     return () => {
       cancelled = true;
       if (generation === loadGenerationRef.current && !skipReleaseOnCloseRef.current) {
-        void releaseAllHeldSeats();
+        const labels = [...heldLabelsRef.current];
+        const token = holdTokenRef.current;
+        const eventKey = eventKeyRef.current;
+        const currentEventId = eventIdRef.current;
+        heldLabelsRef.current = [];
+        if (labels.length && token && eventKey && currentEventId) {
+          void releaseSeatsioHold(currentEventId, { eventKey, holdToken: token, labels });
+        }
       }
       skipReleaseOnCloseRef.current = false;
     };
-  }, [open, eventId, reloadKey, releaseAllHeldSeats]);
+  }, [open, eventId, reloadKey]);
 
-  const syncServerHolds = useCallback(
-    async (nextLabels) => {
-      const eventKey = chartConfig?.event_key;
-      const token = holdTokenRef.current;
-      if (!eventKey || !token || !eventId || syncInFlightRef.current) {
-        return;
-      }
+  const syncServerHolds = useCallback(async (nextLabels) => {
+    const eventKey = eventKeyRef.current;
+    const token = holdTokenRef.current;
+    const currentEventId = eventIdRef.current;
+    if (!eventKey || !token || !currentEventId || syncInFlightRef.current) {
+      return;
+    }
 
-      const { add, remove } = diffLabels(heldLabelsRef.current, nextLabels);
-      if (!add.length && !remove.length) {
-        return;
-      }
+    const { add, remove } = diffLabels(heldLabelsRef.current, nextLabels);
+    if (!add.length && !remove.length) {
+      return;
+    }
 
-      syncInFlightRef.current = true;
-      setSyncingHold(true);
-      try {
-        await syncSeatsioHold(eventId, { eventKey, holdToken: token, add, remove });
-        heldLabelsRef.current = nextLabels;
-      } catch (err) {
-        setLoadError(err.response?.data?.message || err.message || "Could not hold the selected seats.");
-        throw err;
-      } finally {
-        syncInFlightRef.current = false;
-        setSyncingHold(false);
-      }
-    },
-    [chartConfig?.event_key, eventId]
-  );
+    syncInFlightRef.current = true;
+    setSyncingHold(true);
+    try {
+      await syncSeatsioHold(currentEventId, { eventKey, holdToken: token, add, remove });
+      heldLabelsRef.current = nextLabels;
+    } catch (err) {
+      setLoadError(err.response?.data?.message || err.message || "Could not hold the selected seats.");
+      throw err;
+    } finally {
+      syncInFlightRef.current = false;
+      setSyncingHold(false);
+    }
+  }, []);
 
   const syncSelection = useCallback(async () => {
     const chart = chartRef.current;
@@ -168,7 +182,7 @@ export default function GuestSeatSelectionModal({
       await syncServerHolds(labels);
       setSelectedSeats(seats);
     } catch (_err) {
-      /* error surfaced via loadError */
+      /* loadError is set in syncServerHolds */
     }
   }, [syncServerHolds]);
 
@@ -185,6 +199,7 @@ export default function GuestSeatSelectionModal({
   }, [chartConfig]);
 
   const canConfirm = Boolean(holdToken && selectedSeats.length && !syncingHold);
+  const showChart = !loading && !loadError && Boolean(chartConfig?.workspace_key && chartConfig?.event_key);
 
   const footer = (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -202,15 +217,13 @@ export default function GuestSeatSelectionModal({
         ) : (
           <p className="text-sm text-slate-600">Tap or click seats on the chart to select them.</p>
         )}
-        {syncingHold ? (
-          <p className="mt-1 text-xs text-slate-500">Updating seat hold…</p>
-        ) : null}
+        {syncingHold ? <p className="mt-1 text-xs text-slate-500">Updating seat hold…</p> : null}
       </div>
       <div className="flex shrink-0 gap-2">
         <button
           type="button"
           onClick={async () => {
-            await releaseAllHeldSeats();
+            await releaseHeldSeats();
             onClose?.();
           }}
           className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700"
@@ -225,7 +238,7 @@ export default function GuestSeatSelectionModal({
             onConfirm?.({
               holdToken: holdTokenRef.current || holdToken,
               selectedSeats,
-              eventKey: chartConfig?.event_key || ""
+              eventKey: eventKeyRef.current || chartConfig?.event_key || ""
             });
           }}
           className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
@@ -267,25 +280,30 @@ export default function GuestSeatSelectionModal({
             </button>
           </div>
         ) : null}
-        {!loading && !loadError && chartConfig?.workspace_key && chartConfig?.event_key ? (
-          <SeatsioSeatingChart
-            key={chartConfig.event_key}
-            workspaceKey={chartConfig.workspace_key}
-            event={chartConfig.event_key}
-            region={chartConfig.region || "na"}
-            session="none"
-            pricing={pricing}
-            priceFormatter={(price) => formatCurrency(price)}
-            maxSelectedObjects={maxSeats}
-            onRenderStarted={(chart) => {
-              chartRef.current = chart;
-            }}
-            onChartRenderingFailed={() => {
-              setLoadError("Could not render the seating chart. Please try again.");
-            }}
-            onObjectSelected={syncSelection}
-            onObjectDeselected={syncSelection}
-          />
+        {showChart ? (
+          <div className="h-full min-h-[480px] w-full">
+            <SeatsioSeatingChart
+              key={chartConfig.event_key}
+              workspaceKey={chartConfig.workspace_key}
+              event={chartConfig.event_key}
+              region={chartConfig.region || "na"}
+              session="none"
+              pricing={pricing}
+              priceFormatter={(price) => formatCurrency(price)}
+              maxSelectedObjects={maxSeats}
+              onRenderStarted={(chart) => {
+                chartRef.current = chart;
+              }}
+              onChartRendered={() => {
+                setLoadError("");
+              }}
+              onChartRenderingFailed={() => {
+                setLoadError("Could not render the seating chart. Please try again.");
+              }}
+              onObjectSelected={syncSelection}
+              onObjectDeselected={syncSelection}
+            />
+          </div>
         ) : null}
       </div>
     </SeatingModalShell>
