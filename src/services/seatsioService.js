@@ -69,6 +69,11 @@ async function createBuyerHoldSession(client) {
   if (!token?.holdToken) {
     throw new ApiError(502, "Could not start a seat selection session.");
   }
+  try {
+    await client.holdTokens.expiresInMinutes(token.holdToken, SEATSIO_HOLD_MINUTES);
+  } catch (_err) {
+    /* non-fatal */
+  }
   return {
     hold_token: token.holdToken,
     workspace_key: workspaceKey,
@@ -421,6 +426,38 @@ async function releaseSeatHold({ eventKey, holdToken, labels }) {
   }
 }
 
+async function syncSeatHoldSelection({ eventKey, holdToken, add = [], remove = [] }) {
+  if (!isSeatsioConfigured()) {
+    throw new ApiError(503, "Reserved seating is not available.");
+  }
+  if (!eventKey || !holdToken) {
+    throw new ApiError(400, "Seat hold session expired. Please reopen the chart.");
+  }
+
+  const addLabels = (add || []).map((label) => String(label || "").trim()).filter(Boolean);
+  const removeLabels = (remove || []).map((label) => String(label || "").trim()).filter(Boolean);
+  if (!addLabels.length && !removeLabels.length) {
+    return { held: [], released: [] };
+  }
+
+  const client = getClient();
+  try {
+    if (removeLabels.length) {
+      await client.events.release(eventKey, removeLabels, holdToken);
+    }
+    if (addLabels.length) {
+      await client.events.hold(eventKey, addLabels, holdToken);
+    }
+    await client.holdTokens.expiresInMinutes(holdToken, SEATSIO_HOLD_MINUTES);
+    return { held: addLabels, released: removeLabels };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    throwSeatsioError(err, "Could not hold the selected seats.");
+  }
+}
+
 module.exports = {
   isSeatsioConfigured,
   getWorkspaceKey,
@@ -433,5 +470,6 @@ module.exports = {
   getBuyerSeatingSession,
   bookSeatsForCheckout,
   releaseSeatHold,
+  syncSeatHoldSelection,
   ensureSeatsioEventForPlatformEvent
 };

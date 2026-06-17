@@ -33,5 +33,6 @@ router.get(
 );
 
 router.post("/release-hold", seatingController.releaseSeatHold);
+router.post("/sync-hold", seatingController.syncSeatHold);
 
 module.exports = router;

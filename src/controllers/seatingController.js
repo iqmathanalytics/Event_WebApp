@@ -56,9 +56,32 @@ async function releaseSeatHold(req, res, next) {
   }
 }
 
+async function syncSeatHold(req, res, next) {
+  try {
+    const holdToken = String(req.body?.hold_token || "").trim();
+    const eventKey = String(req.body?.event_key || "").trim();
+    const add = Array.isArray(req.body?.add)
+      ? req.body.add.map((label) => String(label || "").trim()).filter(Boolean)
+      : [];
+    const remove = Array.isArray(req.body?.remove)
+      ? req.body.remove.map((label) => String(label || "").trim()).filter(Boolean)
+      : [];
+    const data = await seatsioService.syncSeatHoldSelection({
+      eventKey,
+      holdToken,
+      add,
+      remove
+    });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getOrganizerDesignerConfig,
   saveOrganizerSeatingConfig,
   getPublicSeatingChart,
-  releaseSeatHold
+  releaseSeatHold,
+  syncSeatHold
 };
