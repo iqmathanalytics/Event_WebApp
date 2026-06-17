@@ -27,14 +27,16 @@ async function saveOrganizerSeatingConfig(req, res, next) {
 
 async function getPublicSeatingChart(req, res, next) {
   try {
+    const reuseHoldToken = String(req.query.hold_token || "").trim() || null;
     const prepareHold =
       req.query.prepare_hold === "1" ||
       req.query.prepare_hold === "true" ||
       req.query.prepare_hold === true ||
       req.query.session === "1" ||
-      req.query.session === "true";
+      req.query.session === "true" ||
+      Boolean(reuseHoldToken);
     const data = prepareHold
-      ? await seatsioService.getBuyerSeatingSession(req.params.id)
+      ? await seatsioService.getBuyerSeatingSession(req.params.id, reuseHoldToken)
       : await seatsioService.getPublicSeatingChart(req.params.id, { prepareHold: false });
     res.json(data);
   } catch (err) {

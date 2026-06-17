@@ -11,9 +11,15 @@ export async function saveOrganizerSeatingConfig(eventId, payload) {
 }
 
 /** Buyer chart + server-side hold session (chart uses session=none; holds via API). */
-export async function fetchPublicSeatingChart(eventId) {
+export async function fetchPublicSeatingChart(eventId, { holdToken } = {}) {
+  const params = {};
+  if (holdToken) {
+    params.hold_token = holdToken;
+  } else {
+    params.session = "1";
+  }
   const { data } = await api.get(`/events/${eventId}/seating/chart`, {
-    params: { session: "1" },
+    params,
     timeout: 30000,
     ...optionalAuthRequest
   });

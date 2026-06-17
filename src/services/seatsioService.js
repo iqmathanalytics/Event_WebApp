@@ -3,7 +3,7 @@ const ApiError = require("../utils/ApiError");
 const { findEventById } = require("../models/eventModel");
 const { pool } = require("../config/db");
 const { isReservedSeating, normalizeSeatingMode } = require("../utils/seatingMode");
-const { normalizeTicketLevelsInput } = require("../utils/eventTicketLevels");
+const { normalizeTicketLevelsInput, isTicketLevelSaleActive } = require("../utils/eventTicketLevels");
 const { buildCartFromSelectedSeats } = require("../utils/seatSelection");
 
 function resolveRegion() {
@@ -272,18 +272,75 @@ async function ensureSeatsioEventForPlatformEvent(event) {
   return eventKey;
 }
 
-function buildPricingFromTicketLevels(ticketLevels = []) {
-  const levels = normalizeTicketLevelsInput(ticketLevels);
-  return levels.map((level, index) => ({
-    category: index + 1,
-    price: Number(level.price) || 0,
-    label: level.name
-  }));
+function sortChartCategories(chartCategories = []) {
+  return [...chartCategories].sort((a, b) => Number(a.key) - Number(b.key));
 }
 
-function buildCartFromSelectedSeatsForBooking(selectedSeats = [], ticketLevels = [], totalDays = 1) {
+function buildPricingFromTicketLevels(ticketLevels = [], chartCategories = []) {
   const levels = normalizeTicketLevelsInput(ticketLevels);
-  return buildCartFromSelectedSeats(selectedSeats, levels, totalDays);
+  const categories = sortChartCategories(chartCategories);
+  return levels
+    .map((level, index) => ({
+      level,
+      category: categories[index]?.key ?? index + 1,
+      price: Number(level.price) || 0,
+      label: level.name
+    }))
+    .filter((row) => isTicketLevelSaleActive(row.level))
+    .map(({ category, price, label }) => ({ category, price, label }));
+}
+
+function buildBlockedCategoryKeys(ticketLevels = [], chartCategories = []) {
+  const levels = normalizeTicketLevelsInput(ticketLevels);
+  const categories = sortChartCategories(chartCategories);
+  const blocked = [];
+  levels.forEach((level, index) => {
+    if (!isTicketLevelSaleActive(level)) {
+      const key = categories[index]?.key;
+      if (key != null) {
+        blocked.push(key);
+      }
+    }
+  });
+  return blocked;
+}
+
+async function listChartCategories(client, chartKey) {
+  if (!chartKey) {
+    return [];
+  }
+  try {
+    const categories = await client.charts.listCategories(chartKey);
+    return sortChartCategories(categories);
+  } catch (_err) {
+    return [];
+  }
+}
+
+async function getBuyerSeatingSession(eventId, reuseHoldToken = null) {
+  return getPublicSeatingChart(eventId, { prepareHold: true, reuseHoldToken });
+}
+
+function buildCartFromSelectedSeatsForBooking(
+  selectedSeats = [],
+  ticketLevels = [],
+  totalDays = 1,
+  chartCategoryKeys = [],
+  chartPricing = []
+) {
+  const levels = normalizeTicketLevelsInput(ticketLevels);
+  return buildCartFromSelectedSeats(selectedSeats, levels, totalDays, chartCategoryKeys, chartPricing);
+}
+
+async function getChartSeatingMetaForEvent(event) {
+  if (!event?.seatsio_chart_key || !isSeatsioConfigured()) {
+    return { chartCategoryKeys: [], chartPricing: [] };
+  }
+  const client = getClient();
+  const categories = await listChartCategories(client, event.seatsio_chart_key);
+  const chartCategoryKeys = categories.map((row) => row.key);
+  const chartPricing = buildPricingFromTicketLevels(event.ticket_levels || [], categories);
+  return { chartCategoryKeys, chartPricing };
 }
 
 async function getOrganizerDesignerConfig(eventId, organizerId) {
@@ -342,7 +399,7 @@ async function saveOrganizerSeatingConfig(eventId, organizerId, payload) {
   }
 }
 
-async function getPublicSeatingChart(eventId, { prepareHold = false } = {}) {
+async function getPublicSeatingChart(eventId, { prepareHold = false, reuseHoldToken = null } = {}) {
   if (!isSeatsioConfigured()) {
     throw new ApiError(503, "Reserved seating is not available.");
   }
@@ -368,28 +425,40 @@ async function getPublicSeatingChart(eventId, { prepareHold = false } = {}) {
     );
   }
 
+  const chartCategories = await listChartCategories(client, event.seatsio_chart_key);
+  const chartCategoryKeys = chartCategories.map((row) => row.key);
+  const blockedCategoryKeys = buildBlockedCategoryKeys(event.ticket_levels || [], chartCategories);
   const payload = {
     event_id: Number(eventId),
     workspace_key: await resolveWorkspacePublicKey(client),
     region: publicRegion(),
     event_key: eventKey,
     chart_key: event.seatsio_chart_key,
-    pricing: buildPricingFromTicketLevels(event.ticket_levels || []),
+    chart_category_keys: chartCategoryKeys,
+    blocked_category_keys: blockedCategoryKeys,
+    pricing: buildPricingFromTicketLevels(event.ticket_levels || [], chartCategories),
     max_selected_objects: 20
   };
 
   if (prepareHold) {
-    const holdSession = await createBuyerHoldSession(client);
-    payload.hold_token = holdSession.hold_token;
-    payload.workspace_key = holdSession.workspace_key;
-    payload.hold_expires_at = holdSession.hold_expires_at;
+    const reuseToken = String(reuseHoldToken || "").trim();
+    if (reuseToken) {
+      try {
+        const tokenInfo = await client.holdTokens.retrieve(reuseToken);
+        payload.hold_token = reuseToken;
+        payload.hold_expires_at = tokenInfo?.expiresAt || null;
+      } catch (_err) {
+        throw new ApiError(400, "Seat hold session expired. Please select seats again.");
+      }
+    } else {
+      const holdSession = await createBuyerHoldSession(client);
+      payload.hold_token = holdSession.hold_token;
+      payload.workspace_key = holdSession.workspace_key;
+      payload.hold_expires_at = holdSession.hold_expires_at;
+    }
   }
 
   return payload;
-}
-
-async function getBuyerSeatingSession(eventId) {
-  return getPublicSeatingChart(eventId, { prepareHold: true });
 }
 
 async function bookSeatsForCheckout({ event, holdToken, selectedSeats, bookingId }) {
@@ -448,7 +517,6 @@ async function syncSeatHoldSelection({ eventKey, holdToken, add = [], remove = [
     if (addLabels.length) {
       await client.events.hold(eventKey, addLabels, holdToken);
     }
-    await client.holdTokens.expiresInMinutes(holdToken, SEATSIO_HOLD_MINUTES);
     return { held: addLabels, released: removeLabels };
   } catch (err) {
     if (err instanceof ApiError) {
@@ -471,5 +539,6 @@ module.exports = {
   bookSeatsForCheckout,
   releaseSeatHold,
   syncSeatHoldSelection,
-  ensureSeatsioEventForPlatformEvent
+  ensureSeatsioEventForPlatformEvent,
+  getChartSeatingMetaForEvent
 };

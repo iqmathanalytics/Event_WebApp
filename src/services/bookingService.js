@@ -261,10 +261,13 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     if (!eventWithLevels.seatsio_event_key) {
       throw new ApiError(400, "Seating chart is not configured for this event.");
     }
+    const chartMeta = await seatsioService.getChartSeatingMetaForEvent(eventWithLevels);
     const built = seatsioService.buildCartFromSelectedSeats(
       selectedSeats,
       eventWithLevels.ticket_levels || [],
-      totalDays
+      totalDays,
+      chartMeta.chartCategoryKeys,
+      chartMeta.chartPricing
     );
     cart = built.cart;
     guests = built.attendeeCount;

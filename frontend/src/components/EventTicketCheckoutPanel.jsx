@@ -98,7 +98,9 @@ function buildBookingPayload({
   couponHold,
   reservedSeating = false,
   seatsioHoldToken = "",
-  selectedSeats = []
+  selectedSeats = [],
+  chartCategoryKeys = [],
+  chartPricing = []
 }) {
   const sortedDates = normalizeDateList(selectedDates);
   const first = String(firstName || "").trim();
@@ -109,7 +111,12 @@ function buildBookingPayload({
     return {
       event_id: Number(eventId),
       attendee_count: selectedSeats.length,
-      ticket_items: buildTicketItemsFromSelectedSeats(selectedSeats, levels),
+      ticket_items: buildTicketItemsFromSelectedSeats(
+        selectedSeats,
+        levels,
+        chartCategoryKeys,
+        chartPricing
+      ),
       selected_dates: sortedDates,
       booking_date: sortedDates[0],
       first_name: first || undefined,
@@ -143,7 +150,19 @@ function buildBookingPayload({
 const COUPON_HOLD_MINUTES = 5;
 const COUPON_HOLD_MESSAGE = `Coupon applied. Complete your booking within ${COUPON_HOLD_MINUTES} minutes to keep this rate.`;
 
-function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "" }) {
+function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "", pendingSelection = false }) {
+  if (pendingSelection) {
+    return (
+      <div>
+        <p className="text-xl font-semibold leading-tight tracking-tight text-slate-900">
+          Total pending seat selection
+        </p>
+        <p className="mt-1.5 text-sm text-slate-600">
+          Open the chart below and confirm your seats to view pricing and fees.
+        </p>
+      </div>
+    );
+  }
   const showFee = Number(transactionFee) > 0;
   if (discount > 0 || showFee) {
     return (
@@ -213,6 +232,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const [seatHoldExpiresAt, setSeatHoldExpiresAt] = useState(null);
   const [seatHoldCountdown, setSeatHoldCountdown] = useState("");
   const [seatingEventKey, setSeatingEventKey] = useState("");
+  const [chartCategoryKeys, setChartCategoryKeys] = useState([]);
+  const [chartPricing, setChartPricing] = useState([]);
   const attendeeCount = useMemo(() => {
     if (reservedSeating) {
       return selectedSeats.length;
@@ -300,7 +321,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     const levelsForDraft = getCheckoutTicketLevels(event);
     let cart = cartFromItems(levelsForDraft, draft.ticketItems);
     const draftGuests = cartTicketCount(cart);
-    if (draftGuests < 1) {
+    if (isReservedSeating(event)) {
+      cart = createEmptyCart(levelsForDraft);
+    } else if (draftGuests < 1) {
       const legacyGuests = Math.min(cap > 0 ? cap : 50, Math.max(1, Number(draft.attendeeCount) || 1));
       cart = { ...createEmptyCart(levelsForDraft) };
       if (levelsForDraft[0]) {
@@ -349,6 +372,23 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       };
       setCouponHold(hold);
       setCouponMessage(draft.couponMessage || hold.message || COUPON_HOLD_MESSAGE);
+    }
+
+    if (isReservedSeating(event) && draft.seatHold?.holdToken && draft.seatHold?.selectedSeats?.length) {
+      const expiresMs =
+        typeof draft.seatHold.expiresAt === "number"
+          ? draft.seatHold.expiresAt
+          : parseExpiresMs(draft.seatHold.expiresAt);
+      if (expiresMs && expiresMs > Date.now()) {
+        setSeatsioHoldToken(String(draft.seatHold.holdToken));
+        setSeatingEventKey(String(draft.seatHold.eventKey || ""));
+        setSelectedSeats(draft.seatHold.selectedSeats);
+        setChartCategoryKeys(
+          Array.isArray(draft.seatHold.chartCategoryKeys) ? draft.seatHold.chartCategoryKeys : []
+        );
+        setChartPricing(Array.isArray(draft.seatHold.chartPricing) ? draft.seatHold.chartPricing : []);
+        setSeatHoldExpiresAt(expiresMs);
+      }
     }
 
     setCheckoutReady(true);
@@ -420,10 +460,23 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }, [user, guestMode]);
 
   useEffect(() => {
-    if (reservedSeating && selectedSeats.length) {
-      setTicketCart(buildCartFromSelectedSeats(selectedSeats, ticketLevels));
+    if (reservedSeating) {
+      setTicketCart(
+        selectedSeats.length
+          ? buildCartFromSelectedSeats(selectedSeats, ticketLevels, chartCategoryKeys, chartPricing)
+          : createEmptyCart(ticketLevels)
+      );
     }
-  }, [reservedSeating, selectedSeats, ticketLevels]);
+  }, [reservedSeating, selectedSeats, ticketLevels, chartCategoryKeys, chartPricing]);
+
+  const checkoutCart = useMemo(() => {
+    if (reservedSeating) {
+      return selectedSeats.length
+        ? buildCartFromSelectedSeats(selectedSeats, ticketLevels, chartCategoryKeys, chartPricing)
+        : createEmptyCart(ticketLevels);
+    }
+    return ticketCart;
+  }, [reservedSeating, selectedSeats, ticketLevels, chartCategoryKeys, chartPricing, ticketCart]);
 
   const clearSeatHold = useCallback(
     async ({ expired = false } = {}) => {
@@ -441,6 +494,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setSelectedSeats([]);
       setSeatHoldExpiresAt(null);
       setSeatHoldCountdown("");
+      setChartCategoryKeys([]);
+      setChartPricing([]);
       setTicketCart(createEmptyCart(ticketLevels));
       if (expired) {
         setError(`Your seat hold expired after ${SEATSIO_HOLD_MINUTES} minutes. Please select seats again.`);
@@ -495,7 +550,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const seatBar = null;
 
   const totalDays = selectedDates.length;
-  const subtotalAmount = computeCartSubtotal(ticketLevels, ticketCart, totalDays);
+  const awaitingSeatSelection = reservedSeating && !selectedSeats.length;
+  const subtotalAmount = awaitingSeatSelection
+    ? 0
+    : computeCartSubtotal(ticketLevels, checkoutCart, totalDays);
   const discountAmount = couponHold ? Number(couponHold.discount || 0) : 0;
   const { transactionFeeAmount, totalAmount } = applyTransactionFee({
     subtotalAmount,
@@ -504,8 +562,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
   const sortedSelected = useMemo(() => normalizeDateList(selectedDates), [selectedDates]);
   const reservedSeatGroups = useMemo(
-    () => groupSelectedSeatsForDisplay(selectedSeats, ticketLevels),
-    [selectedSeats, ticketLevels]
+    () => groupSelectedSeatsForDisplay(selectedSeats, ticketLevels, chartCategoryKeys, chartPricing),
+    [selectedSeats, ticketLevels, chartCategoryKeys, chartPricing]
   );
 
   const gridLeftTitle = scheduleType === "single" ? "Date" : "Starts";
@@ -531,7 +589,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }, [scheduleType, event?.event_time, sortedSelected]);
 
   const priceBreakdownLine =
-    totalDays > 0 && attendeeCount > 0
+    !awaitingSeatSelection && totalDays > 0 && attendeeCount > 0
       ? `${attendeeCount} ticket${attendeeCount === 1 ? "" : "s"} · ${totalDays} show day${totalDays === 1 ? "" : "s"}`
       : "";
 
@@ -569,6 +627,17 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       const holdForStorage = hold
         ? (({ _draftSnapshot: _s, ...rest }) => rest)(hold)
         : null;
+      const seatHoldForStorage =
+        reservedSeating && selectedSeats.length && seatsioHoldToken
+          ? {
+              holdToken: seatsioHoldToken,
+              eventKey: seatingEventKey,
+              expiresAt: seatHoldExpiresAt,
+              selectedSeats,
+              chartCategoryKeys,
+              chartPricing
+            }
+          : null;
       saveEventCheckoutDraft({
         eventId: Number(eventId),
         userId: checkoutUserId === "guest" ? "guest" : Number(checkoutUserId),
@@ -585,6 +654,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         couponCodeInput: overrides.couponCodeInput ?? couponCodeInput,
         couponMessage: overrides.couponMessage ?? couponMessage,
         couponHold: holdForStorage,
+        seatHold: overrides.seatHold !== undefined ? overrides.seatHold : seatHoldForStorage,
         holdSnapshot: hold
           ? hold._draftSnapshot || {
               datesKey: datesKey(dates),
@@ -608,7 +678,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       phone,
       selectedDates,
       step,
-      checkoutUserId
+      checkoutUserId,
+      reservedSeating,
+      selectedSeats,
+      seatsioHoldToken,
+      seatingEventKey,
+      seatHoldExpiresAt,
+      chartCategoryKeys,
+      chartPricing
     ]
   );
 
@@ -805,6 +882,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (!ticketLevels.length) {
       return;
     }
+    if (reservedSeating) {
+      return;
+    }
     setTicketCart((prev) => {
       const next = createEmptyCart(ticketLevels);
       ticketLevels.forEach((level) => {
@@ -814,7 +894,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       });
       return next;
     });
-  }, [eventId, ticketLevels]);
+  }, [eventId, ticketLevels, reservedSeating]);
 
   const onContinueToConfirm = () => {
     setError("");
@@ -898,7 +978,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       couponHold,
       reservedSeating,
       seatsioHoldToken,
-      selectedSeats
+      selectedSeats,
+      chartCategoryKeys,
+      chartPricing
     });
 
     try {
@@ -1151,13 +1233,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       ) : null}
       <CheckoutCard pill="Review your booking" seatBar={seatBar}>
         <div className="mb-5">
-          <PriceTotals
-            subtotal={subtotalAmount}
-            discount={discountAmount}
-            transactionFee={transactionFeeAmount}
-            total={totalAmount}
-            suffix=" estimated total"
-          />
+        <PriceTotals
+          subtotal={subtotalAmount}
+          discount={discountAmount}
+          transactionFee={transactionFeeAmount}
+          total={totalAmount}
+          suffix=" estimated total"
+          pendingSelection={awaitingSeatSelection}
+        />
           {couponHold?.couponCode ? (
             <p className="mt-1 text-xs font-semibold text-emerald-700">Coupon {couponHold.couponCode}</p>
           ) : null}
@@ -1253,6 +1336,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           transactionFee={transactionFeeAmount}
           total={totalAmount}
           suffix={totalDays > 0 ? ` for ${totalDays} show day${totalDays === 1 ? "" : "s"}` : ""}
+          pendingSelection={awaitingSeatSelection}
         />
         {priceBreakdownLine ? <p className="mt-1.5 text-sm text-slate-600">{priceBreakdownLine}</p> : null}
       </div>
@@ -1312,11 +1396,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                     </button>
                   </div>
                 </div>
-              ) : (
-                <p className="text-center text-sm text-slate-600">
-                  Open the seating chart to pick your seats.
-                </p>
-              )}
+              ) : null}
               <button
                 type="button"
                 onClick={openSeatSelectionModal}
@@ -1476,11 +1556,25 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       eventTitle={event?.title}
       maxSeats={maxTickets > 0 ? maxTickets : 20}
       totalDays={totalDays}
-      onConfirm={({ holdToken, selectedSeats: seats, eventKey }) => {
+      initialSelectedSeats={selectedSeats}
+      existingHoldToken={seatsioHoldToken}
+      existingEventKey={seatingEventKey}
+      onConfirm={({ holdToken, selectedSeats: seats, eventKey, chartCategoryKeys: categoryKeys, chartPricing: pricing, holdExpiresAt }) => {
         setSeatsioHoldToken(holdToken);
         setSelectedSeats(seats);
-        setSeatHoldExpiresAt(seatHoldExpiresAtFromNow());
+        setSeatHoldExpiresAt((prev) => {
+          if (prev && prev > Date.now()) {
+            return prev;
+          }
+          const fromApi = parseExpiresMs(holdExpiresAt);
+          if (fromApi && fromApi > Date.now()) {
+            return fromApi;
+          }
+          return seatHoldExpiresAtFromNow();
+        });
         setSeatingEventKey(eventKey || "");
+        setChartCategoryKeys(Array.isArray(categoryKeys) ? categoryKeys : []);
+        setChartPricing(Array.isArray(pricing) ? pricing : []);
         setSeatModalOpen(false);
       }}
     />

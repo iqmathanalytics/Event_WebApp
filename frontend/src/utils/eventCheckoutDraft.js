@@ -25,6 +25,20 @@ function isHoldExpired(couponHold) {
   return expiresMs <= Date.now();
 }
 
+export function isSeatHoldExpired(seatHold) {
+  if (!seatHold?.holdToken) {
+    return true;
+  }
+  const expiresMs =
+    typeof seatHold.expiresAt === "number"
+      ? seatHold.expiresAt
+      : parseExpiresMs(seatHold.expiresAt);
+  if (expiresMs == null) {
+    return false;
+  }
+  return expiresMs <= Date.now();
+}
+
 export function loadEventCheckoutDraft(eventId, userId) {
   if (eventId == null || userId == null) {
     return null;
@@ -46,6 +60,9 @@ export function loadEventCheckoutDraft(eventId, userId) {
       draft.couponMessage = "";
       draft.holdSnapshot = null;
     }
+    if (draft.seatHold && isSeatHoldExpired(draft.seatHold)) {
+      draft.seatHold = null;
+    }
     return draft;
   } catch {
     return null;
@@ -62,6 +79,9 @@ export function saveEventCheckoutDraft(draft) {
       payload.couponHold = null;
       payload.couponMessage = "";
       payload.holdSnapshot = null;
+    }
+    if (payload.seatHold && isSeatHoldExpired(payload.seatHold)) {
+      payload.seatHold = null;
     }
     const key = storageKey(draft.eventId, draft.userId);
     const json = JSON.stringify(payload);
