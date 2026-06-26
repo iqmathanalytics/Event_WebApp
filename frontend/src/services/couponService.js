@@ -42,10 +42,11 @@ export async function validateEventCoupon(payload) {
   return response.data;
 }
 
-export async function resumeEventCouponHold({ event_id, hold_token }) {
+export async function resumeEventCouponHold({ event_id, hold_token, ticket_items }) {
   const response = await api.post("/bookings/resume-coupon-hold", {
     event_id,
     hold_token,
+    ...(Array.isArray(ticket_items) ? { ticket_items } : {}),
     timezone_offset: clientTimezoneOffsetMinutes()
   });
   return response.data;

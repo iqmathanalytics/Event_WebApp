@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import { orderAllowedCities } from "../utils/filterOptions";
 import { fetchCities } from "../services/metaService";
 
@@ -13,31 +13,32 @@ export function CityFilterProvider({ children }) {
   const [cities, setCities] = useState([]);
   const [citiesLoading, setCitiesLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
+  const loadCities = useCallback(async ({ silent = false } = {}) => {
+    try {
+      if (!silent) {
         setCitiesLoading(true);
-        const res = await fetchCities();
-        const rows = Array.isArray(res?.data) ? res.data : [];
-        const ordered = orderAllowedCities(rows);
-        if (!cancelled) {
-          setCities(ordered);
-        }
-      } catch (_err) {
-        if (!cancelled) {
-          setCities([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setCitiesLoading(false);
-        }
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      const res = await fetchCities();
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      setCities(orderAllowedCities(rows));
+    } catch (_err) {
+      setCities([]);
+    } finally {
+      if (!silent) {
+        setCitiesLoading(false);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    void loadCities();
+  }, [loadCities]);
+
+  useEffect(() => {
+    const refreshCities = () => void loadCities({ silent: true });
+    window.addEventListener("bmt:cities-cache-cleared", refreshCities);
+    return () => window.removeEventListener("bmt:cities-cache-cleared", refreshCities);
+  }, [loadCities]);
 
   useEffect(() => {
     localStorage.setItem("selectedCity", selectedCity || "");

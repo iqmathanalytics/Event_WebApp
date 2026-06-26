@@ -37,8 +37,9 @@ function computeDiscount(coupon, subtotal) {
   let discount = 0;
   if (coupon.discount_type === "percent") {
     discount = (subtotal * Number(coupon.discount_value)) / 100;
-    if (coupon.max_discount_amount != null && coupon.max_discount_amount !== "") {
-      discount = Math.min(discount, Number(coupon.max_discount_amount));
+    const cap = Number(coupon.max_discount_amount);
+    if (Number.isFinite(cap) && cap > 0) {
+      discount = Math.min(discount, cap);
     }
   } else {
     discount = Number(coupon.discount_value);
@@ -210,7 +211,7 @@ async function releaseCouponHold({ userId, holdToken, eventId }) {
   return { released: true };
 }
 
-async function resumeCouponHold({ userId, eventId, holdToken, timezoneOffsetMinutes = 0 }) {
+async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null, timezoneOffsetMinutes = 0 }) {
   await couponModel.purgeExpiredHolds();
   const hold = await couponModel.findActiveHoldByToken(holdToken);
   if (!hold) {
@@ -240,7 +241,7 @@ async function resumeCouponHold({ userId, eventId, holdToken, timezoneOffsetMinu
 
   const dates = normalizeDateList(JSON.parse(hold.selected_dates_json || "[]"));
   const guests = Number(hold.attendee_count);
-  const subtotal = computeSubtotal(event, dates, guests);
+  const subtotal = computeSubtotal(event, dates, guests, ticketItems);
 
   await assertCouponUsable({
     coupon,
@@ -289,6 +290,7 @@ async function applyCouponHold({
         userId,
         eventId,
         holdToken: existingHoldToken,
+        ticketItems,
         timezoneOffsetMinutes
       });
     } catch (err) {
@@ -386,7 +388,7 @@ async function applyCouponHold({
   });
 }
 
-async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount, selectedDates }) {
+async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount, selectedDates, ticketItems = null }) {
   await couponModel.purgeExpiredHolds();
   const hold = await couponModel.findActiveHoldByToken(holdToken);
   if (!hold) {
@@ -409,7 +411,7 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
     eventId,
     attendeeCount,
     selectedDates,
-    { excludeHoldToken: holdToken, ticketItems: null }
+    { excludeHoldToken: holdToken, ticketItems }
   );
 
   if (guests !== Number(hold.attendee_count)) {
@@ -501,6 +503,11 @@ async function updateOrganizerCoupon(organizerId, couponId, body) {
 }
 
 function mapCouponPayload(organizerId, body, code) {
+  const maxDiscountAmount =
+    body.discount_type === "percent" && Number(body.max_discount_amount) > 0
+      ? Number(body.max_discount_amount)
+      : null;
+
   return {
     organizer_id: organizerId,
     code,
@@ -514,7 +521,7 @@ function mapCouponPayload(organizerId, body, code) {
     max_redemptions_per_user: body.max_redemptions_per_user ?? null,
     min_ticket_count: body.min_ticket_count ?? null,
     min_order_amount: body.min_order_amount ?? null,
-    max_discount_amount: body.max_discount_amount ?? null,
+    max_discount_amount: maxDiscountAmount,
     event_ids: Array.isArray(body.event_ids) ? body.event_ids.map(Number) : []
   };
 }

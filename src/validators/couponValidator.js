@@ -85,6 +85,7 @@ const resumeCouponHoldSchema = z.object({
   body: z.object({
     event_id: z.coerce.number().int().positive(),
     hold_token: z.string().uuid(),
+    ticket_items: z.array(ticketItemSchema).max(20).optional(),
     timezone_offset: z.coerce.number().int().min(-840).max(840).optional().default(0)
   }),
   query: z.object({}).passthrough(),

@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get(
   "/cities",
-  publicCacheMiddleware({ maxAge: 3600, staleWhileRevalidate: 86400 }),
+  publicCacheMiddleware({ maxAge: 60, staleWhileRevalidate: 300 }),
   metaController.listCities
 );
 

@@ -86,6 +86,10 @@ function requiresCardPayment(totalAmount) {
   return Number(totalAmount) >= STRIPE_MIN_USD;
 }
 
+function formatCheckoutCurrency(value) {
+  return formatCurrency(value, { decimals: 2 });
+}
+
 function buildBookingPayload({
   eventId,
   levels,
@@ -168,21 +172,21 @@ function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "", p
     return (
       <div>
         <p className="text-2xl font-semibold leading-tight tracking-tight text-slate-900">
-          <span className="underline decoration-2 underline-offset-4">{formatCurrency(total)}</span>
+          <span className="underline decoration-2 underline-offset-4">{formatCheckoutCurrency(total)}</span>
           {suffix ? <span className="ml-1 text-base font-normal text-slate-900">{suffix}</span> : null}
         </p>
         <p className="mt-1.5 text-sm text-slate-600">
           {discount > 0 ? (
             <>
-              <span className="line-through">{formatCurrency(subtotal)}</span>
-              <span className="mx-1.5 text-emerald-700">−{formatCurrency(discount)}</span>
+              <span className="line-through">{formatCheckoutCurrency(subtotal)}</span>
+              <span className="mx-1.5 text-emerald-700">−{formatCheckoutCurrency(discount)}</span>
             </>
           ) : (
-            <span>{formatCurrency(subtotal)} subtotal</span>
+            <span>{formatCheckoutCurrency(subtotal)} subtotal</span>
           )}
           {showFee ? (
             <span className="ml-1.5 text-slate-600">
-              + {formatCurrency(transactionFee, { decimals: 2 })} transaction fees
+              + {formatCheckoutCurrency(transactionFee)} transaction fees
             </span>
           ) : null}
         </p>
@@ -191,7 +195,7 @@ function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "", p
   }
   return (
     <p className="text-2xl font-semibold leading-tight tracking-tight text-slate-900">
-      <span className="underline decoration-2 underline-offset-4">{formatCurrency(total)}</span>
+      <span className="underline decoration-2 underline-offset-4">{formatCheckoutCurrency(total)}</span>
       {suffix ? <span className="ml-1 text-base font-normal text-slate-900">{suffix}</span> : null}
     </p>
   );
@@ -407,48 +411,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }, [event, scheduleType, eventId, checkoutUserId]);
 
   useEffect(() => {
-    if (
-      !checkoutReady ||
-      !restoredFromDraftRef.current ||
-      !couponHold?.holdToken ||
-      !eventId ||
-      !checkoutUserId ||
-      guestMode ||
-      resumeAttemptedRef.current
-    ) {
-      return;
-    }
-    resumeAttemptedRef.current = true;
-    const token = couponHold.holdToken;
-    const snapshot = couponHold._draftSnapshot;
-
-    void (async () => {
-      try {
-        const res = await resumeEventCouponHold({
-          event_id: Number(eventId),
-          hold_token: token
-        });
-        const data = res?.data || res;
-        const hold = buildHoldState(data, snapshot);
-        if (!hold) {
-          return;
-        }
-        skipHoldClearRef.current = 2;
-        setCouponHold(hold);
-        if (data.couponCode || data.coupon_code) {
-          setCouponCodeInput(String(data.couponCode || data.coupon_code));
-        }
-        setCouponMessage(hold.message || COUPON_HOLD_MESSAGE);
-      } catch (err) {
-        setError(
-          err?.response?.data?.message ||
-            "Could not refresh your coupon hold. You can try Apply again or complete booking soon."
-        );
-      }
-    })();
-  }, [checkoutReady, couponHold?.holdToken, eventId, checkoutUserId, guestMode, buildHoldState]);
-
-  useEffect(() => {
     if (guestMode) {
       return;
     }
@@ -477,6 +439,49 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
     return ticketCart;
   }, [reservedSeating, selectedSeats, ticketLevels, chartCategoryKeys, chartPricing, ticketCart]);
+
+  useEffect(() => {
+    if (
+      !checkoutReady ||
+      !restoredFromDraftRef.current ||
+      !couponHold?.holdToken ||
+      !eventId ||
+      !checkoutUserId ||
+      guestMode ||
+      resumeAttemptedRef.current
+    ) {
+      return;
+    }
+    resumeAttemptedRef.current = true;
+    const token = couponHold.holdToken;
+    const snapshot = couponHold._draftSnapshot;
+
+    void (async () => {
+      try {
+        const res = await resumeEventCouponHold({
+          event_id: Number(eventId),
+          hold_token: token,
+          ticket_items: buildTicketItemsPayload(ticketLevels, checkoutCart)
+        });
+        const data = res?.data || res;
+        const hold = buildHoldState(data, snapshot);
+        if (!hold) {
+          return;
+        }
+        skipHoldClearRef.current = 2;
+        setCouponHold(hold);
+        if (data.couponCode || data.coupon_code) {
+          setCouponCodeInput(String(data.couponCode || data.coupon_code));
+        }
+        setCouponMessage(hold.message || COUPON_HOLD_MESSAGE);
+      } catch (err) {
+        setError(
+          err?.response?.data?.message ||
+            "Could not refresh your coupon hold. You can try Apply again or complete booking soon."
+        );
+      }
+    })();
+  }, [checkoutReady, couponHold?.holdToken, eventId, checkoutUserId, guestMode, buildHoldState, ticketLevels, checkoutCart]);
 
   const clearSeatHold = useCallback(
     async ({ expired = false } = {}) => {
@@ -771,7 +776,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         event_id: Number(eventId),
         coupon_code: code,
         attendee_count: attendeeCount,
-        ticket_items: buildTicketItemsPayload(ticketLevels, ticketCart),
+        ticket_items: buildTicketItemsPayload(ticketLevels, checkoutCart),
         selected_dates: normalizeDateList(selectedDates),
         hold_token: couponHold?.holdToken || undefined
       });
@@ -779,7 +784,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       const snapshot = {
         datesKey: datesKey(selectedDates),
         attendeeCount,
-        cartKey: JSON.stringify(ticketCart)
+        cartKey: JSON.stringify(checkoutCart)
       };
       const hold = buildHoldState(data, snapshot);
       if (!hold) {
@@ -796,8 +801,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         userId: checkoutUserId === "guest" ? "guest" : Number(checkoutUserId),
         selectedDates: normalizeDateList(selectedDates),
         attendeeCount,
-        ticketItems: buildTicketItemsPayload(ticketLevels, ticketCart),
-        ticketCart,
+        ticketItems: buildTicketItemsPayload(ticketLevels, checkoutCart),
+        ticketCart: checkoutCart,
         firstName,
         lastName,
         name: contactName,
@@ -1156,14 +1161,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     const successSubtitle = doneSummary.paidWithCard ? (
       <>
         Payment received for{" "}
-        <span className="font-semibold text-slate-900">{formatCurrency(doneSummary.totalAmount || 0)}</span> (
+        <span className="font-semibold text-slate-900">{formatCheckoutCurrency(doneSummary.totalAmount || 0)}</span> (
         {doneSummary.totalDays} show day{doneSummary.totalDays === 1 ? "" : "s"}, {attendeeCount} ticket
         {attendeeCount === 1 ? "" : "s"}). Your booking is confirmed.
       </>
     ) : (
       <>
         We saved your booking for{" "}
-        <span className="font-semibold text-slate-900">{formatCurrency(doneSummary.totalAmount || 0)}</span> (
+        <span className="font-semibold text-slate-900">{formatCheckoutCurrency(doneSummary.totalAmount || 0)}</span> (
         {doneSummary.totalDays} show day{doneSummary.totalDays === 1 ? "" : "s"}, {attendeeCount} ticket
         {attendeeCount === 1 ? "" : "s"}). No card was required for this total.
       </>
@@ -1224,7 +1229,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             publishableKey={paymentPublishableKey}
             paymentIntentId={paymentIntentId}
             eventId={eventId}
-            totalLabel={formatCurrency(totalAmount)}
+            totalLabel={formatCheckoutCurrency(totalAmount)}
             onClose={onPaymentModalClose}
             onError={(msg) => setError(msg)}
             onSuccess={(piId) => void onPaymentSuccess(piId)}
@@ -1246,7 +1251,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           ) : null}
           <p className="mt-1.5 text-sm text-slate-600">
             {needsCardPayment
-              ? `You will pay ${formatCurrency(totalAmount)} securely with Stripe in a popup on this page.`
+              ? `You will pay ${formatCheckoutCurrency(totalAmount)} securely with Stripe in a popup on this page.`
               : "No card payment is required for this booking total."}
           </p>
         </div>
@@ -1545,7 +1550,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       {error ? <p className="mt-3 text-center text-sm font-medium text-rose-700">{error}</p> : null}
       {!needsCardPayment ? (
         <p className="mt-3 text-center text-xs text-slate-600">
-          {`No card payment required when your total is under ${formatCurrency(STRIPE_MIN_USD)}.`}
+          {`No card payment required when your total is under ${formatCheckoutCurrency(STRIPE_MIN_USD)}.`}
         </p>
       ) : null}
     </CheckoutCard>

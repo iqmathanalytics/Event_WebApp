@@ -39,6 +39,7 @@ export default function GuestSeatSelectionModal({
   const loadGenerationRef = useRef(0);
   const skipReleaseOnCloseRef = useRef(false);
   const initialSeatsRef = useRef([]);
+  const editReleasedRef = useRef(false);
 
   const [chartConfig, setChartConfig] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -46,6 +47,7 @@ export default function GuestSeatSelectionModal({
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [holdToken, setHoldToken] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   const isEditingSelection = Boolean(initialSelectedSeats?.length && existingHoldToken);
@@ -63,12 +65,14 @@ export default function GuestSeatSelectionModal({
       eventKeyRef.current = "";
       heldLabelsRef.current = [];
       initialSeatsRef.current = [];
+      editReleasedRef.current = false;
       setChartConfig(null);
       setSelectedSeats([]);
       setHoldToken("");
       setLoadError("");
       setLoading(false);
       setConfirming(false);
+      setClosing(false);
       return undefined;
     }
 
@@ -81,13 +85,15 @@ export default function GuestSeatSelectionModal({
     setLoadError("");
     setChartConfig(null);
     setConfirming(false);
+    setClosing(false);
+    editReleasedRef.current = false;
 
     if (editing) {
       initialSeatsRef.current = [...initialSelectedSeats];
       heldLabelsRef.current = [...preselectedLabels];
       holdTokenRef.current = existingHoldToken;
       eventKeyRef.current = existingEventKey || "";
-      skipReleaseOnCloseRef.current = true;
+      skipReleaseOnCloseRef.current = false;
       setSelectedSeats([...initialSelectedSeats]);
       setHoldToken(existingHoldToken);
     } else {
@@ -103,15 +109,31 @@ export default function GuestSeatSelectionModal({
     fetchPublicSeatingChart(eventId, {
       holdToken: editing ? existingHoldToken : undefined
     })
-      .then((config) => {
+      .then(async (config) => {
         if (cancelled || generation !== loadGenerationRef.current) {
           return;
         }
         if (!config?.workspace_key || !config?.event_key || !config?.hold_token) {
           throw new Error("Seating session is incomplete. Ask the organizer to publish and save the chart.");
         }
-        holdTokenRef.current = config.hold_token;
-        eventKeyRef.current = config.event_key;
+        const configHoldToken = config.hold_token;
+        const configEventKey = config.event_key;
+
+        if (editing && preselectedLabels.length && configHoldToken && configEventKey) {
+          await releaseSeatsioHold(eventId, {
+            eventKey: configEventKey,
+            holdToken: configHoldToken,
+            labels: preselectedLabels
+          });
+          editReleasedRef.current = true;
+        }
+
+        if (cancelled || generation !== loadGenerationRef.current) {
+          return;
+        }
+
+        holdTokenRef.current = configHoldToken;
+        eventKeyRef.current = configEventKey;
         setHoldToken(config.hold_token);
         setChartConfig(config);
       })
@@ -129,17 +151,22 @@ export default function GuestSeatSelectionModal({
 
     return () => {
       cancelled = true;
-      if (generation === loadGenerationRef.current && !skipReleaseOnCloseRef.current) {
+      if (generation === loadGenerationRef.current) {
         const labels = [...heldLabelsRef.current];
         const token = holdTokenRef.current;
         const eventKey = eventKeyRef.current;
         const currentEventId = eventIdRef.current;
-        heldLabelsRef.current = [];
-        if (labels.length && token && eventKey && currentEventId) {
+        if (editing && editReleasedRef.current && !skipReleaseOnCloseRef.current) {
+          if (labels.length && token && eventKey && currentEventId) {
+            void syncSeatsioHold(currentEventId, { eventKey, holdToken: token, add: labels, remove: [] });
+          }
+        } else if (!editing && !skipReleaseOnCloseRef.current && labels.length && token && eventKey && currentEventId) {
           void releaseSeatsioHold(currentEventId, { eventKey, holdToken: token, labels });
         }
+        heldLabelsRef.current = [];
       }
       skipReleaseOnCloseRef.current = false;
+      editReleasedRef.current = false;
     };
   }, [open, eventId, reloadKey]);
 
@@ -177,8 +204,9 @@ export default function GuestSeatSelectionModal({
       }
 
       const previousLabels = initialSeatsRef.current.map((seat) => seat.label).filter(Boolean);
-      const remove = previousLabels.filter((label) => !labels.includes(label));
-      const add = labels.filter((label) => !previousLabels.includes(label));
+      const editWasReleased = editReleasedRef.current;
+      const remove = editWasReleased ? [] : previousLabels.filter((label) => !labels.includes(label));
+      const add = editWasReleased ? labels : labels.filter((label) => !previousLabels.includes(label));
 
       await syncSeatsioHold(currentEventId, {
         eventKey,
@@ -188,6 +216,7 @@ export default function GuestSeatSelectionModal({
       });
 
       heldLabelsRef.current = labels;
+      editReleasedRef.current = false;
       setSelectedSeats(seats);
       skipReleaseOnCloseRef.current = true;
       onConfirm?.({
@@ -204,6 +233,41 @@ export default function GuestSeatSelectionModal({
       setConfirming(false);
     }
   }, [chartConfig, onConfirm]);
+
+  const restoreOriginalHoldAndClose = useCallback(async () => {
+    if (closing) {
+      return;
+    }
+    if (!isEditingSelection || !editReleasedRef.current) {
+      onClose?.();
+      return;
+    }
+    const labels = initialSeatsRef.current.map((seat) => seat.label).filter(Boolean);
+    const token = holdTokenRef.current;
+    const eventKey = eventKeyRef.current;
+    const currentEventId = eventIdRef.current;
+    if (!labels.length || !token || !eventKey || !currentEventId) {
+      onClose?.();
+      return;
+    }
+
+    setClosing(true);
+    setLoadError("");
+    try {
+      await syncSeatsioHold(currentEventId, { eventKey, holdToken: token, add: labels, remove: [] });
+      editReleasedRef.current = false;
+      heldLabelsRef.current = labels;
+      onClose?.();
+    } catch (err) {
+      setLoadError(
+        err.response?.data?.message ||
+          err.message ||
+          "Could not restore your existing seat hold. Please try again before closing."
+      );
+    } finally {
+      setClosing(false);
+    }
+  }, [closing, isEditingSelection, onClose]);
 
   const subtotal = useMemo(() => {
     const perDay = selectedSeats.reduce((sum, seat) => sum + Number(seat.price || 0), 0);
@@ -226,24 +290,6 @@ export default function GuestSeatSelectionModal({
   const canConfirm = Boolean(selectedSeats.length && !confirming && !submitting);
   const showChart = !loading && !loadError && Boolean(chartConfig?.workspace_key && chartConfig?.event_key);
 
-  const restoreSelectionOnChart = useCallback(async () => {
-    const chart = chartRef.current;
-    if (!chart || !preselectedLabels.length) {
-      await updateLocalSelection();
-      return;
-    }
-    try {
-      if (typeof chart.trySelectObjects === "function") {
-        await chart.trySelectObjects(preselectedLabels);
-      } else if (typeof chart.selectObjects === "function") {
-        await chart.selectObjects(preselectedLabels);
-      }
-    } catch (_err) {
-      /* selection may already be applied via selectedObjects */
-    }
-    await updateLocalSelection();
-  }, [preselectedLabels, updateLocalSelection]);
-
   const footer = (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0 flex-1">
@@ -264,14 +310,15 @@ export default function GuestSeatSelectionModal({
       <div className="flex shrink-0 gap-2">
         <button
           type="button"
-          onClick={onClose}
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700"
+          disabled={closing}
+          onClick={() => void restoreOriginalHoldAndClose()}
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 disabled:opacity-50"
         >
-          Cancel
+          {closing ? "Restoring…" : "Cancel"}
         </button>
         <button
           type="button"
-          disabled={!canConfirm}
+          disabled={!canConfirm || closing}
           onClick={() => void handleConfirm()}
           className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
         >
@@ -285,7 +332,7 @@ export default function GuestSeatSelectionModal({
   return (
     <SeatingModalShell
       open={open}
-      onClose={onClose}
+      onClose={() => void restoreOriginalHoldAndClose()}
       title={eventTitle ? `Choose seats — ${eventTitle}` : "Choose your seats"}
       subtitle={
         isEditingSelection
@@ -325,7 +372,6 @@ export default function GuestSeatSelectionModal({
               region={chartConfig.region || "na"}
               session="none"
               selectedObjects={isEditingSelection ? preselectedLabels : undefined}
-              selectableObjects={isEditingSelection ? preselectedLabels : undefined}
               pricing={pricing}
               priceFormatter={(price) => formatCurrency(price)}
               maxSelectedObjects={maxSeats}
@@ -335,7 +381,9 @@ export default function GuestSeatSelectionModal({
               }}
               onChartRendered={() => {
                 setLoadError("");
-                void restoreSelectionOnChart();
+                if (!isEditingSelection) {
+                  void updateLocalSelection();
+                }
               }}
               onChartRenderingFailed={() => {
                 setLoadError("Could not render the seating chart. Please try again.");

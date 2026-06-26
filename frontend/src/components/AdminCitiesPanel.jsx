@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
 import api from "../services/api";
+import { clearCitiesCache } from "../services/metaService";
 
 export default function AdminCitiesPanel() {
   const [cities, setCities] = useState([]);
@@ -36,6 +37,7 @@ export default function AdminCitiesPanel() {
     setError("");
     try {
       await api.post("/admin/cities/dropdown", { name: name.trim(), state: state.trim().toUpperCase() });
+      clearCitiesCache();
       setName("");
       setState("");
       await load();
@@ -50,6 +52,7 @@ export default function AdminCitiesPanel() {
     setError("");
     try {
       await api.delete(`/admin/cities/dropdown/${id}`);
+      clearCitiesCache();
       await load();
     } catch (err) {
       setError(err?.response?.data?.message || "Could not remove city.");

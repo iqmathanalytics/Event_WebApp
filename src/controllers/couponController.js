@@ -28,11 +28,12 @@ const applyCoupon = asyncHandler(async (req, res) => {
 });
 
 const resumeCoupon = asyncHandler(async (req, res) => {
-  const { event_id, hold_token, timezone_offset } = req.validated.body;
+  const { event_id, hold_token, ticket_items, timezone_offset } = req.validated.body;
   const data = await couponService.resumeCouponHold({
     userId: req.user.id,
     eventId: event_id,
     holdToken: hold_token,
+    ticketItems: ticket_items,
     timezoneOffsetMinutes: timezone_offset
   });
   res.status(200).json({

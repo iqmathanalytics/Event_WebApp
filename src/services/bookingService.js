@@ -298,7 +298,8 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
       holdToken,
       eventId: payload.event_id,
       attendeeCount: guests,
-      selectedDates
+      selectedDates,
+      ticketItems: cart
     });
     subtotalAmount = applied.subtotal;
     discountAmount = applied.discount;
@@ -405,7 +406,8 @@ async function dispatchBookingConfirmationEmail(ctx) {
     totalAmount: ctx.pricing.totalAmount,
     couponCode: ctx.pricing.couponCode,
     paymentStatus,
-    qrImageUrl
+    qrImageUrl,
+    isGuestBooking: Boolean(ctx.pricing.isGuest)
   });
 
   await sendTransactionalEmail({

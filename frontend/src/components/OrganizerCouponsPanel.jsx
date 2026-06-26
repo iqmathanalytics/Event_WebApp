@@ -31,6 +31,7 @@ const emptyForm = {
 };
 
 function couponToForm(coupon) {
+  const maxDiscountAmount = Number(coupon.max_discount_amount);
   return {
     code: coupon.code || "",
     discount_type: coupon.discount_type || "percent",
@@ -45,7 +46,9 @@ function couponToForm(coupon) {
       coupon.max_redemptions_per_user != null ? String(coupon.max_redemptions_per_user) : "",
     min_ticket_count: coupon.min_ticket_count != null ? String(coupon.min_ticket_count) : "",
     min_order_amount: coupon.min_order_amount != null ? String(coupon.min_order_amount) : "",
-    max_discount_amount: coupon.max_discount_amount != null ? String(coupon.max_discount_amount) : ""
+    max_discount_amount: Number.isFinite(maxDiscountAmount) && maxDiscountAmount > 0
+      ? String(coupon.max_discount_amount)
+      : ""
   };
 }
 

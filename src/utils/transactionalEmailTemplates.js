@@ -341,12 +341,16 @@ function buildBookingConfirmationEmail({
   totalAmount,
   couponCode,
   paymentStatus,
-  qrImageUrl = null
+  qrImageUrl = null,
+  isGuestBooking = false
 }) {
   const safeName = String(guestName || "there").trim() || "there";
   const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "See your booking";
   const subject = `You're booked — ${eventTitle || "your event"} · ${BRAND_NAME}`;
   const eventUrl = event ? eventDetailUrl(event) : dashboardUrl("/events");
+  const createAccountUrl = dashboardUrl("/register");
+  const guestAccountLine =
+    "One step to create your account with bookmytickets.us to receive first hand notifications of events and deals around your city.";
 
   const totalLine = formatUsd(totalAmount);
   const discount = Number(discountAmount) || 0;
@@ -364,6 +368,8 @@ function buildBookingConfirmationEmail({
     `Status: ${payLabel}`,
     `Booking reference: #${bookingId}`,
     qrImageUrl ? "Your entry QR code is shown in this email." : "",
+    isGuestBooking ? guestAccountLine : "",
+    isGuestBooking ? `Click here to create your account: ${createAccountUrl}` : "",
     "",
     `View event: ${eventUrl}`,
     `My bookings: ${dashboardUrl("/dashboard/user")}`,
@@ -396,8 +402,13 @@ function buildBookingConfirmationEmail({
     rows,
     qrImageUrl,
     qrCaption: "Scan at entry · keep this email handy",
-    ctaLabel: "View my bookings",
-    ctaUrl: dashboardUrl("/dashboard/user"),
+    highlights: isGuestBooking
+      ? [
+          "One step to create your account with bookmytickets.us to receive first hand notifications of events and deals around your city."
+        ]
+      : [],
+    ctaLabel: isGuestBooking ? "Create your free account" : "View my bookings",
+    ctaUrl: isGuestBooking ? createAccountUrl : dashboardUrl("/dashboard/user"),
     footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
   });
 

@@ -40,6 +40,25 @@ export function writeClientCache(key, data, ttlMs, { persistent = false } = {}) 
   }
 }
 
+export function clearClientCacheByPrefix(prefix, { persistent = false } = {}) {
+  [...memoryCache.keys()].forEach((key) => {
+    if (key.startsWith(prefix)) {
+      memoryCache.delete(key);
+    }
+  });
+  try {
+    const storage = storageFor(persistent);
+    for (let i = storage.length - 1; i >= 0; i -= 1) {
+      const key = storage.key(i);
+      if (key?.startsWith(prefix)) {
+        storage.removeItem(key);
+      }
+    }
+  } catch {
+    // Ignore storage access issues.
+  }
+}
+
 export function buildCacheKey(prefix, params = {}) {
   const parts = Object.keys(params)
     .sort()

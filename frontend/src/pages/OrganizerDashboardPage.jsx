@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
 import { FiCalendar, FiInfo, FiMapPin } from "react-icons/fi";
-import { LayoutGrid } from "lucide-react";
+import { GitBranch, LayoutGrid } from "lucide-react";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
 import { categories } from "../utils/filterOptions";
@@ -27,6 +27,7 @@ import {
   BookingStripeRefCell
 } from "../components/BookingPaymentTableCells";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
+import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
 import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
 import { SEATING_MODES, normalizeSeatingMode } from "../utils/seatingMode";
 const OrganizerInsightsPanel = lazy(() => import("../components/OrganizerInsightsPanel"));
@@ -246,6 +247,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const showPlatformTicketOptions = canSellPlatformTickets || editingPlatformEvent;
   const [saving, setSaving] = useState(false);
   const [seatingModalOpen, setSeatingModalOpen] = useState(false);
+  const [seatingChannelsModalOpen, setSeatingChannelsModalOpen] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [overviewBookings, setOverviewBookings] = useState([]);
   const [bookingRows, setBookingRows] = useState([]);
@@ -1917,95 +1919,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
-              ) : (
-                <>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:col-span-2">
-                    <p className="text-sm font-semibold text-slate-900">Seating type</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      General admission uses quantity pickers. Reserved seating opens an interactive seat map for
-                      buyers.
-                    </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
-                        <input
-                          type="radio"
-                          name="seating_mode"
-                          checked={normalizeSeatingMode(form.seating_mode) === SEATING_MODES.GENERAL}
-                          onChange={() =>
-                            setForm((prev) => ({ ...prev, seating_mode: SEATING_MODES.GENERAL }))
-                          }
-                          className="mt-1"
-                        />
-                        <span>
-                          <span className="block text-sm font-medium text-slate-900">General admission</span>
-                          <span className="block text-xs text-slate-500">Guests pick ticket quantities by tier.</span>
-                        </span>
-                      </label>
-                      <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
-                        <input
-                          type="radio"
-                          name="seating_mode"
-                          checked={normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED}
-                          onChange={() =>
-                            setForm((prev) => ({ ...prev, seating_mode: SEATING_MODES.RESERVED }))
-                          }
-                          className="mt-1"
-                        />
-                        <span>
-                          <span className="block text-sm font-medium text-slate-900">Reserved seating</span>
-                          <span className="block text-xs text-slate-500">Guests choose specific seats on a chart.</span>
-                        </span>
-                      </label>
-                    </div>
-                    {normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <button
-                          type="button"
-                          disabled={!editingEvent?.id}
-                          onClick={() => setSeatingModalOpen(true)}
-                          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                        >
-                          <LayoutGrid className="h-4 w-4" />
-                          Design seating chart
-                        </button>
-                        {!editingEvent?.id ? (
-                          <p className="text-xs text-amber-800">Save the event first, then design the chart.</p>
-                        ) : editingEvent?.seatsio_event_key ? (
-                          <p className="text-xs text-emerald-700">Seating chart linked.</p>
-                        ) : (
-                          <p className="text-xs text-slate-500">Chart not saved yet.</p>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                  {normalizeSeatingMode(form.seating_mode) !== SEATING_MODES.RESERVED ? (
-                  <FormField
-                    label="Total seats available"
-                    hint="Maximum tickets guests can book on this site across all reservations. Booked seats update automatically."
-                    example="250"
-                    className="sm:col-span-2"
-                  >
-                    <input
-                      type="number"
-                      min={1}
-                      max={50000}
-                      step={1}
-                      required
-                      value={form.total_seats}
-                      onChange={(e) => setForm((prev) => ({ ...prev, total_seats: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                      placeholder="e.g. 200"
-                    />
-                  </FormField>
-                  ) : null}
-                  {normalizeSeatingMode(form.seating_mode) !== SEATING_MODES.RESERVED ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
-                    Guests book through checkout on the public event page once approved. Seat count includes confirmed
-                    bookings and short-term coupon holds.
-                  </div>
-                  ) : null}
-                </>
-              )}
+              ) : null}
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:col-span-2">
                 <label className="flex cursor-pointer items-start gap-3">
                   <input
@@ -2065,6 +1979,120 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   />
                 </FormField>
               )}
+              {(form.ticket_sales_mode || "external") === "platform" ? (
+                <>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:col-span-2">
+                    <p className="text-sm font-semibold text-slate-900">Seated and Non Seated Event</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Non seated events use quantity pickers. Seated events open an interactive seat map for buyers.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
+                        <input
+                          type="radio"
+                          name="seating_mode"
+                          checked={normalizeSeatingMode(form.seating_mode) === SEATING_MODES.GENERAL}
+                          onChange={() =>
+                            setForm((prev) => ({ ...prev, seating_mode: SEATING_MODES.GENERAL }))
+                          }
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">Non Seated Event</span>
+                          <span className="block text-xs text-slate-500">Guests pick ticket quantities by tier.</span>
+                        </span>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
+                        <input
+                          type="radio"
+                          name="seating_mode"
+                          checked={normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED}
+                          onChange={() =>
+                            setForm((prev) => ({ ...prev, seating_mode: SEATING_MODES.RESERVED }))
+                          }
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">Seated Event</span>
+                          <span className="block text-xs text-slate-500">Guests choose specific seats on a chart.</span>
+                        </span>
+                      </label>
+                    </div>
+                    {normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED ? (
+                      <div className="mt-3 space-y-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            disabled={!editingEvent?.id}
+                            onClick={() => setSeatingModalOpen(true)}
+                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            <LayoutGrid className="h-4 w-4" />
+                            Design seating chart
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!editingEvent?.id || !editingEvent?.seatsio_event_key}
+                            onClick={() => setSeatingChannelsModalOpen(true)}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:border-slate-400 disabled:opacity-50"
+                          >
+                            <GitBranch className="h-4 w-4" />
+                            Manage channels
+                          </button>
+                          {!editingEvent?.id ? (
+                            <p className="text-xs text-amber-800">Save the event first, then design the chart.</p>
+                          ) : editingEvent?.seatsio_event_key ? (
+                            <p className="text-xs text-emerald-700">Seating chart linked.</p>
+                          ) : (
+                            <p className="text-xs text-slate-500">Chart not saved yet.</p>
+                          )}
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-700">
+                          <p className="font-semibold text-slate-900">Correct tier mapping</p>
+                          <p className="mt-1">
+                            Keep ticket level, chart categories, and seat label prefixes aligned.
+                          </p>
+                          <div className="mt-2 space-y-1">
+                            <p>Level 1 - Category 1 - e.g. (Platinum)</p>
+                            <p>Level 2 - Category 2 - e.g. (Gold)</p>
+                            <p>Level 3 - Category 3 - e.g. (Silver) and so on.</p>
+                          </div>
+                          <p className="mt-2 text-slate-500">
+                            Example: if the ticket tier is Platinum, name seats like Platinum-A-14 and assign those
+                            seats to the Platinum chart category.
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  {normalizeSeatingMode(form.seating_mode) !== SEATING_MODES.RESERVED ? (
+                    <FormField
+                      label="Total seats available"
+                      hint="Maximum tickets guests can book on this site across all reservations. Booked seats update automatically."
+                      example="250"
+                      className="sm:col-span-2"
+                    >
+                      <input
+                        type="number"
+                        min={1}
+                        max={50000}
+                        step={1}
+                        required
+                        value={form.total_seats}
+                        onChange={(e) => setForm((prev) => ({ ...prev, total_seats: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                        placeholder="e.g. 200"
+                      />
+                    </FormField>
+                  ) : null}
+                  {normalizeSeatingMode(form.seating_mode) !== SEATING_MODES.RESERVED ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
+                      Guests book through checkout on the public event page once approved. Seat count includes confirmed
+                      bookings and short-term coupon holds.
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
               <FormField
                 label="Duration"
                 hint="How long the event runs. Use hours and optional minutes (e.g. 2 hr 30 min)."
@@ -2358,6 +2386,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           );
           loadEvents();
         }}
+      />
+      <OrganizerSeatingChannelsModal
+        open={seatingChannelsModalOpen}
+        onClose={() => setSeatingChannelsModalOpen(false)}
+        eventId={editingEvent?.id}
+        eventTitle={editingEvent?.title || form.title}
       />
     </>
   );
