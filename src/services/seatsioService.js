@@ -482,6 +482,27 @@ async function bookSeatsForCheckout({ event, holdToken, selectedSeats, bookingId
   return { booked_labels: labels };
 }
 
+/**
+ * Book seats without an active hold (admin/backfill for already-paid bookings).
+ */
+async function bookSoldSeatsWithoutHold({ event, selectedSeats, bookingId }) {
+  if (!isReservedSeating(event) || !event.seatsio_event_key) {
+    return null;
+  }
+  const labels = (selectedSeats || []).map((seat) => seat.label).filter(Boolean);
+  if (!labels.length) {
+    throw new ApiError(400, "Select at least one seat.");
+  }
+  const client = getClient();
+  await client.events.book(
+    event.seatsio_event_key,
+    labels,
+    null,
+    bookingId != null ? String(bookingId) : null
+  );
+  return { booked_labels: labels };
+}
+
 async function releaseSeatHold({ eventKey, holdToken, labels }) {
   if (!holdToken || !eventKey || !labels?.length || !isSeatsioConfigured()) {
     return { released: false };
@@ -537,6 +558,7 @@ module.exports = {
   getPublicSeatingChart,
   getBuyerSeatingSession,
   bookSeatsForCheckout,
+  bookSoldSeatsWithoutHold,
   releaseSeatHold,
   syncSeatHoldSelection,
   ensureSeatsioEventForPlatformEvent,
