@@ -51,8 +51,22 @@ const exportOrganizerBookings = asyncHandler(async (req, res) => {
   return res.status(200).send(result.csv);
 });
 
+const resendOrganizerBookingEmail = asyncHandler(async (req, res) => {
+  const bookingId = Number(req.params.bookingId);
+  const data = await bookingService.resendOrganizerBookingEmails({
+    organizerId: req.user.id,
+    bookingId
+  });
+  res.status(200).json({
+    success: true,
+    message: "Booking confirmation emails resent",
+    data
+  });
+});
+
 module.exports = {
   createBooking,
   listOrganizerBookings,
-  exportOrganizerBookings
+  exportOrganizerBookings,
+  resendOrganizerBookingEmail
 };

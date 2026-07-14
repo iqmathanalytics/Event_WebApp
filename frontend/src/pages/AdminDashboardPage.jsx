@@ -18,6 +18,7 @@ import {
   AdminBookingPaymentStatusCell,
   AdminBookingStripeRefCell
 } from "../components/BookingPaymentTableCells";
+import ScrollableTableFrame from "../components/ScrollableTableFrame";
 import { categories } from "../utils/filterOptions";
 import {
   activateTeamUser,
@@ -2310,23 +2311,38 @@ function AdminDashboardPage() {
             </div>
             <div
               ref={bookingTableRef}
-              className="mt-3 hidden w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 md:block"
+              className="mt-3 hidden w-full max-w-full min-w-0 md:block"
             >
-              <table className="w-full min-w-[1080px] text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+              <ScrollableTableFrame minWidthClass="min-w-[1280px]">
+              <table className="w-full table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-[220px]" />
+                  <col className="w-[140px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[90px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[96px]" />
+                  <col className="w-[100px]" />
+                  <col className="w-[96px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[110px]" />
+                </colgroup>
+                <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
                   <tr>
-                    <th className="px-4 py-3">Event</th>
-                    <th className="px-4 py-3">User</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Phone</th>
-                    <th className="px-4 py-3">Attendee Count</th>
-                    <th className="px-4 py-3">Event Dates</th>
-                    <th className="px-4 py-3 text-right">Order Total</th>
-                    <th className="px-4 py-3">Payment</th>
-                    <th className="px-4 py-3 text-right">Charged</th>
-                    <th className="px-4 py-3">Stripe</th>
-                    <th className="px-4 py-3">Check-in</th>
-                    <th className="px-4 py-3">Booked</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Event</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">User</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Email</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Phone</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Guests</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Event Dates</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Total</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Payment</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Charged</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Stripe</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Check-in</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Booked</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2347,21 +2363,35 @@ function AdminDashboardPage() {
                   {!loadingBookings
                     ? bookingRows.map((item) => (
                         <tr key={item.id} className="border-b border-slate-100">
-                          <td className="px-4 py-3 font-medium text-slate-900">{item.event_title}</td>
-                          <td className="px-4 py-3 text-slate-600">{item.name}</td>
-                          <td className="px-4 py-3 text-slate-600">{item.email}</td>
-                          <td className="px-4 py-3 text-slate-600">{item.phone}</td>
-                          <td className="px-4 py-3 text-slate-600">{item.attendee_count}</td>
-                          <td className="px-4 py-3 text-slate-600">
+                          <td className="px-3 py-2.5 font-medium text-slate-900">
+                            <span className="line-clamp-2" title={item.event_title || ""}>
+                              {item.event_title}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-600">
+                            <span className="block truncate" title={item.name || ""}>
+                              {item.name}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-600">
+                            <span className="block truncate" title={item.email || ""}>
+                              {item.email}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">{item.phone}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">{item.attendee_count}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
                             {Array.isArray(item.selected_dates) && item.selected_dates.length
                               ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
                               : "-"}
                           </td>
-                          <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(item.total_amount || 0)}</td>
+                          <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-600">
+                            {formatCurrency(item.total_amount || 0)}
+                          </td>
                           <AdminBookingPaymentStatusCell booking={item} />
                           <AdminBookingAmountPaidCell booking={item} />
                           <AdminBookingStripeRefCell booking={item} />
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2.5">
                             {item.checked_in || item.checked_in_at ? (
                               <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
                                 Checked in
@@ -2377,7 +2407,7 @@ function AdminDashboardPage() {
                               <span className="text-xs text-slate-400">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-slate-600">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
                             {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
                           </td>
                         </tr>
@@ -2385,6 +2415,7 @@ function AdminDashboardPage() {
                     : null}
                 </tbody>
               </table>
+              </ScrollableTableFrame>
             </div>
           </section>
         ) : activeSection === "users" ? (
@@ -2455,17 +2486,27 @@ function AdminDashboardPage() {
                 </div>
               ) : null}
             </div>
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+            <div className="hidden md:block">
+              <ScrollableTableFrame minWidthClass="min-w-[900px]" className="rounded-2xl">
+              <table className="w-full table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[10%]" />
+                </colgroup>
+                <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
                   <tr>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Mobile</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Created</th>
-                    <th className="px-4 py-3">Action</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Name</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Email</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Mobile</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Role</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Created</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2516,6 +2557,7 @@ function AdminDashboardPage() {
                     : null}
                 </tbody>
               </table>
+              </ScrollableTableFrame>
             </div>
           </section>
         ) : activeSection === "communications" ? null : activeSection === "ticket-access" ? (
@@ -2728,17 +2770,27 @@ function AdminDashboardPage() {
                 </div>
               ) : null}
             </div>
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+            <div className="hidden md:block">
+              <ScrollableTableFrame minWidthClass="min-w-[980px]" className="rounded-2xl">
+              <table className="w-full table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-[16%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[14%]" />
+                </colgroup>
+                <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
                   <tr>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Mobile</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Capabilities</th>
-                    <th className="px-4 py-3">Action</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Name</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Email</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Mobile</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Role</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Capabilities</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2860,6 +2912,7 @@ function AdminDashboardPage() {
                     : null}
                 </tbody>
               </table>
+              </ScrollableTableFrame>
             </div>
           </section>
         ) : null}

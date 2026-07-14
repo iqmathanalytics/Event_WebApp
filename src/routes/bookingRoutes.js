@@ -137,5 +137,11 @@ router.get(
   validateRequest(organizerBookingsSchema),
   bookingController.exportOrganizerBookings
 );
+router.post(
+  "/organizer/:bookingId/resend-email",
+  authMiddleware,
+  organizerAccessMiddleware,
+  bookingController.resendOrganizerBookingEmail
+);
 
 module.exports = router;

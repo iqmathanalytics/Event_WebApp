@@ -3,6 +3,7 @@ import { CalendarDays, ExternalLink, Heart, MapPin, Tag, Ticket } from "lucide-r
 import { formatCurrency, formatDateUS } from "../utils/format";
 import BookingPaymentBadge from "./BookingPaymentBadge";
 import { bookingAmountPaidDollars } from "../utils/bookingPayment";
+import { formatBookingSeatsLabel } from "../utils/bookingSeats";
 import { dealDetailPath, eventDetailPath, influencerDetailPath } from "../utils/listingPaths";
 import { resolveTicketLevelPalette } from "../utils/ticketLevelPalettes";
 
@@ -169,6 +170,7 @@ function UserBookingCard({ booking }) {
   const mapUrl = getLocationUrl(booking);
   const thumb = booking.event_image || null;
   const ticketCount = Number(booking.attendee_count) || 0;
+  const seatsLabel = formatBookingSeatsLabel(booking);
   const paidAmount = bookingAmountPaidDollars(booking);
   const hasDiscount = Number(booking.discount_amount) > 0;
 
@@ -214,6 +216,14 @@ function UserBookingCard({ booking }) {
             <span>
               {ticketCount} ticket{ticketCount === 1 ? "" : "s"}
             </span>
+            {seatsLabel ? (
+              <>
+                <span className="text-slate-300">|</span>
+                <span className="truncate font-medium text-slate-700" title={seatsLabel}>
+                  Seats: {seatsLabel}
+                </span>
+              </>
+            ) : null}
             <Link
               to={eventUrl}
               className="ml-auto shrink-0 font-semibold text-brand-700 hover:underline sm:ml-0"

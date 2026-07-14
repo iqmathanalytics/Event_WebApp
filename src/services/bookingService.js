@@ -10,6 +10,7 @@ const { isReservedSeating } = require("../utils/seatingMode");
 const {
   createBooking,
   listBookingsByOrganizer,
+  findBookingById,
   listBookingsForAdmin,
   listBookingsByUser,
   countReservedSeatsForEvent
@@ -31,6 +32,7 @@ const {
   ticketBlocksFromCart
 } = require("../utils/transactionalEmailTemplates");
 const { isExclusiveDealEvent } = require("../utils/exclusiveDealEvent");
+const { formatSelectedSeatsLabel, parseSelectedSeatsJson } = require("../utils/bookingSeats");
 
 function amountPaidForExport(row) {
   if (row.amount_paid_cents != null && row.amount_paid_cents !== "") {
@@ -47,6 +49,7 @@ function toCsv(rows) {
     "Email",
     "Phone",
     "Attendee Count",
+    "Seats",
     "Event Dates",
     "Booked On",
     "Total Days",
@@ -64,12 +67,17 @@ function toCsv(rows) {
   const lines = [headers.join(",")];
   rows.forEach((row) => {
     const selectedDates = Array.isArray(row.selected_dates) ? row.selected_dates.join(" | ") : "";
+    const seatsLabel =
+      row.selected_seats_label ||
+      formatSelectedSeatsLabel(row.selected_seats) ||
+      "";
     const values = [
       row.event_title || "",
       row.name || "",
       row.email || "",
       row.phone || "",
       row.attendee_count || 0,
+      seatsLabel,
       selectedDates,
       row.created_at ? String(row.created_at).slice(0, 10) : "",
       row.total_days || 0,
@@ -128,6 +136,22 @@ function parseTicketItemsJson(value) {
 
 function mapBookingRow(row) {
   const ticket_items = parseTicketItemsJson(row.ticket_items_json);
+  let selected_seats = parseSelectedSeatsJson(row.selected_seats_json);
+  if (!selected_seats.length) {
+    // Older Stripe bookings stored seats nested under ticket_items_json[].seats
+    try {
+      const raw = row.ticket_items_json;
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        selected_seats = parseSelectedSeatsJson(
+          parsed.flatMap((item) => (Array.isArray(item?.seats) ? item.seats : []))
+        );
+      }
+    } catch (_err) {
+      /* ignore malformed json */
+    }
+  }
+  const selected_seats_label = formatSelectedSeatsLabel(selected_seats);
   const isGuest =
     row.is_guest_booking === 1 ||
     row.is_guest_booking === true ||
@@ -144,6 +168,8 @@ function mapBookingRow(row) {
     has_ticket_qr: hasTicketQr,
     checked_in: Boolean(row.checked_in_at),
     selected_dates: parseSelectedDates(row.selected_dates_json),
+    selected_seats,
+    selected_seats_label,
     ticket_items: ticket_items.length
       ? ticket_items
       : Number(row.attendee_count) > 0
@@ -374,7 +400,9 @@ function bookingEmailContext({ bookingId, checkInCode, payload, pricing, payment
   if (checkInCode && (status === "paid" || status === "free")) {
     qrImageUrl = publicBookingQrImageUrl(checkInCode);
   }
-  const ticketBlocks = ticketBlocksFromCart(pricing.ticketCart, pricing.totalDays);
+  const selectedSeats = Array.isArray(pricing.selectedSeats) ? pricing.selectedSeats : [];
+  const selectedSeatsLabel = formatSelectedSeatsLabel(selectedSeats);
+  const ticketBlocks = ticketBlocksFromCart(pricing.ticketCart, pricing.totalDays, selectedSeats);
   return {
     event,
     guestName,
@@ -382,12 +410,15 @@ function bookingEmailContext({ bookingId, checkInCode, payload, pricing, payment
     guestPhone,
     qrImageUrl,
     ticketBlocks,
+    selectedSeats,
+    selectedSeatsLabel,
     paymentStatus: paymentStatus || "paid"
   };
 }
 
 async function dispatchBookingConfirmationEmail(ctx) {
-  const { event, guestName, guestEmail, qrImageUrl, ticketBlocks, paymentStatus } = ctx;
+  const { event, guestName, guestEmail, qrImageUrl, ticketBlocks, paymentStatus, selectedSeatsLabel } =
+    ctx;
   if (!guestEmail || !ctx.bookingId || !event) {
     return;
   }
@@ -400,6 +431,7 @@ async function dispatchBookingConfirmationEmail(ctx) {
     selectedDates: ctx.pricing.selectedDates,
     totalDays: ctx.pricing.totalDays,
     attendeeCount: ctx.pricing.attendeeCount,
+    selectedSeatsLabel,
     ticketBlocks,
     subtotalAmount: ctx.pricing.subtotalAmount,
     discountAmount: ctx.pricing.discountAmount,
@@ -438,7 +470,8 @@ async function dispatchGuestWelcomeEmail({ guestAccount, guestName }) {
 }
 
 async function dispatchOrganizerBookingNotificationEmail(ctx) {
-  const { event, guestName, guestEmail, guestPhone, ticketBlocks, paymentStatus } = ctx;
+  const { event, guestName, guestEmail, guestPhone, ticketBlocks, paymentStatus, selectedSeatsLabel } =
+    ctx;
   const organizerId = ctx.pricing.organizerId;
   if (!organizerId || !ctx.bookingId || !event) {
     return;
@@ -460,6 +493,7 @@ async function dispatchOrganizerBookingNotificationEmail(ctx) {
     selectedDates: ctx.pricing.selectedDates,
     totalDays: ctx.pricing.totalDays,
     attendeeCount: ctx.pricing.attendeeCount,
+    selectedSeatsLabel,
     ticketBlocks,
     subtotalAmount: ctx.pricing.subtotalAmount,
     discountAmount: ctx.pricing.discountAmount,
@@ -699,6 +733,75 @@ async function fetchUserBookings({ userId }) {
   return rows.map(mapBookingRow);
 }
 
+/**
+ * Resend guest confirmation + organizer notification for a booking owned by this organizer.
+ */
+async function resendOrganizerBookingEmails({ organizerId, bookingId }) {
+  const row = await findBookingById(bookingId);
+  if (!row) {
+    throw new ApiError(404, "Booking not found");
+  }
+  if (Number(row.organizer_id) !== Number(organizerId)) {
+    throw new ApiError(403, "This booking does not belong to your organizer account.");
+  }
+
+  const event = await findEventById(row.event_id);
+  if (!event) {
+    throw new ApiError(404, "Event not found");
+  }
+
+  const mapped = mapBookingRow(row);
+  const selectedDates = mapped.selected_dates || [];
+  const selectedSeats = mapped.selected_seats || [];
+  const selectedSeatsLabel = mapped.selected_seats_label || "";
+  const ticketCart = mapped.ticket_items || [];
+  const totalDays = Number(row.total_days) || Math.max(1, selectedDates.length || 1);
+  const attendeeCount = Number(row.attendee_count) || 0;
+  const paymentStatus = String(row.payment_status || "paid");
+  const isGuest =
+    mapped.is_guest_booking === 1 ||
+    row.user_id == null;
+
+  const pricing = {
+    event,
+    organizerId: row.organizer_id,
+    userName: row.name,
+    userEmail: row.email,
+    userPhone: row.phone,
+    selectedDates,
+    totalDays,
+    attendeeCount,
+    ticketCart,
+    selectedSeats,
+    subtotalAmount: row.subtotal_amount,
+    discountAmount: row.discount_amount,
+    totalAmount: row.total_amount,
+    couponCode: row.coupon_code,
+    isGuest
+  };
+
+  await dispatchBookingEmails({
+    bookingId: row.id,
+    checkInCode: row.check_in_code,
+    payload: {
+      name: row.name,
+      email: row.email,
+      phone: row.phone,
+      event_id: row.event_id
+    },
+    pricing,
+    paymentStatus,
+    guestAccount: null
+  });
+
+  return {
+    bookingId: row.id,
+    guestEmail: row.email,
+    seats: selectedSeatsLabel || null,
+    eventTitle: event.title || row.event_title
+  };
+}
+
 module.exports = {
   resolveEventBookingPricing,
   resolveGuestEventBookingPricing,
@@ -711,5 +814,6 @@ module.exports = {
   fetchAdminBookings,
   fetchUserBookings,
   getOrganizerBookingsExport,
-  getAdminBookingsExport
+  getAdminBookingsExport,
+  resendOrganizerBookingEmails
 };

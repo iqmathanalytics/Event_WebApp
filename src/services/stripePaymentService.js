@@ -12,6 +12,7 @@ const {
   resolveGuestEventBookingPricing,
   dispatchBookingEmails
 } = require("./bookingService");
+const seatsioService = require("./seatsioService");
 const { ensureGuestUserAccount } = require("./guestAccountService");
 
 const PAYMENT_HOLD_EXTENSION_MINUTES = 30;
@@ -36,7 +37,13 @@ function buildPricingSnapshot(pricing, payload) {
     transactionFeeAmount: pricing.transactionFeeAmount,
     totalAmount: pricing.totalAmount,
     couponId: pricing.couponId,
-    couponCode: pricing.couponCode
+    couponCode: pricing.couponCode,
+    seatsioHoldToken: pricing.seatsioHoldToken || payload.seatsio_hold_token || null,
+    selectedSeats: Array.isArray(pricing.selectedSeats)
+      ? pricing.selectedSeats
+      : Array.isArray(payload.selected_seats)
+        ? payload.selected_seats
+        : null
   };
 }
 
@@ -61,7 +68,13 @@ function pricingFromSnapshot(payload) {
     totalAmount: snap.totalAmount,
     couponId: snap.couponId ?? null,
     couponCode: snap.couponCode ?? null,
-    holdToken: payload.coupon_hold_token || null
+    holdToken: payload.coupon_hold_token || null,
+    seatsioHoldToken: snap.seatsioHoldToken || payload.seatsio_hold_token || null,
+    selectedSeats: Array.isArray(snap.selectedSeats)
+      ? snap.selectedSeats
+      : Array.isArray(payload.selected_seats)
+        ? payload.selected_seats
+        : null
   };
 }
 
@@ -159,7 +172,15 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     name: payload.name,
     email: payload.email,
     phone: payload.phone,
+    first_name: payload.first_name,
+    last_name: payload.last_name,
     coupon_hold_token: holdToken,
+    seatsio_hold_token: pricing.seatsioHoldToken || payload.seatsio_hold_token || null,
+    selected_seats: Array.isArray(pricing.selectedSeats)
+      ? pricing.selectedSeats
+      : Array.isArray(payload.selected_seats)
+        ? payload.selected_seats
+        : undefined,
     pricing_snapshot: buildPricingSnapshot(pricing, payload)
   };
 
@@ -307,12 +328,29 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
         stripe_charge_id: stripeChargeId,
         amount_paid_cents: expectedCents,
         currency: checkout.currency || "usd",
-        paid_at: new Date()
+        paid_at: new Date(),
+        seatsio_hold_token: pricing.seatsioHoldToken || payload.seatsio_hold_token || null,
+        selected_seats_json: pricing.selectedSeats || payload.selected_seats || null
       },
       conn
     );
     const bookingId = created.id;
     const checkInCode = created.check_in_code;
+
+    const seatsToBook = Array.isArray(pricing.selectedSeats)
+      ? pricing.selectedSeats
+      : Array.isArray(payload.selected_seats)
+        ? payload.selected_seats
+        : [];
+    const seatsHoldToken = pricing.seatsioHoldToken || payload.seatsio_hold_token || null;
+    if (seatsHoldToken && seatsToBook.length) {
+      await seatsioService.bookSeatsForCheckout({
+        event: pricing.event,
+        holdToken: seatsHoldToken,
+        selectedSeats: seatsToBook,
+        bookingId
+      });
+    }
 
     if (holdToken && pricing.couponId && checkout.user_id) {
       await couponService.finalizeCouponRedemption(

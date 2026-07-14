@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ScrollableTableFrame from "./ScrollableTableFrame";
 
 function getListingTitle(item) {
   return item.title || item.name || "Untitled";
@@ -216,29 +217,49 @@ function AdminListingsTable({
           </div>
         ) : null}
       </div>
-      <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white md:block">
-      <table className="min-w-full text-left text-sm">
-        <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+      <div className="hidden md:block">
+      <ScrollableTableFrame minWidthClass="min-w-[980px]" className="rounded-2xl">
+      <table className="w-full table-fixed text-left text-sm">
+        <colgroup>
+          <col className="w-[28%]" />
+          <col className="w-[14%]" />
+          <col className="w-[14%]" />
+          <col className="w-[12%]" />
+          {type === "events" ? <col className="w-[10%]" /> : null}
+          <col className="w-[10%]" />
+          <col className="w-[12%]" />
+        </colgroup>
+        <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
           <tr>
-            <th className="px-4 py-3">{labels.title}</th>
-            <th className="px-4 py-3">{labels.city}</th>
-            <th className="px-4 py-3">{labels.category}</th>
-            <th className="px-4 py-3">Status</th>
-            {type === "events" ? <th className="px-4 py-3">Active</th> : null}
-            <th className="px-4 py-3 text-right">{labels.value}</th>
-            <th className="px-4 py-3">Actions</th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">{labels.title}</th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">{labels.city}</th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">{labels.category}</th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
+            {type === "events" ? (
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Active</th>
+            ) : null}
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">{labels.value}</th>
+            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Actions</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((item) => (
             <tr key={String(item.id)} className="border-b border-slate-100">
-              <td className="px-4 py-3 font-medium text-slate-900">{getListingTitle(item)}</td>
-              <td className="px-4 py-3 text-slate-600">
-                {type === "dealers" ? item.location_text || item.city_name || "-" : item.city_name || "-"}
+              <td className="px-4 py-3 font-medium text-slate-900">
+                <span className="line-clamp-2" title={getListingTitle(item)}>
+                  {getListingTitle(item)}
+                </span>
               </td>
-              <td className="px-4 py-3 text-slate-600">{item.category_name || "-"}</td>
+              <td className="px-4 py-3 text-slate-600">
+                <span className="block truncate">
+                  {type === "dealers" ? item.location_text || item.city_name || "-" : item.city_name || "-"}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-slate-600">
+                <span className="block truncate">{item.category_name || "-"}</span>
+              </td>
               <td className="px-4 py-3">
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase text-slate-700">
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase ${getStatusBadgeClass(item.status)}`}>
                   {item.status || "n/a"}
                 </span>
               </td>
@@ -259,7 +280,7 @@ function AdminListingsTable({
                   )}
                 </td>
               ) : null}
-              <td className="px-4 py-3 text-right text-slate-600">{getListingPrimaryMeta(item)}</td>
+              <td className="px-4 py-3 text-right whitespace-nowrap text-slate-600">{getListingPrimaryMeta(item)}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-2">
                   {String(item.status || "").toLowerCase() === "pending" ? (
@@ -303,6 +324,7 @@ function AdminListingsTable({
           ))}
         </tbody>
       </table>
+      </ScrollableTableFrame>
       </div>
     </>
   );

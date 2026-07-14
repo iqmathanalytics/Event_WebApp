@@ -335,6 +335,7 @@ function buildBookingConfirmationEmail({
   selectedDates,
   totalDays,
   attendeeCount,
+  selectedSeatsLabel = "",
   ticketBlocks,
   subtotalAmount,
   discountAmount,
@@ -346,6 +347,7 @@ function buildBookingConfirmationEmail({
 }) {
   const safeName = String(guestName || "there").trim() || "there";
   const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "See your booking";
+  const seatsLabel = String(selectedSeatsLabel || "").trim();
   const subject = `You're booked — ${eventTitle || "your event"} · ${BRAND_NAME}`;
   const eventUrl = event ? eventDetailUrl(event) : dashboardUrl("/events");
   const createAccountUrl = dashboardUrl("/register");
@@ -363,6 +365,7 @@ function buildBookingConfirmationEmail({
     `Event: ${eventTitle || "Event"}`,
     `Show date(s): ${datesLabel}`,
     `Tickets: ${attendeeCount || 0}`,
+    seatsLabel ? `Seats: ${seatsLabel}` : "",
     `Total: ${totalLine}`,
     discount > 0 ? `Discount: ${formatUsd(discount)}${couponCode ? ` (${couponCode})` : ""}` : "",
     `Status: ${payLabel}`,
@@ -375,7 +378,9 @@ function buildBookingConfirmationEmail({
     `My bookings: ${dashboardUrl("/dashboard/user")}`,
     "",
     `${BRAND_NAME} Team`
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const rows = [
     { label: "Booking ref", value: `#${bookingId}` },
@@ -383,6 +388,7 @@ function buildBookingConfirmationEmail({
     { label: "Event", value: eventTitle || "Event" },
     { label: "Show date(s)", value: datesLabel },
     { label: "Tickets", value: String(attendeeCount || 0) },
+    ...(seatsLabel ? [{ label: "Seats", value: seatsLabel }] : []),
     ...(totalDays > 1 ? [{ label: "Show days", value: String(totalDays) }] : []),
     { label: "Total paid", value: totalLine }
   ];
@@ -426,6 +432,7 @@ function buildOrganizerBookingNotificationEmail({
   selectedDates,
   totalDays,
   attendeeCount,
+  selectedSeatsLabel = "",
   ticketBlocks,
   subtotalAmount,
   discountAmount,
@@ -436,6 +443,7 @@ function buildOrganizerBookingNotificationEmail({
 }) {
   const safeOrganizer = String(organizerName || "there").trim() || "there";
   const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "—";
+  const seatsLabel = String(selectedSeatsLabel || "").trim();
   const subject = `New booking — ${eventTitle || "your event"} · ${BRAND_NAME}`;
   const totalLine = formatUsd(totalAmount);
   const discount = Number(discountAmount) || 0;
@@ -452,6 +460,7 @@ function buildOrganizerBookingNotificationEmail({
     guestPhone ? `Phone: ${guestPhone}` : "",
     `Show date(s): ${datesLabel}`,
     `Tickets: ${attendeeCount || 0}`,
+    seatsLabel ? `Seats: ${seatsLabel}` : "",
     `Total: ${totalLine}`,
     discount > 0 ? `Discount: ${formatUsd(discount)}${couponCode ? ` (${couponCode})` : ""}` : "",
     `Status: ${payLabel}`,
@@ -474,6 +483,7 @@ function buildOrganizerBookingNotificationEmail({
     { label: "Event", value: eventTitle || "Event" },
     { label: "Show date(s)", value: datesLabel },
     { label: "Tickets", value: String(attendeeCount || 0) },
+    ...(seatsLabel ? [{ label: "Seats", value: seatsLabel }] : []),
     ...(totalDays > 1 ? [{ label: "Show days", value: String(totalDays) }] : []),
     { label: "Total", value: totalLine }
   ];
@@ -529,8 +539,14 @@ function buildContactAdminEmail({ contactId, name, email, subject: topic, messag
   return { subject, text, html };
 }
 
-function ticketBlocksFromCart(cart, totalDays) {
+function ticketBlocksFromCart(cart, totalDays, selectedSeats = []) {
   const days = Math.max(1, Number(totalDays) || 1);
+  const seats = Array.isArray(selectedSeats) ? selectedSeats : [];
+  const seatLabels = seats
+    .map((seat) => (typeof seat === "string" ? seat.trim() : String(seat?.label || "").trim()))
+    .filter(Boolean);
+  const allSeatsOneTier = cart?.length === 1 && seatLabels.length > 0;
+
   return (cart || []).map((row, index) => {
     const qty = Number(row.quantity) || 0;
     const unit = Number(row.unit_price) || 0;
@@ -546,11 +562,34 @@ function ticketBlocksFromCart(cart, totalDays) {
     } else if (index >= 2) {
       tone = "luxe";
     }
+
+    let seatMeta = "";
+    if (allSeatsOneTier) {
+      seatMeta = ` · Seats: ${seatLabels.join(", ")}`;
+    } else if (seatLabels.length && cart.length > 1) {
+      const levelKey = String(row.level_name || "").trim().toLowerCase();
+      const matched = seats
+        .filter((seat) => {
+          const category = String(seat?.category_label || "").trim().toLowerCase();
+          const label = String(seat?.label || "").trim().toLowerCase();
+          return (
+            (category && category === levelKey) ||
+            (levelKey && label.startsWith(`${levelKey}-`)) ||
+            (levelKey && label.startsWith(`${levelKey} `))
+          );
+        })
+        .map((seat) => String(seat.label || "").trim())
+        .filter(Boolean);
+      if (matched.length) {
+        seatMeta = ` · Seats: ${matched.join(", ")}`;
+      }
+    }
+
     return {
       tone,
       badge: tone === "luxe" ? "Luxe" : tone === "premium" ? "Premium" : "Standard",
       name: row.level_name || "Ticket",
-      meta: `${qty} ticket${qty === 1 ? "" : "s"}${days > 1 ? ` · ${days} show days` : ""}${unit > 0 ? ` · ${formatUsd(unit)} each` : ""}`,
+      meta: `${qty} ticket${qty === 1 ? "" : "s"}${days > 1 ? ` · ${days} show days` : ""}${unit > 0 ? ` · ${formatUsd(unit)} each` : ""}${seatMeta}`,
       price: line > 0 ? formatUsd(line) : ""
     };
   });

@@ -4,6 +4,7 @@ const {
   markBookingCheckedIn
 } = require("../models/bookingModel");
 const { normalizeCheckInCodeInput } = require("../utils/bookingCheckIn");
+const { formatSelectedSeatsLabel, parseSelectedSeatsJson } = require("../utils/bookingSeats");
 
 function parseTicketItemsJson(raw) {
   if (!raw) {
@@ -50,6 +51,8 @@ function mapVerifyBooking(row) {
     attendee_count: row.attendee_count,
     ticket_items: parseTicketItemsJson(row.ticket_items_json),
     selected_dates: parseSelectedDatesJson(row.selected_dates_json),
+    selected_seats: parseSelectedSeatsJson(row.selected_seats_json),
+    selected_seats_label: formatSelectedSeatsLabel(parseSelectedSeatsJson(row.selected_seats_json)),
     total_amount: row.total_amount,
     payment_status: row.payment_status,
     booking_ref: `#${row.id}`,

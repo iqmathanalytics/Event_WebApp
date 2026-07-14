@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FiDownload, FiMail, FiMessageSquare, FiTrash2 } from "react-icons/fi";
 import { formatDateUS } from "../utils/format";
+import ScrollableTableFrame from "./ScrollableTableFrame";
 
 function AdminCommunicationsSection({
   tab,
@@ -209,9 +210,20 @@ function AdminCommunicationsSection({
               </div>
             ) : null}
           </div>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="hidden md:block">
+            <ScrollableTableFrame minWidthClass="min-w-[1020px]" bordered={false}>
+            <table className="w-full table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[20%]" />
+                <col className="w-[14%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[9%]" />
+                <col className="w-[9%]" />
+              </colgroup>
+              <thead className="sticky top-0 z-[1] bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-2">First Name</th>
                   <th className="px-4 py-2">Last Name</th>
@@ -270,6 +282,7 @@ function AdminCommunicationsSection({
                 )}
               </tbody>
             </table>
+            </ScrollableTableFrame>
           </div>
           {nPages > 1 ? (
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-600">
@@ -372,9 +385,18 @@ function AdminCommunicationsSection({
               </div>
             ) : null}
           </div>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="hidden md:block">
+            <ScrollableTableFrame minWidthClass="min-w-[980px]" bordered={false}>
+            <table className="w-full table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[12%]" />
+                <col className="w-[14%]" />
+                <col className="w-[18%]" />
+                <col className="w-[16%]" />
+                <col className="w-[10%]" />
+                <col className="w-[30%]" />
+              </colgroup>
+              <thead className="sticky top-0 z-[1] bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2">Name</th>
@@ -403,22 +425,33 @@ function AdminCommunicationsSection({
                       <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">
                         {row.created_at ? formatDateUS(row.created_at) : "—"}
                       </td>
-                      <td className="px-4 py-2.5 font-medium text-slate-900">{row.name}</td>
-                      <td className="max-w-[180px] truncate px-4 py-2.5 text-slate-600" title={row.email}>
-                        {row.email}
+                      <td className="px-4 py-2.5 font-medium text-slate-900">
+                        <span className="block truncate" title={row.name || ""}>
+                          {row.name}
+                        </span>
                       </td>
-                      <td className="max-w-[160px] px-4 py-2.5 text-slate-600" title={row.subject}>
-                        {row.subject}
+                      <td className="px-4 py-2.5 text-slate-600">
+                        <span className="block truncate" title={row.email || ""}>
+                          {row.email}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">
+                        <span className="line-clamp-2" title={row.subject || ""}>
+                          {row.subject}
+                        </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">{row.status}</td>
-                      <td className="max-w-xs px-4 py-2.5 text-slate-600">
-                        <span className="line-clamp-3">{row.message}</span>
+                      <td className="px-4 py-2.5 text-slate-600">
+                        <span className="line-clamp-3" title={row.message || ""}>
+                          {row.message}
+                        </span>
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+            </ScrollableTableFrame>
           </div>
           {cPages > 1 ? (
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-xs text-slate-600">

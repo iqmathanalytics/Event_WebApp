@@ -49,6 +49,12 @@ function TicketDetails({ booking }) {
           <dt className="text-xs text-slate-500">Tickets</dt>
           <dd className="font-semibold text-slate-900">{booking.attendee_count}</dd>
         </div>
+        {booking.selected_seats_label ? (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-slate-500">Seats</dt>
+            <dd className="font-medium text-slate-800">{booking.selected_seats_label}</dd>
+          </div>
+        ) : null}
         {dates ? (
           <div className="sm:col-span-2">
             <dt className="text-xs text-slate-500">Show date(s)</dt>
