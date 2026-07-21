@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import HomePage from "./pages/HomePage";
@@ -20,6 +20,7 @@ import AnimatedBackground from "./components/AnimatedBackground";
 import LogoutOverlay from "./components/LogoutOverlay";
 import NavigationProgress from "./components/NavigationProgress";
 import ScrollToTop from "./components/ScrollToTop";
+import { getEventLandingConfig } from "./eventLandings/registry";
 
 const EventDetailsPage = lazy(() => import("./pages/EventDetailsPage"));
 const DealDetailsPage = lazy(() => import("./pages/DealDetailsPage"));
@@ -29,15 +30,20 @@ const UserSubmissionsPage = lazy(() => import("./pages/UserSubmissionsPage"));
 const OrganizerDashboardPage = lazy(() => import("./pages/OrganizerDashboardPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminVerifyTicketPage = lazy(() => import("./pages/AdminVerifyTicketPage"));
+const EventLandingPage = lazy(() => import("./eventLandings/EventLandingPage"));
 
 function RouteFallback({ label = "Loading…" }) {
   return <p className="py-10 text-center text-sm text-slate-500">{label}</p>;
 }
 
 function App() {
+  const location = useLocation();
+  const rootSlug = location.pathname.split("/").filter(Boolean)[0];
+  const isEventLanding = Boolean(rootSlug && getEventLandingConfig(rootSlug));
+
   return (
     <div className="relative isolate min-h-screen overflow-x-hidden">
-      <AnimatedBackground />
+      {!isEventLanding ? <AnimatedBackground /> : null}
       <LogoutOverlay />
       <NavigationProgress />
       <ScrollToTop />
@@ -156,6 +162,14 @@ function App() {
             />
           </Route>
 
+          <Route
+            path="/:eventSlug"
+            element={
+              <Suspense fallback={<RouteFallback label="Loading event…" />}>
+                <EventLandingPage />
+              </Suspense>
+            }
+          />
           <Route path="/404" element={<NotFoundPage />} />
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
