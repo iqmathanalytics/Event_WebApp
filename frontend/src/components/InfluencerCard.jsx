@@ -154,7 +154,7 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
       className={`group relative flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm ${
-        isLanding ? "h-full w-full" : "h-full min-h-[19rem] sm:min-h-[20rem]"
+        isLanding ? "h-full w-full" : "h-full"
       }`}
     >
       <button
@@ -180,6 +180,7 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
         <ListingCardImage
           src={item.image}
           alt={item.name}
+          fit="contain-edge"
           emptyLabel="No profile image"
           placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500"
         />

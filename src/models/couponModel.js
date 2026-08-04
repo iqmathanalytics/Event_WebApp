@@ -196,10 +196,10 @@ async function createHold(payload, conn) {
   await runner.query(
     `INSERT INTO event_coupon_holds
       (coupon_id, user_id, event_id, hold_token, attendee_count, selected_dates_json,
-       subtotal_amount, discount_amount, total_amount, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+       subtotal_amount, discount_amount, total_amount, hold_kind, applied_code, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
     [
-      payload.coupon_id,
+      payload.coupon_id ?? null,
       payload.user_id,
       payload.event_id,
       payload.hold_token,
@@ -208,6 +208,8 @@ async function createHold(payload, conn) {
       payload.subtotal_amount,
       payload.discount_amount,
       payload.total_amount,
+      payload.hold_kind === "vendor" ? "vendor" : "coupon",
+      payload.applied_code ? String(payload.applied_code).trim().toUpperCase().slice(0, 40) : null,
       HOLD_MINUTES
     ]
   );
@@ -219,6 +221,35 @@ async function deleteHoldsForUserCouponEvent(userId, couponId, eventId, conn) {
     `DELETE FROM event_coupon_holds WHERE user_id = ? AND coupon_id = ? AND event_id = ?`,
     [userId, couponId, eventId]
   );
+}
+
+async function deleteVendorHoldsForUserEvent(userId, eventId, conn) {
+  const runner = conn || pool;
+  await runner.query(
+    `DELETE FROM event_coupon_holds
+     WHERE user_id = ? AND event_id = ? AND COALESCE(hold_kind, 'coupon') = 'vendor'`,
+    [userId, eventId]
+  );
+}
+
+async function deleteAllHoldsForUserEvent(userId, eventId, conn) {
+  const runner = conn || pool;
+  await runner.query(`DELETE FROM event_coupon_holds WHERE user_id = ? AND event_id = ?`, [
+    userId,
+    eventId
+  ]);
+}
+
+async function findActiveVendorHoldForUserEvent(userId, eventId, conn) {
+  const runner = conn || pool;
+  const [rows] = await runner.query(
+    `SELECT * FROM event_coupon_holds
+     WHERE user_id = ? AND event_id = ? AND COALESCE(hold_kind, 'coupon') = 'vendor' AND expires_at >= NOW()
+     ORDER BY id DESC
+     LIMIT 1`,
+    [userId, eventId]
+  );
+  return rows[0] || null;
 }
 
 async function findHoldByToken(holdToken, conn) {
@@ -327,6 +358,9 @@ module.exports = {
   deleteCouponById,
   createHold,
   deleteHoldsForUserCouponEvent,
+  deleteVendorHoldsForUserEvent,
+  deleteAllHoldsForUserEvent,
+  findActiveVendorHoldForUserEvent,
   findHoldByToken,
   findActiveHoldByToken,
   findActiveHoldForUserCouponEvent,

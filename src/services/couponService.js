@@ -11,11 +11,20 @@ const {
 } = require("../utils/eventTicketLevels");
 
 const CODE_PATTERN = /^[A-Za-z0-9]{5,20}$/;
+const APPLY_CODE_PATTERN = /^[A-Za-z0-9]{3,40}$/;
 
 function assertValidCodeFormat(code) {
   const raw = String(code || "").trim();
   if (!CODE_PATTERN.test(raw)) {
     throw new ApiError(400, "Coupon code must be 5–20 characters (letters and numbers only).");
+  }
+  return couponModel.normalizeCouponCode(raw);
+}
+
+function assertValidApplyCodeFormat(code) {
+  const raw = String(code || "").trim();
+  if (!APPLY_CODE_PATTERN.test(raw)) {
+    throw new ApiError(400, "Code must be 3–40 characters (letters and numbers only).");
   }
   return couponModel.normalizeCouponCode(raw);
 }
@@ -46,6 +55,42 @@ function computeDiscount(coupon, subtotal) {
   }
   discount = Math.min(discount, subtotal);
   return Number(discount.toFixed(2));
+}
+
+function isVendorEnabled(event) {
+  return !(event.vendor_code_enabled === false || Number(event.vendor_code_enabled) === 0);
+}
+
+function isCouponsEnabled(event) {
+  return !(event.coupon_codes_enabled === false || Number(event.coupon_codes_enabled) === 0);
+}
+
+function vendorDiscountType(event) {
+  return String(event.vendor_discount_type || "percent").toLowerCase() === "fixed_amount"
+    ? "fixed_amount"
+    : "percent";
+}
+
+function buildVendorCoupon(event) {
+  const code = String(event.vendor_code || "").trim().toUpperCase();
+  return {
+    id: null,
+    code,
+    discount_type: vendorDiscountType(event),
+    discount_value: Number(event.vendor_discount_value) || 0,
+    max_discount_amount: null,
+    organizer_id: event.organizer_id,
+    is_active: 1,
+    hold_kind: "vendor"
+  };
+}
+
+function codesMatch(a, b) {
+  return String(a || "").trim().toUpperCase() === String(b || "").trim().toUpperCase();
+}
+
+function isVendorHold(hold) {
+  return hold && (hold.hold_kind === "vendor" || (!hold.coupon_id && hold.applied_code));
 }
 
 function isCouponInDateWindow(coupon, timezoneOffsetMinutes = 0) {
@@ -121,7 +166,7 @@ async function resolveBookingContext(eventId, attendeeCount, selectedDatesInput,
   }
   const ticketSalesMode = event.ticket_sales_mode || "external";
   if (ticketSalesMode !== "platform") {
-    throw new ApiError(400, "Coupons apply only to on-site ticket bookings for this event.");
+    throw new ApiError(400, "Discount codes apply only to on-site ticket bookings for this event.");
   }
 
   const availableDates = getEventAvailableDates(event);
@@ -181,17 +226,20 @@ function formatHoldExpiresAt(expiresAtRaw) {
   );
 }
 
-function buildHoldResponse({ holdToken, expiresAtRaw, coupon, subtotal, discount, total }) {
+function buildHoldResponse({ holdToken, expiresAtRaw, coupon, subtotal, discount, total, holdKind = "coupon" }) {
+  const kind = holdKind === "vendor" || coupon?.hold_kind === "vendor" ? "vendor" : "coupon";
+  const label = kind === "vendor" ? "Vendor code" : "Coupon";
   return {
     holdToken,
     expiresAt: formatHoldExpiresAt(expiresAtRaw),
     holdMinutes: couponModel.HOLD_MINUTES,
     couponCode: coupon.code,
-    couponId: coupon.id,
+    couponId: coupon.id ?? null,
+    holdKind: kind,
     subtotal,
     discount,
     total,
-    message: `Coupon applied. Complete your booking within ${couponModel.HOLD_MINUTES} minutes to keep this rate.`
+    message: `${label} applied. Complete your booking within ${couponModel.HOLD_MINUTES} minutes to keep this rate.`
   };
 }
 
@@ -218,15 +266,15 @@ async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null
     const expired = await couponModel.findHoldByToken(holdToken);
     if (expired) {
       await couponModel.deleteHoldByToken(holdToken);
-      throw new ApiError(400, "Coupon hold expired. Please apply the coupon again.");
+      throw new ApiError(400, "Code hold expired. Please apply the code again.");
     }
-    throw new ApiError(400, "Coupon hold expired or invalid. Please apply the coupon again.");
+    throw new ApiError(400, "Code hold expired or invalid. Please apply the code again.");
   }
   if (Number(hold.user_id) !== Number(userId)) {
-    throw new ApiError(403, "This coupon hold belongs to another account.");
+    throw new ApiError(403, "This code hold belongs to another account.");
   }
   if (Number(hold.event_id) !== Number(eventId)) {
-    throw new ApiError(400, "Coupon hold does not match this event.");
+    throw new ApiError(400, "Code hold does not match this event.");
   }
 
   const event = await findEventById(eventId);
@@ -234,14 +282,49 @@ async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null
     throw new ApiError(404, "Event not found");
   }
 
+  const dates = normalizeDateList(JSON.parse(hold.selected_dates_json || "[]"));
+  const guests = Number(hold.attendee_count);
+  const subtotal = computeSubtotal(event, dates, guests, ticketItems);
+
+  if (isVendorHold(hold)) {
+    if (!isVendorEnabled(event) || !codesMatch(event.vendor_code, hold.applied_code || event.vendor_code)) {
+      throw new ApiError(400, "Vendor code is no longer available.");
+    }
+    const vendorCoupon = buildVendorCoupon(event);
+    if (!vendorCoupon.code || Number(vendorCoupon.discount_value) <= 0) {
+      throw new ApiError(400, "Vendor code is no longer available.");
+    }
+    if (subtotal <= 0) {
+      throw new ApiError(400, "Codes cannot be applied to free bookings.");
+    }
+    const discount = computeDiscount(vendorCoupon, subtotal);
+    const total = Number((subtotal - discount).toFixed(2));
+    await couponModel.updateHoldPricing(hold.id, {
+      attendee_count: guests,
+      selected_dates_json: JSON.stringify(dates),
+      subtotal_amount: subtotal,
+      discount_amount: discount,
+      total_amount: total
+    });
+    return buildHoldResponse({
+      holdToken: hold.hold_token,
+      expiresAtRaw: hold.expires_at,
+      coupon: vendorCoupon,
+      subtotal,
+      discount,
+      total,
+      holdKind: "vendor"
+    });
+  }
+
+  if (!isCouponsEnabled(event)) {
+    throw new ApiError(400, "Coupon codes are not enabled for this event.");
+  }
+
   const coupon = await couponModel.findCouponByIdForOrganizer(hold.coupon_id, event.organizer_id);
   if (!coupon) {
     throw new ApiError(400, "Coupon is no longer available.");
   }
-
-  const dates = normalizeDateList(JSON.parse(hold.selected_dates_json || "[]"));
-  const guests = Number(hold.attendee_count);
-  const subtotal = computeSubtotal(event, dates, guests, ticketItems);
 
   await assertCouponUsable({
     coupon,
@@ -274,6 +357,85 @@ async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null
   });
 }
 
+async function applyVendorHold({
+  userId,
+  event,
+  dates,
+  guests,
+  subtotal,
+  existingHoldToken = null
+}) {
+  if (!isVendorEnabled(event)) {
+    throw new ApiError(400, "Vendor codes are not enabled for this event.");
+  }
+  const vendorCoupon = buildVendorCoupon(event);
+  if (!vendorCoupon.code || Number(vendorCoupon.discount_value) <= 0) {
+    throw new ApiError(400, "Vendor code is not configured for this event.");
+  }
+  if (subtotal <= 0) {
+    throw new ApiError(400, "Codes cannot be applied to free bookings.");
+  }
+
+  await couponModel.purgeExpiredHolds();
+
+  const existing = await couponModel.findActiveVendorHoldForUserEvent(userId, event.id);
+  if (existing) {
+    const existingDates = normalizeDateList(JSON.parse(existing.selected_dates_json || "[]"));
+    const datesMatch = existingDates.join(",") === dates.join(",");
+    const guestsMatch = Number(existing.attendee_count) === guests;
+    if (datesMatch && guestsMatch) {
+      const discount = computeDiscount(vendorCoupon, subtotal);
+      const total = Number((subtotal - discount).toFixed(2));
+      await couponModel.updateHoldPricing(existing.id, {
+        attendee_count: guests,
+        selected_dates_json: JSON.stringify(dates),
+        subtotal_amount: subtotal,
+        discount_amount: discount,
+        total_amount: total
+      });
+      return buildHoldResponse({
+        holdToken: existing.hold_token,
+        expiresAtRaw: existing.expires_at,
+        coupon: vendorCoupon,
+        subtotal,
+        discount,
+        total,
+        holdKind: "vendor"
+      });
+    }
+  }
+
+  const discount = computeDiscount(vendorCoupon, subtotal);
+  const total = Number((subtotal - discount).toFixed(2));
+  const holdToken = crypto.randomUUID();
+
+  await couponModel.deleteVendorHoldsForUserEvent(userId, event.id);
+  await couponModel.createHold({
+    coupon_id: null,
+    user_id: userId,
+    event_id: event.id,
+    hold_token: holdToken,
+    attendee_count: guests,
+    selected_dates_json: JSON.stringify(dates),
+    subtotal_amount: subtotal,
+    discount_amount: discount,
+    total_amount: total,
+    hold_kind: "vendor",
+    applied_code: vendorCoupon.code
+  });
+
+  const inserted = await couponModel.findActiveHoldByToken(holdToken);
+  return buildHoldResponse({
+    holdToken,
+    expiresAtRaw: inserted?.expires_at,
+    coupon: vendorCoupon,
+    subtotal,
+    discount,
+    total,
+    holdKind: "vendor"
+  });
+}
+
 async function applyCouponHold({
   userId,
   eventId,
@@ -300,7 +462,7 @@ async function applyCouponHold({
     }
   }
 
-  const normalizedCode = assertValidCodeFormat(couponCode);
+  const normalizedCode = assertValidApplyCodeFormat(couponCode);
   const { event, selectedDates: dates, attendeeCount: guests, subtotal } = await resolveBookingContext(
     eventId,
     attendeeCount,
@@ -308,84 +470,106 @@ async function applyCouponHold({
     { excludeHoldToken: existingHoldToken || null, ticketItems }
   );
 
-  const coupon = await couponModel.findCouponByOrganizerAndCode(event.organizer_id, normalizedCode);
-  if (!coupon) {
-    throw new ApiError(404, "Coupon code not found.");
-  }
+  // Prefer organizer coupon when coupons are enabled and code matches a coupon.
+  const coupon = isCouponsEnabled(event)
+    ? await couponModel.findCouponByOrganizerAndCode(event.organizer_id, normalizedCode)
+    : null;
 
-  await couponModel.purgeExpiredHolds();
+  if (coupon) {
+    await couponModel.purgeExpiredHolds();
 
-  const existing = await couponModel.findActiveHoldForUserCouponEvent(userId, coupon.id, event.id);
-  if (existing) {
-    const existingDates = normalizeDateList(JSON.parse(existing.selected_dates_json || "[]"));
-    const datesMatch = existingDates.join(",") === dates.join(",");
-    const guestsMatch = Number(existing.attendee_count) === guests;
-    if (datesMatch && guestsMatch) {
-      await assertCouponUsable({
-        coupon,
-        event,
-        userId,
-        attendeeCount: guests,
-        subtotal,
-        excludeHoldId: existing.id,
-        timezoneOffsetMinutes
-      });
-      const discount = computeDiscount(coupon, subtotal);
-      const total = Number((subtotal - discount).toFixed(2));
-      await couponModel.updateHoldPricing(existing.id, {
-        attendee_count: guests,
-        selected_dates_json: JSON.stringify(dates),
-        subtotal_amount: subtotal,
-        discount_amount: discount,
-        total_amount: total
-      });
-      return buildHoldResponse({
-        holdToken: existing.hold_token,
-        expiresAtRaw: existing.expires_at,
-        coupon,
-        subtotal,
-        discount,
-        total
-      });
+    const existing = await couponModel.findActiveHoldForUserCouponEvent(userId, coupon.id, event.id);
+    if (existing) {
+      const existingDates = normalizeDateList(JSON.parse(existing.selected_dates_json || "[]"));
+      const datesMatch = existingDates.join(",") === dates.join(",");
+      const guestsMatch = Number(existing.attendee_count) === guests;
+      if (datesMatch && guestsMatch) {
+        await assertCouponUsable({
+          coupon,
+          event,
+          userId,
+          attendeeCount: guests,
+          subtotal,
+          excludeHoldId: existing.id,
+          timezoneOffsetMinutes
+        });
+        const discount = computeDiscount(coupon, subtotal);
+        const total = Number((subtotal - discount).toFixed(2));
+        await couponModel.updateHoldPricing(existing.id, {
+          attendee_count: guests,
+          selected_dates_json: JSON.stringify(dates),
+          subtotal_amount: subtotal,
+          discount_amount: discount,
+          total_amount: total
+        });
+        return buildHoldResponse({
+          holdToken: existing.hold_token,
+          expiresAtRaw: existing.expires_at,
+          coupon,
+          subtotal,
+          discount,
+          total
+        });
+      }
     }
+
+    await assertCouponUsable({
+      coupon,
+      event,
+      userId,
+      attendeeCount: guests,
+      subtotal,
+      timezoneOffsetMinutes
+    });
+
+    const discount = computeDiscount(coupon, subtotal);
+    const total = Number((subtotal - discount).toFixed(2));
+    const holdToken = crypto.randomUUID();
+
+    await couponModel.deleteAllHoldsForUserEvent(userId, event.id);
+    await couponModel.createHold({
+      coupon_id: coupon.id,
+      user_id: userId,
+      event_id: event.id,
+      hold_token: holdToken,
+      attendee_count: guests,
+      selected_dates_json: JSON.stringify(dates),
+      subtotal_amount: subtotal,
+      discount_amount: discount,
+      total_amount: total,
+      hold_kind: "coupon",
+      applied_code: coupon.code
+    });
+
+    const inserted = await couponModel.findActiveHoldByToken(holdToken);
+
+    return buildHoldResponse({
+      holdToken,
+      expiresAtRaw: inserted?.expires_at,
+      coupon,
+      subtotal,
+      discount,
+      total
+    });
   }
 
-  await assertCouponUsable({
-    coupon,
-    event,
-    userId,
-    attendeeCount: guests,
-    subtotal,
-    timezoneOffsetMinutes
-  });
+  // Fall back to per-event vendor code.
+  if (isVendorEnabled(event) && codesMatch(event.vendor_code, normalizedCode)) {
+    await couponModel.deleteAllHoldsForUserEvent(userId, event.id);
+    return applyVendorHold({
+      userId,
+      event,
+      dates,
+      guests,
+      subtotal,
+      existingHoldToken
+    });
+  }
 
-  const discount = computeDiscount(coupon, subtotal);
-  const total = Number((subtotal - discount).toFixed(2));
-  const holdToken = crypto.randomUUID();
-
-  await couponModel.deleteHoldsForUserCouponEvent(userId, coupon.id, event.id);
-  await couponModel.createHold({
-    coupon_id: coupon.id,
-    user_id: userId,
-    event_id: event.id,
-    hold_token: holdToken,
-    attendee_count: guests,
-    selected_dates_json: JSON.stringify(dates),
-    subtotal_amount: subtotal,
-    discount_amount: discount,
-    total_amount: total
-  });
-
-  const inserted = await couponModel.findActiveHoldByToken(holdToken);
-
-  return buildHoldResponse({
-    holdToken,
-    expiresAtRaw: inserted?.expires_at,
-    coupon,
-    subtotal,
-    discount,
-    total
-  });
+  if (!isCouponsEnabled(event) && !isVendorEnabled(event)) {
+    throw new ApiError(400, "Discount codes are not enabled for this event.");
+  }
+  throw new ApiError(404, "Code not found.");
 }
 
 async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount, selectedDates, ticketItems = null }) {
@@ -395,15 +579,15 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
     const expired = await couponModel.findHoldByToken(holdToken);
     if (expired) {
       await couponModel.deleteHoldByToken(holdToken);
-      throw new ApiError(400, "Coupon hold expired. Please apply the coupon again.");
+      throw new ApiError(400, "Code hold expired. Please apply the code again.");
     }
-    throw new ApiError(400, "Coupon hold expired or invalid. Please apply the coupon again.");
+    throw new ApiError(400, "Code hold expired or invalid. Please apply the code again.");
   }
   if (Number(hold.user_id) !== Number(userId)) {
-    throw new ApiError(403, "This coupon hold belongs to another account.");
+    throw new ApiError(403, "This code hold belongs to another account.");
   }
   if (Number(hold.event_id) !== Number(eventId)) {
-    throw new ApiError(400, "Coupon hold does not match this event.");
+    throw new ApiError(400, "Code hold does not match this event.");
   }
 
   const parsedHoldDates = normalizeDateList(JSON.parse(hold.selected_dates_json || "[]"));
@@ -415,27 +599,40 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
   );
 
   if (guests !== Number(hold.attendee_count)) {
-    throw new ApiError(400, "Ticket count changed. Please apply the coupon again.");
+    throw new ApiError(400, "Ticket count changed. Please apply the code again.");
   }
   const holdDatesKey = parsedHoldDates.join(",");
   const requestDatesKey = dates.join(",");
   if (holdDatesKey !== requestDatesKey) {
-    throw new ApiError(400, "Selected dates changed. Please apply the coupon again.");
+    throw new ApiError(400, "Selected dates changed. Please apply the code again.");
   }
 
-  const coupon = await couponModel.findCouponByIdForOrganizer(hold.coupon_id, event.organizer_id);
-  if (!coupon) {
-    throw new ApiError(400, "Coupon is no longer available.");
+  let coupon;
+  if (isVendorHold(hold)) {
+    if (!isVendorEnabled(event) || !codesMatch(event.vendor_code, hold.applied_code || event.vendor_code)) {
+      throw new ApiError(400, "Vendor code is no longer available.");
+    }
+    coupon = buildVendorCoupon(event);
+    if (!coupon.code || Number(coupon.discount_value) <= 0) {
+      throw new ApiError(400, "Vendor code is no longer available.");
+    }
+  } else {
+    if (!isCouponsEnabled(event)) {
+      throw new ApiError(400, "Coupon codes are not enabled for this event.");
+    }
+    coupon = await couponModel.findCouponByIdForOrganizer(hold.coupon_id, event.organizer_id);
+    if (!coupon) {
+      throw new ApiError(400, "Coupon is no longer available.");
+    }
+    await assertCouponUsable({
+      coupon,
+      event,
+      userId,
+      attendeeCount: guests,
+      subtotal,
+      excludeHoldId: hold.id
+    });
   }
-
-  await assertCouponUsable({
-    coupon,
-    event,
-    userId,
-    attendeeCount: guests,
-    subtotal,
-    excludeHoldId: hold.id
-  });
 
   const discount = computeDiscount(coupon, subtotal);
   const total = Number((subtotal - discount).toFixed(2));
@@ -445,7 +642,7 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
     Number(hold.discount_amount) !== discount ||
     Number(hold.total_amount) !== total
   ) {
-    throw new ApiError(400, "Pricing changed. Please apply the coupon again.");
+    throw new ApiError(400, "Pricing changed. Please apply the code again.");
   }
 
   return {
@@ -461,8 +658,10 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
 
 async function finalizeCouponRedemption({ couponId, userId, bookingId, holdToken }, conn) {
   await couponModel.deleteHoldByToken(holdToken, conn);
-  await couponModel.incrementCouponRedemption(couponId, conn);
-  await couponModel.insertRedemption({ couponId, userId, bookingId }, conn);
+  if (couponId) {
+    await couponModel.incrementCouponRedemption(couponId, conn);
+    await couponModel.insertRedemption({ couponId, userId, bookingId }, conn);
+  }
 }
 
 async function listOrganizerCoupons(organizerId) {

@@ -2,6 +2,16 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # Canonical host: bookmytickets.us → www.bookmytickets.us (keep path + query)
+  RewriteCond %{HTTP_HOST} ^bookmytickets\.us$ [NC]
+  RewriteRule ^(.*)$ https://www.bookmytickets.us/$1 [R=301,L]
+
+  # Force HTTPS on www (optional safety if HTTP still reaches Apache)
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP_HOST} ^www\.bookmytickets\.us$ [NC]
+  RewriteRule ^(.*)$ https://www.bookmytickets.us/$1 [R=301,L]
+
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

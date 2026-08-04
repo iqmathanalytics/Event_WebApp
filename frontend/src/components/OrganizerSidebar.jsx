@@ -1,6 +1,7 @@
 function OrganizerSidebar({ activeSection, onSectionChange }) {
   const items = [
     { key: "overview", label: "Overview" },
+    { key: "shared", label: "Shared with me" },
     { key: "my-events", label: "My Events" },
     { key: "coupons", label: "Coupons" },
     { key: "bookings", label: "Event Bookings" }

@@ -62,6 +62,48 @@ function galleryImageUrlsDbValue(value) {
   return urls.length ? toJsonDbString(urls) : null;
 }
 
+function toBoolFlag(raw, defaultValue = false) {
+  if (raw === undefined || raw === null) {
+    return defaultValue;
+  }
+  if (typeof raw === "boolean") {
+    return raw;
+  }
+  return Number(raw) !== 0 && String(raw) !== "0" && String(raw).toLowerCase() !== "false";
+}
+
+function normalizeFeeType(raw) {
+  return String(raw || "percent").toLowerCase() === "fixed" ? "fixed" : "percent";
+}
+
+function normalizeCheckoutConfigFromPayload(payload = {}) {
+  const serviceEnabled = toBoolFlag(payload.service_fee_enabled, false);
+  const platformEnabled = toBoolFlag(payload.platform_fee_enabled, false);
+  const vendorEnabled = toBoolFlag(payload.vendor_code_enabled, false);
+  const vendorCode =
+    vendorEnabled && payload.vendor_code != null && String(payload.vendor_code).trim()
+      ? String(payload.vendor_code).trim().slice(0, 40)
+      : null;
+  const vendorDiscountType =
+    String(payload.vendor_discount_type || "percent").toLowerCase() === "fixed_amount"
+      ? "fixed_amount"
+      : "percent";
+  return {
+    service_fee_enabled: serviceEnabled ? 1 : 0,
+    service_fee_type: normalizeFeeType(payload.service_fee_type),
+    service_fee_value: Math.max(0, Number(payload.service_fee_value) || 0),
+    platform_fee_enabled: platformEnabled ? 1 : 0,
+    platform_fee_type: normalizeFeeType(payload.platform_fee_type),
+    platform_fee_value: Math.max(0, Number(payload.platform_fee_value) || 0),
+    vendor_code_enabled: vendorEnabled ? 1 : 0,
+    vendor_code: vendorCode,
+    vendor_discount_type: vendorDiscountType,
+    vendor_discount_value: vendorEnabled ? Math.max(0, Number(payload.vendor_discount_value) || 0) : 0,
+    coupon_codes_enabled: toBoolFlag(payload.coupon_codes_enabled, true) ? 1 : 0,
+    show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0
+  };
+}
+
 function normalizeEventRow(row) {
   if (!row) {
     return row;
@@ -85,6 +127,21 @@ function normalizeEventRow(row) {
     seating_mode,
     ticket_levels,
     price: listPrice != null ? listPrice : row.price,
+    service_fee_enabled: toBoolFlag(row.service_fee_enabled, false),
+    service_fee_type: normalizeFeeType(row.service_fee_type),
+    service_fee_value: Number(row.service_fee_value) || 0,
+    platform_fee_enabled: toBoolFlag(row.platform_fee_enabled, false),
+    platform_fee_type: normalizeFeeType(row.platform_fee_type),
+    platform_fee_value: Number(row.platform_fee_value) || 0,
+    vendor_code_enabled: toBoolFlag(row.vendor_code_enabled, false),
+    vendor_code: row.vendor_code ? String(row.vendor_code) : null,
+    vendor_discount_type:
+      String(row.vendor_discount_type || "percent").toLowerCase() === "fixed_amount"
+        ? "fixed_amount"
+        : "percent",
+    vendor_discount_value: Number(row.vendor_discount_value) || 0,
+    coupon_codes_enabled: toBoolFlag(row.coupon_codes_enabled, true),
+    show_on_events_page: toBoolFlag(row.show_on_events_page, true),
     event_highlights: parseHighlights(row.event_highlights),
     gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
     promo_video_urls: parsePromoVideoUrls(row.promo_video_urls),
@@ -181,14 +238,20 @@ async function createEvent(payload) {
       ? Math.min(...levelsNormalized.map((l) => l.price))
       : perDayPrice || 0;
 
+  const checkoutConfig = normalizeCheckoutConfigFromPayload(payload);
+
   const [result] = await pool.query(
     `INSERT INTO events
       (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
        venue_name, venue_address, google_maps_link, organizer_id, ticket_link, ticket_sales_mode, total_seats,
        image_url, gallery_image_urls, promo_video_urls, price, ticket_levels_json, duration_hours, duration_minutes, age_limit, languages, genres, event_highlights,
        is_yay_deal_event, deal_event_discount_code,
+       service_fee_enabled, service_fee_type, service_fee_value,
+       platform_fee_enabled, platform_fee_type, platform_fee_value,
+       vendor_code_enabled, vendor_code, vendor_discount_type, vendor_discount_value,
+       coupon_codes_enabled, show_on_events_page,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -221,6 +284,18 @@ async function createEvent(payload) {
       highlightsValue,
       yayDeal ? 1 : 0,
       yayDeal ? discountCode : null,
+      checkoutConfig.service_fee_enabled,
+      checkoutConfig.service_fee_type,
+      checkoutConfig.service_fee_value,
+      checkoutConfig.platform_fee_enabled,
+      checkoutConfig.platform_fee_type,
+      checkoutConfig.platform_fee_value,
+      checkoutConfig.vendor_code_enabled,
+      checkoutConfig.vendor_code,
+      checkoutConfig.vendor_discount_type,
+      checkoutConfig.vendor_discount_value,
+      checkoutConfig.coupon_codes_enabled,
+      checkoutConfig.show_on_events_page,
       initialStatus
     ]
   );
@@ -290,7 +365,7 @@ async function findPublicEventBySlugOrId(param) {
          LEFT JOIN cities c ON c.id = e.city_id
          LEFT JOIN categories cat ON cat.id = e.category_id
          LEFT JOIN users u ON u.id = e.organizer_id
-         WHERE e.public_slug = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1
+         WHERE e.public_slug = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1 AND COALESCE(e.show_on_events_page, 1) = 1
          LIMIT 1`,
         [slug]
       );
@@ -327,7 +402,7 @@ async function findPublicEventById(id) {
      LEFT JOIN cities c ON c.id = e.city_id
      LEFT JOIN categories cat ON cat.id = e.category_id
      LEFT JOIN users u ON u.id = e.organizer_id
-     WHERE e.id = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1
+     WHERE e.id = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1 AND COALESCE(e.show_on_events_page, 1) = 1
      LIMIT 1`,
     [id]
   );
@@ -387,6 +462,18 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "event_highlights",
     "is_yay_deal_event",
     "deal_event_discount_code",
+    "service_fee_enabled",
+    "service_fee_type",
+    "service_fee_value",
+    "platform_fee_enabled",
+    "platform_fee_type",
+    "platform_fee_value",
+    "vendor_code_enabled",
+    "vendor_code",
+    "vendor_discount_type",
+    "vendor_discount_value",
+    "coupon_codes_enabled",
+    "show_on_events_page",
     "ticket_levels",
     "ticket_levels_json",
     "seating_mode"
@@ -441,8 +528,51 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
       if (key === "seating_mode") {
         return [key, normalizeSeatingMode(value)];
       }
+      if (
+        key === "service_fee_enabled" ||
+        key === "platform_fee_enabled" ||
+        key === "vendor_code_enabled" ||
+        key === "coupon_codes_enabled" ||
+        key === "show_on_events_page"
+      ) {
+        const defaultOn = key === "coupon_codes_enabled" || key === "show_on_events_page";
+        return [key, toBoolFlag(value, defaultOn) ? 1 : 0];
+      }
+      if (key === "service_fee_type" || key === "platform_fee_type") {
+        return [key, normalizeFeeType(value)];
+      }
+      if (key === "service_fee_value" || key === "platform_fee_value") {
+        return [key, Math.max(0, Number(value) || 0)];
+      }
+      if (key === "vendor_code") {
+        if (value == null || value === "") {
+          return [key, null];
+        }
+        return [key, String(value).trim().slice(0, 40)];
+      }
+      if (key === "vendor_discount_type") {
+        return [
+          key,
+          String(value || "percent").toLowerCase() === "fixed_amount" ? "fixed_amount" : "percent"
+        ];
+      }
+      if (key === "vendor_discount_value") {
+        return [key, Math.max(0, Number(value) || 0)];
+      }
       return [key, value];
     });
+
+  // Clear vendor code when disabled in the same update.
+  if (
+    Object.prototype.hasOwnProperty.call(updates, "vendor_code_enabled") &&
+    !toBoolFlag(updates.vendor_code_enabled, false) &&
+    !Object.prototype.hasOwnProperty.call(updates, "vendor_code")
+  ) {
+    entries.push(["vendor_code", null]);
+    if (!Object.prototype.hasOwnProperty.call(updates, "vendor_discount_value")) {
+      entries.push(["vendor_discount_value", 0]);
+    }
+  }
 
   if (!entries.length) {
     return false;
@@ -507,6 +637,7 @@ async function listEvents({ filters, pagination }) {
   }
   if (filters.publicListedOnly) {
     conditions.push("COALESCE(e.is_listed, 1) = 1");
+    conditions.push("COALESCE(e.show_on_events_page, 1) = 1");
   }
   if (filters.cityId) {
     conditions.push("e.city_id = ?");
@@ -651,6 +782,7 @@ async function listFeaturedEvents({ cityId, limit = 6 }) {
      LEFT JOIN categories cat ON cat.id = e.category_id
      WHERE e.status = 'approved'
        AND COALESCE(e.is_listed, 1) = 1
+       AND COALESCE(e.show_on_events_page, 1) = 1
        AND e.event_date >= CURDATE()
        ${cityClause}
      ORDER BY e.event_date ASC, e.id ASC

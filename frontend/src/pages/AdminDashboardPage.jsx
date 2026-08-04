@@ -67,8 +67,11 @@ import useAuth from "../hooks/useAuth";
 import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
 import { formatEventDuration } from "../utils/format";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
+import RichTextEditor from "../components/RichTextEditor";
+import RichTextContent from "../components/RichTextContent";
 import { parseGalleryImageUrls } from "../utils/eventGallery";
 import { parsePromoVideoUrlsForForm } from "../utils/youtubeVideo";
+import { plainTextFromHtml } from "../utils/richText";
 
 const eventHighlightOptions = [
   "Free Parking",
@@ -723,7 +726,7 @@ function AdminDashboardPage() {
     };
 
     pushText("Title", reviewForm.title);
-    pushText("Description", reviewForm.description);
+    pushText("Description", plainTextFromHtml(reviewForm.description));
     pushText("Schedule Type", getScheduleTypeLabel(reviewForm.schedule_type));
     pushText("Time", reviewForm.event_time);
 
@@ -3022,6 +3025,18 @@ function AdminDashboardPage() {
                     />
                   </FormField>
                 </>
+              ) : listingType === "events" ? (
+                <FormField
+                  label="Description"
+                  hint="Event description supports rich text (bold, lists, links)."
+                  className="sm:col-span-2"
+                >
+                  <RichTextEditor
+                    value={editForm.description || ""}
+                    onChange={(next) => setEditForm((prev) => ({ ...prev, description: next }))}
+                    disabled={editSaving}
+                  />
+                </FormField>
               ) : (
                 <FormField
                   label={listingType === "influencers" ? "Bio" : "Description"}
@@ -3792,12 +3807,10 @@ function AdminDashboardPage() {
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                   />
                 </FormField>
-                <FormField label="Description" hint="Summarize event details and attendee expectations." className="sm:col-span-2">
-                  <textarea
-                    rows={3}
+                <FormField label="Description" hint="Summarize event details and attendee expectations. Supports rich text." className="sm:col-span-2">
+                  <RichTextEditor
                     value={reviewForm.description || ""}
-                    onChange={(e) => setReviewForm((prev) => ({ ...prev, description: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    onChange={(next) => setReviewForm((prev) => ({ ...prev, description: next }))}
                   />
                 </FormField>
                 <FormField label="Schedule Type" hint="Choose single date, multiple dates, or a date range." className="sm:col-span-2">
@@ -4362,7 +4375,13 @@ function AdminDashboardPage() {
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:col-span-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Description</p>
-                    <p className="mt-1 text-sm text-slate-700">{viewListing.description || "-"}</p>
+                    <div className="mt-1 text-sm text-slate-700">
+                      <RichTextContent
+                        html={viewListing.description || ""}
+                        className="text-sm font-medium leading-relaxed text-slate-700"
+                        emptyLabel="-"
+                      />
+                    </div>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Date</p>

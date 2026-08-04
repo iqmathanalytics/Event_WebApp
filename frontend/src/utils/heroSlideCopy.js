@@ -1,3 +1,5 @@
+import { plainTextFromHtml } from "./richText";
+
 /** Copy blocks for the hero text column, synced to the active slideshow slide */
 
 export const DEFAULT_HERO_NARRATIVE = {
@@ -9,7 +11,7 @@ export const DEFAULT_HERO_NARRATIVE = {
 };
 
 function normalizeDescription(raw) {
-  return String(raw || "").replace(/\s+/g, " ").trim();
+  return plainTextFromHtml(raw);
 }
 
 /**

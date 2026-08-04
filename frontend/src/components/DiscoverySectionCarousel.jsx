@@ -68,7 +68,7 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
         ref={isStaticGrid ? null : sliderRef}
         className={
           isStaticGrid
-            ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+            ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3"
             : isLandingGrid
               ? "flex items-stretch snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               : "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

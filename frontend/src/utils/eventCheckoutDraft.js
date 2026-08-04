@@ -131,6 +131,7 @@ export function normalizeCouponHoldPayload(data) {
     holdMinutes: data.holdMinutes ?? data.hold_minutes,
     couponCode: data.couponCode || data.coupon_code,
     couponId: data.couponId ?? data.coupon_id,
+    holdKind: data.holdKind || data.hold_kind || (data.couponId || data.coupon_id ? "coupon" : "vendor"),
     subtotal: data.subtotal,
     discount: data.discount,
     total: data.total,

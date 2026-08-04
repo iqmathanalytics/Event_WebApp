@@ -18,6 +18,8 @@ import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import EventDetailBanner from "../components/EventDetailBanner";
 import GuestPromoVideoCard from "../components/GuestPromoVideoCard";
 import EventAirbnbBookingShell from "../components/EventAirbnbBookingShell";
+import RichTextContent from "../components/RichTextContent";
+import { truncateDescriptionPlain } from "../utils/richText";
 
 const EventTicketCheckoutPanel = lazy(() => import("../components/EventTicketCheckoutPanel"));
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
@@ -155,14 +157,14 @@ function EventDetailsPage() {
     String(event.is_yay_deal_event || "") === "1";
   const yayDealGuestLocked = isYayDealEvent && isGuest;
   const ticketSalesMode = normalizeEventTicketSalesMode(event.ticket_sales_mode);
-  const fullDescription = event.description || "No event description provided yet.";
-  const partialDescription =
-    fullDescription.length > 240 ? `${fullDescription.slice(0, 240).trim()}...` : fullDescription;
+  const fullDescription = event.description || "";
+  const partialDescription = truncateDescriptionPlain(fullDescription, 240) || "No event description provided yet.";
   const aboutText = yayDealGuestLocked
     ? `Login to unlock full ${EXCLUSIVE_DEAL_EVENT_LABEL.toLowerCase()} details, highlights, location, and your exclusive discount code.`
     : isGuest
       ? partialDescription
-      : fullDescription;
+      : fullDescription || "No event description provided yet.";
+  const aboutIsLockedOrTruncated = yayDealGuestLocked || isGuest;
 
   const metaCard =
     "rounded-xl border border-slate-100 bg-gradient-to-b from-slate-50/95 to-white p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none";
@@ -256,7 +258,15 @@ function EventDetailsPage() {
             <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 lg:text-base lg:font-semibold lg:normal-case lg:tracking-normal lg:text-slate-900">
               About this event
             </h2>
-            <p className="mt-2 text-[15px] font-medium leading-relaxed text-slate-800 lg:text-sm lg:leading-6">{aboutText}</p>
+            {aboutIsLockedOrTruncated ? (
+              <p className="mt-2 text-[15px] font-medium leading-relaxed text-slate-800 lg:text-sm lg:leading-6">
+                {aboutText}
+              </p>
+            ) : (
+              <div className="mt-2">
+                <RichTextContent html={aboutText} />
+              </div>
+            )}
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-2.5 rounded-2xl border border-slate-200/90 bg-slate-50 p-3 sm:grid-cols-2 sm:p-4 lg:gap-3 lg:p-4">

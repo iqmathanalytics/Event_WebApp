@@ -1,6 +1,6 @@
 import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
 import { FiCalendar, FiInfo, FiMapPin } from "react-icons/fi";
@@ -19,7 +19,9 @@ import useCityFilter from "../hooks/useCityFilter";
 import useAuth from "../hooks/useAuth";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
+import RichTextEditor from "../components/RichTextEditor";
 import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
+import { isRichTextEmpty } from "../utils/richText";
 import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
 import BookingPaymentSummary from "../components/BookingPaymentSummary";
 import {
@@ -29,9 +31,12 @@ import {
 } from "../components/BookingPaymentTableCells";
 import ScrollableTableFrame from "../components/ScrollableTableFrame";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
+import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
+import SharedAnalyticsList from "../components/SharedAnalyticsList";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
 import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
 import { SEATING_MODES, normalizeSeatingMode } from "../utils/seatingMode";
+import { acceptAnalyticsInvite } from "../services/organizerAnalyticsService";
 const OrganizerInsightsPanel = lazy(() => import("../components/OrganizerInsightsPanel"));
 import EventTicketLevelsEditor from "../components/EventTicketLevelsEditor";
 import {
@@ -71,6 +76,18 @@ const initialForm = {
   event_highlights: [],
   is_yay_deal_event: false,
   deal_event_discount_code: "",
+  show_on_events_page: true,
+  service_fee_enabled: false,
+  service_fee_type: "percent",
+  service_fee_value: "",
+  platform_fee_enabled: false,
+  platform_fee_type: "percent",
+  platform_fee_value: "",
+  coupon_codes_enabled: true,
+  vendor_code_enabled: false,
+  vendor_code: "",
+  vendor_discount_type: "percent",
+  vendor_discount_value: "",
   ticket_levels: [],
   seating_mode: SEATING_MODES.GENERAL
 };
@@ -234,7 +251,14 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   };
   const { cities } = useCityFilter();
   const myEventsOnly = embedded && embeddedSectionMode === "my-events-only";
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState(myEventsOnly ? "my-events" : "overview");
+  const [sharedEventId, setSharedEventId] = useState("");
+  const [sharedOwnerLabel, setSharedOwnerLabel] = useState("");
+  const [inviteNotice, setInviteNotice] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  const [sharedListKey, setSharedListKey] = useState(0);
+  const inviteHandledRef = useRef("");
   const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -243,6 +267,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [shareTarget, setShareTarget] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
   const editingPlatformEvent =
     Boolean(editingEvent) && resolveEventTicketSalesMode(editingEvent) === "platform";
@@ -341,6 +366,47 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         event.is_yay_deal_event === true ||
         String(event.is_yay_deal_event || "") === "1",
       deal_event_discount_code: event.deal_event_discount_code || "",
+      show_on_events_page:
+        event.show_on_events_page === undefined || event.show_on_events_page === null
+          ? true
+          : event.show_on_events_page === 1 ||
+            event.show_on_events_page === true ||
+            String(event.show_on_events_page) === "1",
+      service_fee_enabled:
+        event.service_fee_enabled === 1 ||
+        event.service_fee_enabled === true ||
+        String(event.service_fee_enabled || "") === "1",
+      service_fee_type: event.service_fee_type === "fixed" ? "fixed" : "percent",
+      service_fee_value:
+        event.service_fee_value != null && event.service_fee_value !== ""
+          ? String(event.service_fee_value)
+          : "",
+      platform_fee_enabled:
+        event.platform_fee_enabled === 1 ||
+        event.platform_fee_enabled === true ||
+        String(event.platform_fee_enabled || "") === "1",
+      platform_fee_type: event.platform_fee_type === "fixed" ? "fixed" : "percent",
+      platform_fee_value:
+        event.platform_fee_value != null && event.platform_fee_value !== ""
+          ? String(event.platform_fee_value)
+          : "",
+      coupon_codes_enabled:
+        event.coupon_codes_enabled === undefined || event.coupon_codes_enabled === null
+          ? true
+          : event.coupon_codes_enabled === 1 ||
+            event.coupon_codes_enabled === true ||
+            String(event.coupon_codes_enabled) === "1",
+      vendor_code_enabled:
+        event.vendor_code_enabled === 1 ||
+        event.vendor_code_enabled === true ||
+        String(event.vendor_code_enabled || "") === "1",
+      vendor_code: event.vendor_code || "",
+      vendor_discount_type:
+        event.vendor_discount_type === "fixed_amount" ? "fixed_amount" : "percent",
+      vendor_discount_value:
+        event.vendor_discount_value != null && event.vendor_discount_value !== ""
+          ? String(event.vendor_discount_value)
+          : "",
       ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event)),
       seating_mode: normalizeSeatingMode(event.seating_mode)
     });
@@ -358,6 +424,102 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       setActiveSection("my-events");
     }
   }, [myEventsOnly, activeSection]);
+
+  useEffect(() => {
+    if (myEventsOnly) {
+      return;
+    }
+    const section = String(searchParams.get("section") || "").toLowerCase();
+    const eventId = String(searchParams.get("eventId") || "").trim();
+    if (section === "shared" || searchParams.get("invite")) {
+      setActiveSection("shared");
+      if (eventId) {
+        setSharedEventId(eventId);
+      }
+    }
+  }, [myEventsOnly, searchParams]);
+
+  useEffect(() => {
+    if (myEventsOnly) {
+      return;
+    }
+    const token = String(searchParams.get("invite") || "").trim();
+    if (!token || inviteHandledRef.current === token) {
+      return;
+    }
+    inviteHandledRef.current = token;
+    let cancelled = false;
+    (async () => {
+      setInviteError("");
+      setInviteNotice("Accepting invitation…");
+      setActiveSection("shared");
+      try {
+        const res = await acceptAnalyticsInvite(token);
+        if (cancelled) {
+          return;
+        }
+        const eventId = String(res?.data?.event_id || "").trim();
+        setInviteNotice(res?.message || "Invitation accepted.");
+        setSharedOwnerLabel(res?.data?.owner?.name || res?.data?.owner?.email || "");
+        if (eventId) {
+          setSharedEventId(eventId);
+        }
+        setSharedListKey((k) => k + 1);
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("section", "shared");
+            next.delete("invite");
+            if (eventId) {
+              next.set("eventId", eventId);
+            }
+            return next;
+          },
+          { replace: true }
+        );
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        setInviteNotice("");
+        setInviteError(err?.response?.data?.message || "Could not accept this invitation.");
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("section", "shared");
+            next.delete("invite");
+            return next;
+          },
+          { replace: true }
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [myEventsOnly, searchParams, setSearchParams]);
+
+  const openSharedEvent = useCallback(
+    (row) => {
+      const id = String(row?.event_id || "");
+      if (!id) {
+        return;
+      }
+      setSharedEventId(id);
+      setSharedOwnerLabel(row?.owner?.name || row?.owner?.email || "");
+      setActiveSection("shared");
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("section", "shared");
+          next.set("eventId", id);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const loadEvents = async () => {
     try {
@@ -475,6 +637,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       }
       if (!form.venue_name.trim()) {
         throw new Error("Venue name is required.");
+      }
+      if (isRichTextEmpty(form.description)) {
+        throw new Error("Please enter an event description.");
       }
       if (!form.city_id) {
         throw new Error("Please select a city.");
@@ -597,8 +762,41 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         is_yay_deal_event: Boolean(form.is_yay_deal_event),
         deal_event_discount_code: form.is_yay_deal_event
           ? String(form.deal_event_discount_code || "").trim()
-          : undefined
+          : undefined,
+        show_on_events_page: Boolean(form.show_on_events_page),
+        service_fee_enabled: Boolean(form.service_fee_enabled),
+        service_fee_type: form.service_fee_type === "fixed" ? "fixed" : "percent",
+        service_fee_value: form.service_fee_enabled
+          ? Number(form.service_fee_value === "" ? 0 : form.service_fee_value)
+          : 0,
+        platform_fee_enabled: Boolean(form.platform_fee_enabled),
+        platform_fee_type: form.platform_fee_type === "fixed" ? "fixed" : "percent",
+        platform_fee_value: form.platform_fee_enabled
+          ? Number(form.platform_fee_value === "" ? 0 : form.platform_fee_value)
+          : 0,
+        coupon_codes_enabled: Boolean(form.coupon_codes_enabled),
+        vendor_code_enabled: Boolean(form.vendor_code_enabled),
+        vendor_code: form.vendor_code_enabled
+          ? String(form.vendor_code || "").trim()
+          : undefined,
+        vendor_discount_type:
+          form.vendor_discount_type === "fixed_amount" ? "fixed_amount" : "percent",
+        vendor_discount_value: form.vendor_code_enabled
+          ? Number(form.vendor_discount_value === "" ? 0 : form.vendor_discount_value)
+          : 0
       };
+
+      if (form.vendor_code_enabled && !String(form.vendor_code || "").trim()) {
+        setError("Enter a vendor code, or turn vendor code off.");
+        return;
+      }
+      if (
+        form.vendor_code_enabled &&
+        !(Number(form.vendor_discount_value === "" ? 0 : form.vendor_discount_value) > 0)
+      ) {
+        setError("Enter a vendor discount value, or turn vendor code off.");
+        return;
+      }
 
       if (resolvedTicketMode === "external") {
         payload.ticket_link = ticketUrl;
@@ -647,6 +845,14 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const openDelete = (event) => {
     setDeleteTarget(event);
     setIsDeleteOpen(true);
+  };
+
+  const openShareAnalytics = (event) => {
+    setShareTarget(event);
+  };
+
+  const closeShareAnalytics = () => {
+    setShareTarget(null);
   };
 
   const confirmDelete = async () => {
@@ -778,6 +984,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </button>
             <button
               type="button"
+              onClick={() => setActiveSection("shared")}
+              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
+                activeSection === "shared"
+                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
+                  : "bg-white/10 hover:bg-white/15"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Shared</p>
+              <p className="mt-1 text-sm font-semibold">With me</p>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveSection("coupons")}
               className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
                 activeSection === "coupons"
@@ -845,6 +1063,51 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
+          {!myEventsOnly && activeSection === "shared" ? (
+            <motion.section
+              key="m-shared"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="space-y-4"
+            >
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+                <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Events you accepted an analytics invitation for. Pending invites appear only after you accept
+                  the email link.
+                </p>
+                {inviteNotice ? (
+                  <p className="mt-3 text-sm font-medium text-emerald-700">{inviteNotice}</p>
+                ) : null}
+                {inviteError ? (
+                  <p className="mt-3 text-sm font-medium text-rose-700">{inviteError}</p>
+                ) : null}
+                <div className="mt-4">
+                  <SharedAnalyticsList
+                    selectedEventId={sharedEventId}
+                    onOpenEvent={openSharedEvent}
+                    reloadKey={sharedListKey}
+                  />
+                </div>
+              </div>
+              {sharedEventId ? (
+                <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                  <OrganizerInsightsPanel
+                    fixedEventId={sharedEventId}
+                    refreshKey={analyticsRefreshKey}
+                    sharedAccessBanner={
+                      sharedOwnerLabel
+                        ? `Shared by ${sharedOwnerLabel} · view only`
+                        : "Shared access · view only"
+                    }
+                  />
+                </Suspense>
+              ) : null}
+            </motion.section>
+          ) : null}
+
           {myEventsOnly || activeSection === "my-events" ? (
             <motion.section
               key="m-my-events"
@@ -894,13 +1157,20 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         <span className="font-semibold">City:</span> {item.city_name || "-"}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status, item.review_note)}</p>
-                      <div className="mt-3 flex items-center gap-2">
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => openEdit(item)}
                           className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
                         >
                           Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openShareAnalytics(item)}
+                          className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                        >
+                          Share
                         </button>
                         <button
                           type="button"
@@ -1171,6 +1441,51 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
+          {!myEventsOnly && activeSection === "shared" ? (
+            <motion.section
+              key="shared"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="space-y-4"
+            >
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+                <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Events you accepted an analytics invitation for. Pending invites appear only after you accept
+                  the email link.
+                </p>
+                {inviteNotice ? (
+                  <p className="mt-3 text-sm font-medium text-emerald-700">{inviteNotice}</p>
+                ) : null}
+                {inviteError ? (
+                  <p className="mt-3 text-sm font-medium text-rose-700">{inviteError}</p>
+                ) : null}
+                <div className="mt-4">
+                  <SharedAnalyticsList
+                    selectedEventId={sharedEventId}
+                    onOpenEvent={openSharedEvent}
+                    reloadKey={sharedListKey}
+                  />
+                </div>
+              </div>
+              {sharedEventId ? (
+                <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                  <OrganizerInsightsPanel
+                    fixedEventId={sharedEventId}
+                    refreshKey={analyticsRefreshKey}
+                    sharedAccessBanner={
+                      sharedOwnerLabel
+                        ? `Shared by ${sharedOwnerLabel} · view only`
+                        : "Shared access · view only"
+                    }
+                  />
+                </Suspense>
+              ) : null}
+            </motion.section>
+          ) : null}
+
           {myEventsOnly || activeSection === "my-events" ? (
             <motion.section
               key="my-events"
@@ -1216,13 +1531,20 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           <p className="col-span-2"><span className="font-semibold">Price:</span> {formatCurrency(item.price || 0)}</p>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status, item.review_note)}</p>
-                        <div className="mt-2 flex items-center gap-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => openEdit(item)}
                             className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
                           >
                             Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openShareAnalytics(item)}
+                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                          >
+                            Share
                           </button>
                           <button
                             type="button"
@@ -1291,6 +1613,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                                 className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
                               >
                                 Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openShareAnalytics(item)}
+                                className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                              >
+                                Share
                               </button>
                               <button
                                 type="button"
@@ -1619,13 +1948,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 />
               </FormField>
-              <FormField label="Description" hint="Describe the experience, audience, and key value." example="Founder networking with live panel and Q&A." className="sm:col-span-2">
-                <textarea
-                  required
-                  rows={4}
+              <FormField label="Description" hint="Describe the experience, audience, and key value. Use formatting for lists and emphasis." example="Founder networking with live panel and Q&A." className="sm:col-span-2">
+                <RichTextEditor
                   value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                  onChange={(next) => setForm((prev) => ({ ...prev, description: next }))}
+                  placeholder="Describe the experience, audience, and key value…"
                 />
               </FormField>
               <FormField label="Schedule Type" hint="Select how attendees can pick event dates." className="sm:col-span-2">
@@ -2036,6 +2363,211 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   </div>
                 ) : null}
               </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:col-span-2">
+                <p className="text-sm font-semibold text-slate-900">Listing &amp; checkout options</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Control whether this event appears on the events page and what buyers see at checkout.
+                </p>
+                <div className="mt-4 space-y-4">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.show_on_events_page)}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, show_on_events_page: e.target.checked }))
+                      }
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-slate-900">Show on events page</span>
+                      <span className="block text-xs text-slate-500">
+                        When off, this event is hidden from public listings and featured sections.
+                      </span>
+                    </span>
+                  </label>
+
+                  {(form.ticket_sales_mode || "external") === "platform" ? (
+                    <>
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.coupon_codes_enabled)}
+                          onChange={(e) =>
+                            setForm((prev) => ({ ...prev, coupon_codes_enabled: e.target.checked }))
+                          }
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">Coupon codes</span>
+                          <span className="block text-xs text-slate-500">
+                            When off, the coupon field is hidden on the booking cart.
+                          </span>
+                        </span>
+                      </label>
+
+                      <div>
+                        <label className="flex cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(form.service_fee_enabled)}
+                            onChange={(e) =>
+                              setForm((prev) => ({ ...prev, service_fee_enabled: e.target.checked }))
+                            }
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                          />
+                          <span>
+                            <span className="block text-sm font-medium text-slate-900">Service fee</span>
+                            <span className="block text-xs text-slate-500">
+                              Added to the buyer total after discounts when enabled.
+                            </span>
+                          </span>
+                        </label>
+                        {form.service_fee_enabled ? (
+                          <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-2">
+                            <select
+                              value={form.service_fee_type === "fixed" ? "fixed" : "percent"}
+                              onChange={(e) =>
+                                setForm((prev) => ({ ...prev, service_fee_type: e.target.value }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            >
+                              <option value="percent">Percent</option>
+                              <option value="fixed">Fixed (USD)</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={form.service_fee_value}
+                              onChange={(e) =>
+                                setForm((prev) => ({ ...prev, service_fee_value: e.target.value }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                              placeholder={form.service_fee_type === "fixed" ? "e.g. 2.50" : "e.g. 5"}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        <label className="flex cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(form.platform_fee_enabled)}
+                            onChange={(e) =>
+                              setForm((prev) => ({ ...prev, platform_fee_enabled: e.target.checked }))
+                            }
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                          />
+                          <span>
+                            <span className="block text-sm font-medium text-slate-900">Platform fee</span>
+                            <span className="block text-xs text-slate-500">
+                              Added to the buyer total after discounts when enabled. Separate from the transaction fee.
+                            </span>
+                          </span>
+                        </label>
+                        {form.platform_fee_enabled ? (
+                          <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-2">
+                            <select
+                              value={form.platform_fee_type === "fixed" ? "fixed" : "percent"}
+                              onChange={(e) =>
+                                setForm((prev) => ({ ...prev, platform_fee_type: e.target.value }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            >
+                              <option value="percent">Percent</option>
+                              <option value="fixed">Fixed (USD)</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={form.platform_fee_value}
+                              onChange={(e) =>
+                                setForm((prev) => ({ ...prev, platform_fee_value: e.target.value }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                              placeholder={form.platform_fee_type === "fixed" ? "e.g. 1.00" : "e.g. 3"}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        <label className="flex cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(form.vendor_code_enabled)}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                vendor_code_enabled: e.target.checked,
+                                vendor_code: e.target.checked ? prev.vendor_code : ""
+                              }))
+                            }
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                          />
+                          <span>
+                            <span className="block text-sm font-medium text-slate-900">Vendor code</span>
+                            <span className="block text-xs text-slate-500">
+                              When on, buyers can enter this code at checkout to get a discount (same as coupons).
+                            </span>
+                          </span>
+                        </label>
+                        {form.vendor_code_enabled ? (
+                          <div className="mt-3 ml-7 space-y-3">
+                            <input
+                              value={form.vendor_code}
+                              onChange={(e) =>
+                                setForm((prev) => ({ ...prev, vendor_code: e.target.value }))
+                              }
+                              maxLength={40}
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm uppercase"
+                              placeholder="VENDOR123"
+                              autoComplete="off"
+                            />
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <select
+                                value={
+                                  form.vendor_discount_type === "fixed_amount"
+                                    ? "fixed_amount"
+                                    : "percent"
+                                }
+                                onChange={(e) =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    vendor_discount_type: e.target.value
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                              >
+                                <option value="percent">Percent off</option>
+                                <option value="fixed_amount">Fixed amount (USD)</option>
+                              </select>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={form.vendor_discount_value}
+                                onChange={(e) =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    vendor_discount_value: e.target.value
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                                placeholder={
+                                  form.vendor_discount_type === "fixed_amount" ? "e.g. 10" : "e.g. 15"
+                                }
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </div>
               {(form.ticket_sales_mode || "external") === "platform" ? (
                 <EventTicketLevelsEditor
                   levels={form.ticket_levels}
@@ -2430,6 +2962,36 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     {saving ? "Deleting..." : "Delete"}
                   </button>
                 </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {shareTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/45 p-4">
+              <div className="max-h-[min(90vh,40rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold text-slate-900">Share analytics</h3>
+                    <p className="mt-1 truncate text-sm text-slate-600" title={shareTarget.title || ""}>
+                      {shareTarget.title || `Event #${shareTarget.id}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeShareAnalytics}
+                    className="shrink-0 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Close
+                  </button>
+                </div>
+                <EventAnalyticsSharePanel
+                  eventId={shareTarget.id}
+                  eventTitle={shareTarget.title}
+                  embedded
+                />
               </div>
             </div>,
             document.body

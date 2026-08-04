@@ -30,9 +30,10 @@ const UserSubmissionsPage = lazy(() => import("./pages/UserSubmissionsPage"));
 const OrganizerDashboardPage = lazy(() => import("./pages/OrganizerDashboardPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminVerifyTicketPage = lazy(() => import("./pages/AdminVerifyTicketPage"));
+const BookingConfirmedPage = lazy(() => import("./pages/BookingConfirmedPage"));
 const EventLandingPage = lazy(() => import("./eventLandings/EventLandingPage"));
 
-function RouteFallback({ label = "Loading…" }) {
+function RouteFallback({ label = "Loading..." }) {
   return <p className="py-10 text-center text-sm text-slate-500">{label}</p>;
 }
 
@@ -55,7 +56,7 @@ function App() {
             <Route
               path="/events/:slug"
               element={
-                <Suspense fallback={<RouteFallback label="Loading event…" />}>
+                <Suspense fallback={<RouteFallback label="Loading event..." />}>
                   <EventDetailsPage />
                 </Suspense>
               }
@@ -64,7 +65,7 @@ function App() {
             <Route
               path="/influencers/:slug"
               element={
-                <Suspense fallback={<RouteFallback label="Loading profile…" />}>
+                <Suspense fallback={<RouteFallback label="Loading profile..." />}>
                   <InfluencerDetailsPage />
                 </Suspense>
               }
@@ -73,7 +74,7 @@ function App() {
             <Route
               path="/deals/:slug"
               element={
-                <Suspense fallback={<RouteFallback label="Loading deal…" />}>
+                <Suspense fallback={<RouteFallback label="Loading deal..." />}>
                   <DealDetailsPage />
                 </Suspense>
               }
@@ -84,6 +85,14 @@ function App() {
             <Route path="/admin" element={<StaffLoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/set-password" element={<SetPasswordPage />} />
+            <Route
+              path="/booking/confirmed"
+              element={
+                <Suspense fallback={<RouteFallback label="Loading confirmation..." />}>
+                  <BookingConfirmedPage />
+                </Suspense>
+              }
+            />
             <Route
               path="/complete-signup"
               element={
@@ -104,7 +113,7 @@ function App() {
             <Route
               path="/dashboard/user"
               element={
-                <Suspense fallback={<RouteFallback label="Loading dashboard…" />}>
+                <Suspense fallback={<RouteFallback label="Loading dashboard..." />}>
                   <UserDashboardPage />
                 </Suspense>
               }
@@ -112,7 +121,7 @@ function App() {
             <Route
               path="/dashboard/user/submissions"
               element={
-                <Suspense fallback={<RouteFallback label="Loading submissions…" />}>
+                <Suspense fallback={<RouteFallback label="Loading submissions..." />}>
                   <UserSubmissionsPage />
                 </Suspense>
               }
@@ -130,7 +139,7 @@ function App() {
             <Route
               index
               element={
-                <Suspense fallback={<RouteFallback label="Loading organizer dashboard…" />}>
+                <Suspense fallback={<RouteFallback label="Loading organizer dashboard..." />}>
                   <OrganizerDashboardPage />
                 </Suspense>
               }
@@ -147,7 +156,7 @@ function App() {
             <Route
               path="/dashboard/admin"
               element={
-                <Suspense fallback={<RouteFallback label="Loading admin dashboard…" />}>
+                <Suspense fallback={<RouteFallback label="Loading admin dashboard..." />}>
                   <AdminDashboardPage />
                 </Suspense>
               }
@@ -155,7 +164,7 @@ function App() {
             <Route
               path="/dashboard/admin/verify-ticket"
               element={
-                <Suspense fallback={<RouteFallback label="Loading ticket scanner…" />}>
+                <Suspense fallback={<RouteFallback label="Loading ticket scanner..." />}>
                   <AdminVerifyTicketPage />
                 </Suspense>
               }
@@ -165,7 +174,7 @@ function App() {
           <Route
             path="/:eventSlug"
             element={
-              <Suspense fallback={<RouteFallback label="Loading event…" />}>
+              <Suspense fallback={<RouteFallback label="Loading event..." />}>
                 <EventLandingPage />
               </Suspense>
             }

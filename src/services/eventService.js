@@ -32,6 +32,7 @@ const {
   assertValidTicketLevelsForPlatform
 } = require("../utils/eventTicketLevels");
 const { findUserById } = require("../models/userModel");
+const { sanitizeEventDescription } = require("../utils/sanitizeRichText");
 
 async function userCanSellPlatformTickets(userId, { role } = {}) {
   if (role === "admin") {
@@ -302,6 +303,10 @@ async function submitEvent(payload, organizerId, { role } = {}) {
   const autoApproved = approvedCount > 0;
   const { status: _clientStatus, ...createPayload } = forCreate;
 
+  if (Object.prototype.hasOwnProperty.call(createPayload, "description")) {
+    createPayload.description = sanitizeEventDescription(createPayload.description);
+  }
+
   let eventId;
   try {
     eventId = await createEvent({
@@ -530,6 +535,9 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
   }
 
   const updates = pickOrganizerUpdates(payload, normalizedPayload);
+  if (Object.prototype.hasOwnProperty.call(updates, "description")) {
+    updates.description = sanitizeEventDescription(updates.description);
+  }
   if (Object.keys(updates).length) {
     const updated = await updateEventByOrganizer({
       eventId,

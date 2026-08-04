@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+﻿import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Ticket } from "lucide-react";
 import {
   confirmBookingPayment,
@@ -12,7 +12,6 @@ import {
 import { confirmBookingPaymentWithRetry } from "../utils/confirmBookingPaymentWithRetry";
 const StripePaymentModal = lazy(() => import("./StripePaymentModal"));
 import StripePaymentReturnRelay from "./StripePaymentReturnRelay";
-import BookingSuccessAnimation from "./BookingSuccessAnimation";
 import {
   buildStripeReturnUrl,
   clearPendingStripePayment,
@@ -35,6 +34,7 @@ import {
 } from "../utils/bookingContact";
 import { getEventAvailableDates, normalizeDateList } from "../utils/eventSchedule";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "../constants/brand";
+import { BOOKING_CONFIRMED_STORAGE_KEY } from "../pages/BookingConfirmedPage";
 import EventTicketCart from "./EventTicketCart";
 import { trackBookingCompleteTiers } from "../utils/googleAnalytics";
 import { maxTicketsForBooking } from "../utils/eventSeats";
@@ -58,7 +58,7 @@ import {
   parseExpiresMs,
   saveEventCheckoutDraft
 } from "../utils/eventCheckoutDraft";
-import { applyTransactionFee } from "../utils/transactionFee";
+import { applyCheckoutFees, toBoolFlag } from "../utils/transactionFee";
 import GuestSeatSelectionModal from "./seating/GuestSeatSelectionModal";
 import { releaseSeatsioHold } from "../services/seatingService";
 import { isReservedSeating } from "../utils/seatingMode";
@@ -88,6 +88,41 @@ function requiresCardPayment(totalAmount) {
 
 function formatCheckoutCurrency(value) {
   return formatCurrency(value, { decimals: 2 });
+}
+
+function buildBookingConfirmationPayload({
+  data,
+  event,
+  email,
+  totalAmount,
+  subtotalAmount,
+  discountAmount,
+  couponCode,
+  totalDays,
+  selectedDates,
+  paidWithCard,
+  attendeeCount
+}) {
+  return {
+    bookingId: data?.bookingId,
+    checkInCode: data?.checkInCode || "",
+    email: String(email || data?.email || "").trim(),
+    totalAmount: data?.totalAmount ?? totalAmount,
+    subtotalAmount: data?.subtotalAmount ?? subtotalAmount,
+    discountAmount: data?.discountAmount ?? discountAmount,
+    couponCode: data?.couponCode || couponCode,
+    totalDays: data?.totalDays ?? totalDays,
+    selectedDates: data?.selectedDates || selectedDates,
+    paidWithCard,
+    attendeeCount,
+    event: {
+      id: event?.id ?? null,
+      title: event?.title || "",
+      image_url: event?.image_url || "",
+      venue: event?.venue || "",
+      public_slug: event?.public_slug || ""
+    }
+  };
 }
 
 function buildBookingPayload({
@@ -154,7 +189,16 @@ function buildBookingPayload({
 const COUPON_HOLD_MINUTES = 5;
 const COUPON_HOLD_MESSAGE = `Coupon applied. Complete your booking within ${COUPON_HOLD_MINUTES} minutes to keep this rate.`;
 
-function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "", pendingSelection = false }) {
+function PriceTotals({
+  subtotal,
+  discount,
+  serviceFee = 0,
+  platformFee = 0,
+  transactionFee,
+  total,
+  suffix = "",
+  pendingSelection = false
+}) {
   if (pendingSelection) {
     return (
       <div>
@@ -167,8 +211,11 @@ function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "", p
       </div>
     );
   }
-  const showFee = Number(transactionFee) > 0;
-  if (discount > 0 || showFee) {
+  const showServiceFee = Number(serviceFee) > 0;
+  const showPlatformFee = Number(platformFee) > 0;
+  const showTxnFee = Number(transactionFee) > 0;
+  const showAnyFee = showServiceFee || showPlatformFee || showTxnFee;
+  if (discount > 0 || showAnyFee) {
     return (
       <div>
         <p className="text-2xl font-semibold leading-tight tracking-tight text-slate-900">
@@ -184,7 +231,17 @@ function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "", p
           ) : (
             <span>{formatCheckoutCurrency(subtotal)} subtotal</span>
           )}
-          {showFee ? (
+          {showServiceFee ? (
+            <span className="ml-1.5 text-slate-600">
+              + {formatCheckoutCurrency(serviceFee)} service fee
+            </span>
+          ) : null}
+          {showPlatformFee ? (
+            <span className="ml-1.5 text-slate-600">
+              + {formatCheckoutCurrency(platformFee)} platform fee
+            </span>
+          ) : null}
+          {showTxnFee ? (
             <span className="ml-1.5 text-slate-600">
               + {formatCheckoutCurrency(transactionFee)} transaction fees
             </span>
@@ -201,7 +258,7 @@ function PriceTotals({ subtotal, discount, transactionFee, total, suffix = "", p
   );
 }
 
-function CheckoutCard({ children, pill = `${BRAND_NAME} · your city's event guide`, seatBar = null }) {
+function CheckoutCard({ children, pill = `${BRAND_NAME} Â· your city's event guide`, seatBar = null }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_6px_20px_rgba(0,0,0,0.08)] ring-1 ring-slate-900/[0.04]">
       {seatBar}
@@ -220,6 +277,7 @@ function CheckoutCard({ children, pill = `${BRAND_NAME} · your city's event gui
 
 export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const userId = user?.id ?? user?.userId;
   const checkoutUserId = guestMode ? "guest" : userId;
   const eventId = event?.id;
@@ -251,10 +309,11 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const [step, setStep] = useState("form");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [doneSummary, setDoneSummary] = useState(null);
   const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [vendorCodeInput, setVendorCodeInput] = useState("");
   const [couponHold, setCouponHold] = useState(null);
   const [couponApplying, setCouponApplying] = useState(false);
+  const [vendorApplying, setVendorApplying] = useState(false);
   const [couponMessage, setCouponMessage] = useState("");
   const [holdCountdown, setHoldCountdown] = useState("");
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -356,6 +415,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (draft.couponCodeInput) {
       setCouponCodeInput(String(draft.couponCodeInput));
     }
+    if (draft.vendorCodeInput) {
+      setVendorCodeInput(String(draft.vendorCodeInput));
+    }
     const returningFromStripe =
       stripeReturn.isPaymentReturn && stripeReturn.paymentIntentId && stripeReturn.redirectStatus;
     if (draft.step === "confirm" && !returningFromStripe) {
@@ -376,6 +438,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       };
       setCouponHold(hold);
       setCouponMessage(draft.couponMessage || hold.message || COUPON_HOLD_MESSAGE);
+      if (hold.holdKind === "vendor" && hold.couponCode && !draft.vendorCodeInput) {
+        setVendorCodeInput(String(hold.couponCode));
+      }
     }
 
     if (isReservedSeating(event) && draft.seatHold?.holdToken && draft.seatHold?.selectedSeats?.length) {
@@ -470,8 +535,15 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         }
         skipHoldClearRef.current = 2;
         setCouponHold(hold);
-        if (data.couponCode || data.coupon_code) {
-          setCouponCodeInput(String(data.couponCode || data.coupon_code));
+        const code = data.couponCode || data.coupon_code;
+        if (code) {
+          if (hold.holdKind === "vendor") {
+            setVendorCodeInput(String(code));
+            setCouponCodeInput("");
+          } else {
+            setCouponCodeInput(String(code));
+            setVendorCodeInput("");
+          }
         }
         setCouponMessage(hold.message || COUPON_HOLD_MESSAGE);
       } catch (err) {
@@ -560,10 +632,20 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     ? 0
     : computeCartSubtotal(ticketLevels, checkoutCart, totalDays);
   const discountAmount = couponHold ? Number(couponHold.discount || 0) : 0;
-  const { transactionFeeAmount, totalAmount } = applyTransactionFee({
+  const {
+    serviceFeeAmount,
+    platformFeeAmount,
+    transactionFeeAmount,
+    totalAmount
+  } = applyCheckoutFees({
     subtotalAmount,
-    discountAmount
+    discountAmount,
+    event
   });
+  const couponsEnabled = toBoolFlag(event?.coupon_codes_enabled, true);
+  const vendorCodeEnabled = toBoolFlag(event?.vendor_code_enabled, false);
+  const isVendorHoldApplied = couponHold?.holdKind === "vendor";
+  const isCouponHoldApplied = Boolean(couponHold?.holdToken) && !isVendorHoldApplied;
 
   const sortedSelected = useMemo(() => normalizeDateList(selectedDates), [selectedDates]);
   const reservedSeatGroups = useMemo(
@@ -578,7 +660,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       return formatDateUS(availableDates[0]);
     }
     if (!sortedSelected.length) {
-      return "—";
+      return "â€”";
     }
     return formatDateUS(sortedSelected[0]);
   }, [scheduleType, availableDates, sortedSelected]);
@@ -595,7 +677,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
   const priceBreakdownLine =
     !awaitingSeatSelection && totalDays > 0 && attendeeCount > 0
-      ? `${attendeeCount} ticket${attendeeCount === 1 ? "" : "s"} · ${totalDays} show day${totalDays === 1 ? "" : "s"}`
+      ? `${attendeeCount} ticket${attendeeCount === 1 ? "" : "s"} Â· ${totalDays} show day${totalDays === 1 ? "" : "s"}`
       : "";
 
   const needsCardPayment = useMemo(() => requiresCardPayment(totalAmount), [totalAmount]);
@@ -657,6 +739,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         phone: overrides.phone ?? phone,
         step: overrides.step ?? step,
         couponCodeInput: overrides.couponCodeInput ?? couponCodeInput,
+        vendorCodeInput: overrides.vendorCodeInput ?? vendorCodeInput,
         couponMessage: overrides.couponMessage ?? couponMessage,
         couponHold: holdForStorage,
         seatHold: overrides.seatHold !== undefined ? overrides.seatHold : seatHoldForStorage,
@@ -673,6 +756,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       ticketCart,
       ticketLevels,
       couponCodeInput,
+      vendorCodeInput,
       couponHold,
       couponMessage,
       email,
@@ -749,11 +833,20 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     return () => clearInterval(id);
   }, [couponHold?.expiresAt, couponHold?.holdToken, clearCouponHold]);
 
-  const applyCoupon = async () => {
+  const applyPromoCode = async (rawCode, { kind }) => {
+    const isVendor = kind === "vendor";
+    if (isVendor && !vendorCodeEnabled) {
+      setError("Vendor codes are not available for this event.");
+      return;
+    }
+    if (!isVendor && !couponsEnabled) {
+      setError("Coupon codes are not available for this event.");
+      return;
+    }
     setError("");
     setCouponMessage("");
     if (!userId) {
-      setError("Sign in to apply a coupon code.");
+      setError(isVendor ? "Sign in to apply a vendor code." : "Sign in to apply a coupon code.");
       return;
     }
     const msg = validateForm();
@@ -761,17 +854,21 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setError(msg);
       return;
     }
-    const code = couponCodeInput.trim();
+    const code = String(rawCode || "").trim();
     if (!code) {
-      setError("Enter a coupon code.");
+      setError(isVendor ? "Enter a vendor code." : "Enter a coupon code.");
       return;
     }
     if (subtotalAmount <= 0) {
-      setError("Coupons cannot be applied to free bookings.");
+      setError("Codes cannot be applied to free bookings.");
       return;
     }
     try {
-      setCouponApplying(true);
+      if (isVendor) {
+        setVendorApplying(true);
+      } else {
+        setCouponApplying(true);
+      }
       const res = await validateEventCoupon({
         event_id: Number(eventId),
         coupon_code: code,
@@ -788,12 +885,19 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       };
       const hold = buildHoldState(data, snapshot);
       if (!hold) {
-        setError("Could not apply this coupon.");
+        setError(isVendor ? "Could not apply this vendor code." : "Could not apply this coupon.");
         return;
       }
+      // If user applied from vendor field but got a coupon (or vice versa), still accept.
       skipHoldClearRef.current = 2;
       setCouponHold(hold);
-      setCouponCodeInput(hold.couponCode || code);
+      if (hold.holdKind === "vendor") {
+        setVendorCodeInput(hold.couponCode || code);
+        setCouponCodeInput("");
+      } else {
+        setCouponCodeInput(hold.couponCode || code);
+        setVendorCodeInput("");
+      }
       const message = hold.message || COUPON_HOLD_MESSAGE;
       setCouponMessage(message);
       saveEventCheckoutDraft({
@@ -809,18 +913,23 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         email,
         phone,
         step,
-        couponCodeInput: hold.couponCode || code,
+        couponCodeInput: hold.holdKind === "vendor" ? "" : hold.couponCode || code,
+        vendorCodeInput: hold.holdKind === "vendor" ? hold.couponCode || code : "",
         couponMessage: message,
         couponHold: (({ _draftSnapshot: _s, ...rest }) => rest)(hold),
         holdSnapshot: snapshot
       });
     } catch (err) {
       await clearCouponHold({ skipApi: true });
-      setError(err?.response?.data?.message || "Could not apply this coupon.");
+      setError(err?.response?.data?.message || (isVendor ? "Could not apply this vendor code." : "Could not apply this coupon."));
     } finally {
       setCouponApplying(false);
+      setVendorApplying(false);
     }
   };
+
+  const applyCoupon = async () => applyPromoCode(couponCodeInput, { kind: "coupon" });
+  const applyVendorCode = async () => applyPromoCode(vendorCodeInput, { kind: "vendor" });
 
   const validateForm = useCallback(() => {
     if (!availableDates.length) {
@@ -831,7 +940,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
     const invalid = selectedDates.find((d) => !availableDates.includes(d));
     if (invalid) {
-      return "One of the dates you picked isn’t offered for this event.";
+      return "One of the dates you picked isnâ€™t offered for this event.";
     }
     const ticketCap = maxTickets > 0 ? maxTickets : 50;
     if (!ticketLevels.length) {
@@ -912,6 +1021,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setError("Apply your coupon code before continuing, or remove it.");
       return;
     }
+    if (!guestMode && vendorCodeInput.trim() && !couponHold?.holdToken) {
+      setError("Apply your vendor code before continuing, or remove it.");
+      return;
+    }
     setStep("confirm");
   };
 
@@ -924,37 +1037,52 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       if (eventId && items.length) {
         trackBookingCompleteTiers({ eventId, items });
       }
-      setDoneSummary({
-        bookingId: data?.bookingId,
-        checkInCode: data?.checkInCode || "",
-        email: String(email || data?.email || "").trim(),
-        totalAmount: data?.totalAmount ?? totalAmount,
-        subtotalAmount: data?.subtotalAmount ?? subtotalAmount,
-        discountAmount: data?.discountAmount ?? discountAmount,
-        couponCode: data?.couponCode || couponHold?.couponCode,
-        totalDays: data?.totalDays ?? totalDays,
-        selectedDates: data?.selectedDates || sortedDates,
-        paidWithCard: needsCardPayment
+
+      const summary = buildBookingConfirmationPayload({
+        data,
+        event,
+        email,
+        totalAmount,
+        subtotalAmount,
+        discountAmount,
+        couponCode: couponHold?.couponCode,
+        totalDays,
+        selectedDates: sortedDates,
+        paidWithCard: needsCardPayment,
+        attendeeCount
       });
+
+      try {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(BOOKING_CONFIRMED_STORAGE_KEY, JSON.stringify(summary));
+        }
+      } catch {
+        // ignore session storage failures and continue navigation
+      }
+
       setCouponHold(null);
       setPaymentModalOpen(false);
       setPaymentClientSecret("");
       clearPendingStripePayment(eventId, checkoutUserId);
       clearStripeReturnParams();
       clearEventCheckoutDraft(eventId, checkoutUserId);
-      setStep("done");
+      navigate("/booking/confirmed", { replace: true, state: summary });
     },
     [
+      attendeeCount,
+      checkoutUserId,
       couponHold?.couponCode,
       discountAmount,
+      email,
+      event,
       eventId,
+      navigate,
       needsCardPayment,
       subtotalAmount,
       ticketCart,
       ticketLevels,
       totalAmount,
-      totalDays,
-      checkoutUserId
+      totalDays
     ]
   );
 
@@ -1022,7 +1150,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setPaymentModalOpen(true);
     } catch (err) {
       const apiMessage = err?.response?.data?.message;
-      setError(apiMessage || `We couldn’t start checkout on ${BRAND_NAME}. Please try again.`);
+      setError(apiMessage || `We couldnâ€™t start checkout on ${BRAND_NAME}. Please try again.`);
     } finally {
       setSubmitting(false);
     }
@@ -1123,7 +1251,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     setPaymentModalOpen(false);
     setPaymentClientSecret("");
     setError(
-      "Payment was not completed. Your tickets are not booked yet — try again when you are ready."
+      "Payment was not completed. Your tickets are not booked yet â€” try again when you are ready."
     );
   };
 
@@ -1141,7 +1269,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       <CheckoutCard pill="Confirming payment">
         <div className="py-10 text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-[#E31C5F]" />
-          <p className="mt-4 text-sm font-medium text-slate-800">Confirming your payment and booking…</p>
+          <p className="mt-4 text-sm font-medium text-slate-800">Confirming your payment and bookingâ€¦</p>
         </div>
       </CheckoutCard>
     );
@@ -1149,71 +1277,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
   if (!availableDates.length) {
     return (
-      <CheckoutCard pill={`${BRAND_NAME} · booking`}>
+      <CheckoutCard pill={`${BRAND_NAME} Â· booking`}>
         <p className="text-center text-sm text-slate-600">
-          This event doesn’t have any bookable show dates on {BRAND_NAME} yet. Check back later or contact the organizer.
+          This event doesnâ€™t have any bookable show dates on {BRAND_NAME} yet. Check back later or contact the organizer.
         </p>
-      </CheckoutCard>
-    );
-  }
-
-  if (step === "done" && doneSummary) {
-    const successSubtitle = doneSummary.paidWithCard ? (
-      <>
-        Payment received for{" "}
-        <span className="font-semibold text-slate-900">{formatCheckoutCurrency(doneSummary.totalAmount || 0)}</span> (
-        {doneSummary.totalDays} show day{doneSummary.totalDays === 1 ? "" : "s"}, {attendeeCount} ticket
-        {attendeeCount === 1 ? "" : "s"}). Your booking is confirmed.
-      </>
-    ) : (
-      <>
-        We saved your booking for{" "}
-        <span className="font-semibold text-slate-900">{formatCheckoutCurrency(doneSummary.totalAmount || 0)}</span> (
-        {doneSummary.totalDays} show day{doneSummary.totalDays === 1 ? "" : "s"}, {attendeeCount} ticket
-        {attendeeCount === 1 ? "" : "s"}). No card was required for this total.
-      </>
-    );
-
-    return (
-      <CheckoutCard pill="Booking confirmed">
-        <BookingSuccessAnimation title="You're on the list" subtitle={successSubtitle}>
-          {Array.isArray(doneSummary.selectedDates) && doneSummary.selectedDates.length ? (
-            <ul className="mx-auto max-w-xs space-y-1 text-left text-sm text-slate-600">
-              {doneSummary.selectedDates.map((d) => (
-                <li key={d} className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden />
-                  {formatDateUS(d)}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {guestMode ? (
-            <Link
-              to="/events"
-              className="inline-flex w-full items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-base font-semibold text-white transition hover:bg-[#D70466]"
-            >
-              Browse more events
-            </Link>
-          ) : (
-            <Link
-              to="/dashboard/user"
-              className="inline-flex w-full items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-base font-semibold text-white transition hover:bg-[#D70466]"
-            >
-              Open my dashboard
-            </Link>
-          )}
-          {doneSummary.checkInCode ? (
-            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              Your entry QR code was sent to <strong>{doneSummary.email || "your email"}</strong>. Show that QR at
-              the venue for check-in.
-            </p>
-          ) : null}
-          {doneSummary.paidWithCard ? (
-            <p className="text-xs text-slate-500">Paid securely with Stripe.</p>
-          ) : (
-            <p className="text-xs text-slate-500">No card payment was required for this booking.</p>
-          )}
-        </BookingSuccessAnimation>
       </CheckoutCard>
     );
   }
@@ -1241,13 +1308,17 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <PriceTotals
           subtotal={subtotalAmount}
           discount={discountAmount}
+          serviceFee={serviceFeeAmount}
+          platformFee={platformFeeAmount}
           transactionFee={transactionFeeAmount}
           total={totalAmount}
           suffix=" estimated total"
           pendingSelection={awaitingSeatSelection}
         />
           {couponHold?.couponCode ? (
-            <p className="mt-1 text-xs font-semibold text-emerald-700">Coupon {couponHold.couponCode}</p>
+            <p className="mt-1 text-xs font-semibold text-emerald-700">
+              {isVendorHoldApplied ? "Vendor code" : "Coupon"} {couponHold.couponCode}
+            </p>
           ) : null}
           <p className="mt-1.5 text-sm text-slate-600">
             {needsCardPayment
@@ -1271,7 +1342,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                   ? reservedSeatGroups.map((group) => (
                       <li key={group.levelId}>
                         <span className="font-medium text-slate-800">
-                          {group.levelName} × {group.seatLabels.length}
+                          {group.levelName} Ã— {group.seatLabels.length}
                         </span>
                         <span className="block text-xs text-slate-600">{group.seatLabels.join(", ")}</span>
                       </li>
@@ -1280,7 +1351,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                       const level = ticketLevels.find((l) => l.id === row.level_id);
                       return (
                         <li key={row.level_id}>
-                          {level?.name || "Ticket"} × {row.quantity}
+                          {level?.name || "Ticket"} Ã— {row.quantity}
                         </li>
                       );
                     })}
@@ -1291,7 +1362,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             ) : null}
             <p>
               <span className="text-slate-500">Contact: </span>
-              {contactName || "—"} · {email || "—"}
+              {contactName || "â€”"} Â· {email || "â€”"}
             </p>
           </div>
         </div>
@@ -1312,8 +1383,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           >
             {submitting
               ? needsCardPayment
-                ? "Starting…"
-                : "Saving…"
+                ? "Startingâ€¦"
+                : "Savingâ€¦"
               : needsCardPayment
                 ? "Pay & confirm"
                 : "Confirm booking"}
@@ -1338,6 +1409,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <PriceTotals
           subtotal={subtotalAmount}
           discount={discountAmount}
+          serviceFee={serviceFeeAmount}
+          platformFee={platformFeeAmount}
           transactionFee={transactionFeeAmount}
           total={totalAmount}
           suffix={totalDays > 0 ? ` for ${totalDays} show day${totalDays === 1 ? "" : "s"}` : ""}
@@ -1377,7 +1450,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                         {reservedSeatGroups.map((group) => (
                           <li key={group.levelId}>
                             <span className="font-medium">{group.levelName}</span>
-                            <span className="text-slate-500"> ({group.seatLabels.length}) — </span>
+                            <span className="text-slate-500"> ({group.seatLabels.length}) â€” </span>
                             {group.seatLabels.join(", ")}
                           </li>
                         ))}
@@ -1506,14 +1579,63 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </div>
       </div>
 
-      {!guestMode && subtotalAmount > 0 ? (
+      {!guestMode && vendorCodeEnabled && subtotalAmount > 0 ? (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Vendor code</p>
+          <div className="mt-2 flex gap-2">
+            <input
+              value={vendorCodeInput}
+              onChange={(e) => {
+                setVendorCodeInput(e.target.value.toUpperCase());
+                if (couponHold) void clearCouponHold();
+              }}
+              maxLength={40}
+              placeholder="VENDOR123"
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase"
+            />
+            <button
+              type="button"
+              disabled={vendorApplying || !vendorCodeInput.trim()}
+              onClick={() => void applyVendorCode()}
+              className="shrink-0 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {vendorApplying ? "..." : "Apply"}
+            </button>
+          </div>
+          {isVendorHoldApplied && couponHold?.holdToken ? (
+            <div className="mt-2 space-y-1 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-emerald-700">{couponMessage}</span>
+                <button
+                  type="button"
+                  onClick={() => void clearCouponHold()}
+                  className="font-semibold text-slate-600 hover:text-slate-900"
+                >
+                  Remove
+                </button>
+              </div>
+              {holdCountdown ? (
+                <p className="font-semibold tabular-nums text-amber-800">
+                  Reserved for {holdCountdown}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-slate-500">
+              Reserved for {COUPON_HOLD_MINUTES} minutes after you apply.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {!guestMode && couponsEnabled && subtotalAmount > 0 ? (
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Coupon code</p>
           <div className="mt-2 flex gap-2">
             <input value={couponCodeInput} onChange={(e) => { setCouponCodeInput(e.target.value.toUpperCase()); if (couponHold) void clearCouponHold(); }} maxLength={20} placeholder="SAVE20" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase" />
             <button type="button" disabled={couponApplying || !couponCodeInput.trim()} onClick={() => void applyCoupon()} className="shrink-0 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{couponApplying ? "..." : "Apply"}</button>
           </div>
-          {couponHold?.holdToken ? (
+          {isCouponHoldApplied && couponHold?.holdToken ? (
             <div className="mt-2 space-y-1 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-emerald-700">{couponMessage}</span>
@@ -1586,3 +1708,13 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   </>
   );
 }
+
+
+
+
+
+
+
+
+
+

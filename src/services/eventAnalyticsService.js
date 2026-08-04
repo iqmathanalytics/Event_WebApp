@@ -12,6 +12,8 @@ const {
   parseTicketItemsJson
 } = require("../utils/ticketTierInsights");
 
+const shareModel = require("../models/eventAnalyticsShareModel");
+
 async function assertOrganizerOwnsEvent(eventId, organizerId) {
   const event = await findEventById(eventId);
   if (!event) {
@@ -21,6 +23,21 @@ async function assertOrganizerOwnsEvent(eventId, organizerId) {
     throw new ApiError(403, "You can only view analytics for your own events");
   }
   return event;
+}
+
+async function assertCanViewEventAnalytics(eventId, userId) {
+  const event = await findEventById(eventId);
+  if (!event) {
+    throw new ApiError(404, "Event not found");
+  }
+  if (Number(event.organizer_id) === Number(userId)) {
+    return { event, access: "owner" };
+  }
+  const shared = await shareModel.hasActiveAnalyticsShare(eventId, userId);
+  if (shared) {
+    return { event, access: "shared" };
+  }
+  throw new ApiError(403, "You can only view analytics for your own events or events shared with you");
 }
 
 function buildTierInsightsFromBookings(event, bookingRows) {
@@ -363,8 +380,13 @@ async function getOrganizerEventInsights(organizerId, eventIdParam, options = {}
     throw new ApiError(400, "Invalid event id");
   }
 
-  const event = await assertOrganizerOwnsEvent(eventId, organizerId);
-  return buildEventInsightsPayload(event, options);
+  const { event, access } = await assertCanViewEventAnalytics(eventId, organizerId);
+  const payload = await buildEventInsightsPayload(event, options);
+  return {
+    ...payload,
+    access,
+    shared_view: access === "shared"
+  };
 }
 
 async function getAdminEventInsights(eventIdParam, options = {}) {
@@ -383,5 +405,7 @@ async function getAdminEventInsights(eventIdParam, options = {}) {
 module.exports = {
   getOrganizerInsightsSummary,
   getOrganizerEventInsights,
-  getAdminEventInsights
+  getAdminEventInsights,
+  assertOrganizerOwnsEvent,
+  assertCanViewEventAnalytics
 };

@@ -44,11 +44,18 @@ const ticketItemSchema = z.object({
   quantity: z.coerce.number().int().min(0).max(50)
 });
 
+const applyCodeField = z
+  .string()
+  .trim()
+  .min(3)
+  .max(40)
+  .regex(/^[A-Za-z0-9]+$/, "Code must be letters and numbers only");
+
 const applyCouponSchema = z.object({
   body: z
     .object({
     event_id: z.coerce.number().int().positive(),
-    coupon_code: couponCodeField,
+    coupon_code: applyCodeField,
     attendee_count: z.coerce.number().int().min(1).max(50).optional(),
     ticket_items: z.array(ticketItemSchema).max(20).optional(),
     selected_dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(366).optional(),

@@ -38,6 +38,7 @@ const {
 const { normalizeTicketSalesMode } = require("../utils/eventTicketSalesMode");
 const { findEventById, normalizeEventRow } = require("../models/eventModel");
 const { promoVideoUrlsDbValue } = require("../utils/youtubeVideo");
+const { sanitizeEventDescription } = require("../utils/sanitizeRichText");
 const { sqlAssignFragment } = require("../utils/jsonDb");
 
 async function getModerationQueue() {
@@ -499,7 +500,19 @@ function resolveEditableColumns(type) {
       "one_of_a_kind_manual",
       "price_per_day",
       "is_yay_deal_event",
-      "deal_event_discount_code"
+      "deal_event_discount_code",
+      "service_fee_enabled",
+      "service_fee_type",
+      "service_fee_value",
+      "platform_fee_enabled",
+      "platform_fee_type",
+      "platform_fee_value",
+      "vendor_code_enabled",
+      "vendor_code",
+      "vendor_discount_type",
+      "vendor_discount_value",
+      "coupon_codes_enabled",
+      "show_on_events_page"
     ],
     deals: ["title", "description", "city_id", "category_id", "original_price", "discounted_price", "expiry_date"],
     influencers: [
@@ -588,6 +601,9 @@ async function editListing({ type, id, payload }) {
 
   const mappedEntries = entries.map(([key, value]) => {
     if (table === "events") {
+      if (key === "description") {
+        return [key, sanitizeEventDescription(value)];
+      }
       if (key === "event_dates" && Array.isArray(value)) {
         return ["event_dates_json", JSON.stringify(value)];
       }
@@ -602,6 +618,40 @@ async function editListing({ type, id, payload }) {
       }
       if (key === "deal_event_discount_code") {
         return [key, value == null || value === "" ? null : String(value).trim()];
+      }
+      if (
+        key === "service_fee_enabled" ||
+        key === "platform_fee_enabled" ||
+        key === "vendor_code_enabled" ||
+        key === "coupon_codes_enabled" ||
+        key === "show_on_events_page"
+      ) {
+        const defaultOn = key === "coupon_codes_enabled" || key === "show_on_events_page";
+        if (value === true || value === 1 || String(value) === "1") {
+          return [key, 1];
+        }
+        if (value === false || value === 0 || String(value) === "0") {
+          return [key, 0];
+        }
+        return [key, defaultOn ? 1 : 0];
+      }
+      if (key === "service_fee_type" || key === "platform_fee_type") {
+        return [key, String(value || "percent").toLowerCase() === "fixed" ? "fixed" : "percent"];
+      }
+      if (key === "service_fee_value" || key === "platform_fee_value") {
+        return [key, Math.max(0, Number(value) || 0)];
+      }
+      if (key === "vendor_code") {
+        return [key, value == null || value === "" ? null : String(value).trim().slice(0, 40)];
+      }
+      if (key === "vendor_discount_type") {
+        return [
+          key,
+          String(value || "percent").toLowerCase() === "fixed_amount" ? "fixed_amount" : "percent"
+        ];
+      }
+      if (key === "vendor_discount_value") {
+        return [key, Math.max(0, Number(value) || 0)];
       }
       if (key === "gallery_image_urls") {
         const urls = Array.isArray(value)

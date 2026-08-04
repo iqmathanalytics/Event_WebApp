@@ -23,7 +23,7 @@ import useCityFilter from "../hooks/useCityFilter";
 import { formatDateUS } from "../utils/format";
 import { getEventSortDate } from "../utils/eventSchedule";
 import { trackEventClick } from "../services/eventService";
-import { pickHomeCarouselFromSorted, pickLandingSectionFromSorted } from "../utils/homeCarouselCuration";
+import { pickHomeCarouselFromSorted, pickHomeCarouselSix, pickLandingSectionCards, pickLandingSectionFromSorted } from "../utils/homeCarouselCuration";
 import {
   enrichEventWithCountdown,
   isUpcomingEvent,
@@ -36,7 +36,7 @@ import { useRouteContentReady } from "../context/RouteContentReadyContext";
 function HomePage() {
   const navigate = useNavigate();
   const { setBrandLogoPhase, headerLogoRef, startLogoFlight, onSplashExitComplete } = useOutletContext() || {};
-  const { selectedCity, selectedCityLabel } = useCityFilter();
+  const { selectedCity, selectedCityLabel, setSelectedCity } = useCityFilter();
   const [trendingEvents, setTrendingEvents] = useState([]);
   const [landingEvents, setLandingEvents] = useState([]);
   const [liveInfluencers, setLiveInfluencers] = useState([]);
@@ -126,7 +126,7 @@ function HomePage() {
           );
 
           setTrendingEvents(pickHomeCarouselFromSorted(enriched, 6));
-          setLandingEvents(pickLandingSectionFromSorted(enriched, { limit: 8 }));
+          setLandingEvents(pickLandingSectionFromSorted(enriched, { limit: 6 }));
         }
       } catch (_err) {
         if (active) {
@@ -181,11 +181,19 @@ function HomePage() {
         if (!active) {
           return;
         }
-        setLiveInfluencers((influencerResponse?.data || []).slice(0, 12));
-        const dealPool = (dealsResponse?.data || []).slice(0, 120);
-        const curatedDeals = pickHomeCarouselSix(dealPool);
-        setLiveDeals(curatedDeals);
-        setLandingDeals(pickLandingSectionCards(dealPool, { limit: 8 }));
+        const influencerRows = influencerResponse?.data || [];
+        setLiveInfluencers(influencerRows.slice(0, 12));
+
+        try {
+          const dealPool = (dealsResponse?.data || []).slice(0, 120);
+          setLiveDeals(pickHomeCarouselSix(dealPool));
+          setLandingDeals(pickLandingSectionCards(dealPool, { limit: 6 }));
+        } catch (_dealErr) {
+          if (active) {
+            setLiveDeals([]);
+            setLandingDeals([]);
+          }
+        }
       } catch (_err) {
         if (active) {
           setLiveInfluencers([]);
@@ -356,61 +364,65 @@ function HomePage() {
 
       <DiscoverySectionCarousel title={`Trending Events ${citySuffix}`} actionHref="/events" variant="landing-grid8">
         {loadingEvents
-          ? Array.from({ length: 8 }).map((_, idx) => (
+          ? Array.from({ length: 6 }).map((_, idx) => (
               <LandingCarouselSlot key={`event-skeleton-${idx}`} grid>
-                <div className="min-h-[20rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
+                <div className="min-h-[22rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
               </LandingCarouselSlot>
             ))
-          : landingEvents.map((item) => (
-              <LandingCarouselSlot key={item.id} grid>
-                <LazyMount>
-                <EventCard
-                  variant="landing"
-                  item={{
-                    ...item,
-                    id: item.id,
-                    public_slug: item.public_slug,
-                    title: item.title,
-                    category: item.category_name || "General",
-                    city: item.city_name || "City",
-                    event_date: getEventSortDate(item) || item.event_date,
-                    event_time: item.event_time,
-                    date: formatDateUS(getEventSortDate(item) || item.event_date),
-                    time: item.event_time ? String(item.event_time).slice(0, 5) : "",
-                    price: item.price,
-                    image: item.image_url,
-                    galleryImages: item.gallery_image_urls
-                  }}
-                  isYayDealEvent={
-                    item.is_yay_deal_event === 1 ||
-                    item.is_yay_deal_event === true ||
-                    String(item.is_yay_deal_event || "") === "1"
-                  }
-                  showPremiumBadge
-                  isFavorite={isFavorite("event", item.id)}
-                  tags={item.tags || []}
-                  countdownLabel={item.countdownLabel}
-                  onToggleFavorite={() =>
-                    toggleFavorite({
-                      listingType: "event",
-                      listingId: item.id
-                    })
-                  }
-                />
-                </LazyMount>
-              </LandingCarouselSlot>
-            ))}
+          : landingEvents.length > 0
+            ? landingEvents.map((item) => (
+                <LandingCarouselSlot key={item.id} grid>
+                  <LazyMount>
+                  <EventCard
+                    variant="landing"
+                    item={{
+                      ...item,
+                      id: item.id,
+                      public_slug: item.public_slug,
+                      title: item.title,
+                      category: item.category_name || "General",
+                      city: item.city_name || "City",
+                      event_date: getEventSortDate(item) || item.event_date,
+                      event_time: item.event_time,
+                      date: formatDateUS(getEventSortDate(item) || item.event_date),
+                      time: item.event_time ? String(item.event_time).slice(0, 5) : "",
+                      price: item.price,
+                      image: item.image_url,
+                      galleryImages: item.gallery_image_urls
+                    }}
+                    isYayDealEvent={
+                      item.is_yay_deal_event === 1 ||
+                      item.is_yay_deal_event === true ||
+                      String(item.is_yay_deal_event || "") === "1"
+                    }
+                    showPremiumBadge
+                    isFavorite={isFavorite("event", item.id)}
+                    tags={item.tags || []}
+                    countdownLabel={item.countdownLabel}
+                    onToggleFavorite={() =>
+                      toggleFavorite({
+                        listingType: "event",
+                        listingId: item.id
+                      })
+                    }
+                  />
+                  </LazyMount>
+                </LandingCarouselSlot>
+              ))
+            : (
+              <p className="min-w-full text-sm text-slate-500">No events available right now.</p>
+            )}
       </DiscoverySectionCarousel>
 
       <DiscoverySectionCarousel title={`Popular Influencers ${citySuffix}`} actionHref="/influencers" variant="landing-grid8">
         {loadingInfluencers
-          ? Array.from({ length: 8 }).map((_, idx) => (
+          ? Array.from({ length: 6 }).map((_, idx) => (
               <LandingCarouselSlot key={`influencer-skeleton-${idx}`} grid>
-                <div className="min-h-[20rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
+                <div className="min-h-[22rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
               </LandingCarouselSlot>
             ))
           : liveInfluencers.length > 0
-            ? liveInfluencers.slice(0, 8).map((item) => {
+            ? liveInfluencers.slice(0, 6).map((item) => {
                 const socialLinks = parseInfluencerSocialLinks(item.social_links);
                 return (
                 <LandingCarouselSlot key={item.id} grid>
@@ -451,9 +463,9 @@ function HomePage() {
 
       <DiscoverySectionCarousel title={`Top Deals ${citySuffix}`} actionHref="/deals" variant="landing-grid8">
         {loadingDeals
-          ? Array.from({ length: 8 }).map((_, idx) => (
+          ? Array.from({ length: 6 }).map((_, idx) => (
               <LandingCarouselSlot key={`deal-skeleton-${idx}`} grid>
-                <div className="min-h-[20rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
+                <div className="min-h-[22rem] flex-1 animate-pulse rounded-3xl border border-slate-200 bg-white" />
               </LandingCarouselSlot>
             ))
           : landingDeals.length > 0

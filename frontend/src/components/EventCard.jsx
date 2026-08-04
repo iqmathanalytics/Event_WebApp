@@ -82,7 +82,7 @@ function EventCard({
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
       className={`group relative flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm ${
-        isLanding ? "h-full w-full" : "h-full min-h-[19rem] sm:min-h-[20rem]"
+        isLanding ? "h-full w-full" : "h-full"
       }`}
     >
       {locked ? <PremiumLockOverlay open={premiumGateOpen} onClose={() => setPremiumGateOpen(false)} variant="event" /> : null}
@@ -100,14 +100,14 @@ function EventCard({
       <button
         type="button"
         onClick={openEvent}
-        className={`relative w-full shrink-0 overflow-hidden bg-slate-100 text-left ${
-          isLanding ? "h-44" : "h-40 sm:h-44"
-        } ${locked ? "cursor-default" : "cursor-pointer"}`}
+        className={`relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-slate-100 text-left ${
+          locked ? "cursor-default" : "cursor-pointer"
+        }`}
         aria-label={`View ${item.title}`}
       >
         {showBadge ? (
-          <div className="pointer-events-none absolute bottom-2 right-2 z-20 max-w-[5.75rem] rounded-lg border border-amber-300/80 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1.5 py-1 text-center shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl sm:bottom-3 sm:right-3 sm:max-w-[7rem] sm:rounded-full sm:px-2 sm:py-1">
-            <span className="block text-[8px] font-bold uppercase leading-tight tracking-wide text-slate-900 sm:text-[9px]">
+          <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-20 max-w-[4.5rem] rounded-md border border-amber-300/80 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-1 py-0.5 text-center shadow-md transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-lg sm:bottom-2 sm:right-2 sm:max-w-[5.25rem] sm:rounded-full sm:px-1.5">
+            <span className="block text-[7px] font-bold uppercase leading-tight tracking-wide text-slate-900 sm:text-[8px]">
               {EXCLUSIVE_DEAL_EVENT_LABEL}
             </span>
           </div>

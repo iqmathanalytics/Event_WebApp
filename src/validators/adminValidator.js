@@ -64,7 +64,7 @@ const editListingSchema = z.object({
     business_email: z.string().email().optional(),
     business_mobile: z.string().max(25).optional(),
     location_text: z.string().max(255).optional(),
-    description: z.string().max(5000).optional(),
+    description: z.string().max(20000).optional(),
     city_id: z.coerce.number().int().positive().optional(),
     category_id: z.coerce.number().int().positive().optional(),
     price: z.coerce.number().min(0).optional(),

@@ -21,7 +21,7 @@ const {
   resolveBookingCart,
   computeCartSubtotal
 } = require("../utils/eventTicketLevels");
-const { applyTransactionFee } = require("../utils/transactionFee");
+const { applyCheckoutFees } = require("../utils/transactionFee");
 const { ensureGuestUserAccount } = require("./guestAccountService");
 const { publicBookingQrImageUrl } = require("../utils/bookingQr");
 const { sendTransactionalEmail } = require("../utils/emailIntegrations");
@@ -335,9 +335,15 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     selectedDates = applied.selectedDates;
   }
 
-  const feeBreakdown = applyTransactionFee({ subtotalAmount, discountAmount });
+  const feeBreakdown = applyCheckoutFees({
+    subtotalAmount,
+    discountAmount,
+    event: eventWithLevels
+  });
   subtotalAmount = feeBreakdown.subtotalAmount;
   discountAmount = feeBreakdown.discountAmount;
+  const serviceFeeAmount = feeBreakdown.serviceFeeAmount;
+  const platformFeeAmount = feeBreakdown.platformFeeAmount;
   const transactionFeeAmount = feeBreakdown.transactionFeeAmount;
   totalAmount = feeBreakdown.totalAmount;
 
@@ -358,6 +364,8 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     ticketCart: cart,
     subtotalAmount,
     discountAmount,
+    serviceFeeAmount,
+    platformFeeAmount,
     transactionFeeAmount,
     totalAmount,
     couponId,
@@ -609,9 +617,9 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
     }
     const checkInCode = created.check_in_code;
 
-    if (holdToken && pricing.couponId && userId) {
+    if (holdToken && userId) {
       await couponService.finalizeCouponRedemption(
-        { couponId: pricing.couponId, userId, bookingId, holdToken },
+        { couponId: pricing.couponId || null, userId, bookingId, holdToken },
         conn
       );
     }
@@ -634,6 +642,8 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       totalDays: pricing.totalDays,
       subtotalAmount: pricing.subtotalAmount,
       discountAmount: pricing.discountAmount,
+      serviceFeeAmount: pricing.serviceFeeAmount ?? 0,
+      platformFeeAmount: pricing.platformFeeAmount ?? 0,
       transactionFeeAmount: pricing.transactionFeeAmount,
       totalAmount: pricing.totalAmount,
       couponCode: pricing.couponCode,

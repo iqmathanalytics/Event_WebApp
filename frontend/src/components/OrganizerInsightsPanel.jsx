@@ -74,7 +74,8 @@ export default function OrganizerInsightsPanel({
   organizerBookings = [],
   fixedEventId = null,
   embedded = false,
-  fetchEventInsightsFn = null
+  fetchEventInsightsFn = null,
+  sharedAccessBanner = null
 }) {
   const [events, setEvents] = useState(eventsProp);
   const [selectedEventId, setSelectedEventId] = useState("");
@@ -416,6 +417,11 @@ export default function OrganizerInsightsPanel({
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Insights</p>
               <h2 className="mt-1 text-xl font-bold sm:text-2xl">Event performance analytics</h2>
+              {sharedAccessBanner || insights?.shared_view ? (
+                <p className="mt-2 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90 ring-1 ring-white/20">
+                  {sharedAccessBanner || "Shared access · view only"}
+                </p>
+              ) : null}
               <p className="mt-2 max-w-2xl text-sm text-white/75">
                 See how people discover your event, when they visit, where they are from, and how tickets perform — all
                 in one place.

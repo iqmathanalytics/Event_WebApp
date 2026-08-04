@@ -59,7 +59,12 @@ const FILES = [
   "events_additional_fields.sql",
   "events_location_fields.sql",
   "favorites_table.sql",
-  "discovery_indexes.sql"
+  "discovery_indexes.sql",
+  "event_checkout_fee_and_code_flags.sql",
+  "event_vendor_discount.sql",
+  "event_booking_coupon_code_widen.sql",
+  "event_analytics_shares.sql",
+  "event_analytics_share_invites.sql"
 ];
 
 function buildSsl() {

@@ -28,6 +28,90 @@ const ticketLevelsField = z
   .union([z.array(ticketLevelSchema).max(12), z.string().max(50000)])
   .optional();
 
+const boolish = z.preprocess((v) => {
+  if (v === undefined || v === null || v === "") {
+    return undefined;
+  }
+  if (typeof v === "boolean") {
+    return v;
+  }
+  if (v === 1 || v === "1" || v === "true" || v === true) {
+    return true;
+  }
+  if (v === 0 || v === "0" || v === "false" || v === false) {
+    return false;
+  }
+  return v;
+}, z.boolean().optional());
+
+const feeTypeEnum = z.enum(["percent", "fixed"]);
+
+const checkoutConfigFields = {
+  service_fee_enabled: boolish,
+  service_fee_type: feeTypeEnum.optional(),
+  service_fee_value: z.coerce.number().min(0).max(100000).optional(),
+  platform_fee_enabled: boolish,
+  platform_fee_type: feeTypeEnum.optional(),
+  platform_fee_value: z.coerce.number().min(0).max(100000).optional(),
+  vendor_code_enabled: boolish,
+  vendor_code: z.string().max(40).optional(),
+  vendor_discount_type: z.enum(["percent", "fixed_amount"]).optional(),
+  vendor_discount_value: z.coerce.number().min(0).max(100000).optional(),
+  coupon_codes_enabled: boolish,
+  show_on_events_page: boolish
+};
+
+function refineCheckoutConfigFields(data, ctx) {
+  for (const [enabledKey, typeKey, valueKey, label] of [
+    ["service_fee_enabled", "service_fee_type", "service_fee_value", "Service fee"],
+    ["platform_fee_enabled", "platform_fee_type", "platform_fee_value", "Platform fee"]
+  ]) {
+    if (data[enabledKey] !== true) {
+      continue;
+    }
+    const type = data[typeKey] || "percent";
+    const value = Number(data[valueKey] ?? 0);
+    if (type === "percent" && value > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [valueKey],
+        message: `${label} percent cannot exceed 100`
+      });
+    }
+  }
+  if (data.vendor_code_enabled === true) {
+    const code = String(data.vendor_code || "").trim();
+    if (!code) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["vendor_code"],
+        message: "Vendor code is required when vendor code is enabled"
+      });
+    } else if (!/^[A-Za-z0-9]{3,40}$/.test(code)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["vendor_code"],
+        message: "Vendor code must be 3–40 letters or numbers"
+      });
+    }
+    const dtype = data.vendor_discount_type || "percent";
+    const dvalue = Number(data.vendor_discount_value ?? 0);
+    if (!(dvalue > 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["vendor_discount_value"],
+        message: "Vendor discount value is required when vendor code is enabled"
+      });
+    } else if (dtype === "percent" && dvalue > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["vendor_discount_value"],
+        message: "Vendor discount percent cannot exceed 100"
+      });
+    }
+  }
+}
+
 /** JSON often sends `null`; coerce so older Zod / strict string schemas still accept it. */
 function optionalTicketLinkUrl(maxLen) {
   return z.preprocess(
@@ -39,7 +123,7 @@ function optionalTicketLinkUrl(maxLen) {
 const submitEventBodySchema = z
   .object({
     title: z.string().min(3).max(220),
-    description: z.string().max(5000).optional(),
+    description: z.string().max(20000).optional(),
     event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     schedule_type: scheduleTypeEnum.optional(),
     event_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -71,9 +155,11 @@ const submitEventBodySchema = z
     is_yay_deal_event: z.boolean().optional(),
     deal_event_discount_code: z.string().max(80).optional(),
     ticket_levels: ticketLevelsField,
-    ticket_levels_json: ticketLevelsField
+    ticket_levels_json: ticketLevelsField,
+    ...checkoutConfigFields
   })
   .superRefine((data, ctx) => {
+    refineCheckoutConfigFields(data, ctx);
     const scheduleType = data.schedule_type || "single";
     if (scheduleType === "multiple") {
       if (!Array.isArray(data.event_dates) || data.event_dates.length === 0) {
@@ -192,7 +278,7 @@ const trackEventAnalyticsSchema = z.object({
 const editOwnEventBodySchema = z
   .object({
     title: z.string().min(3).max(220).optional(),
-    description: z.string().max(5000).optional(),
+    description: z.string().max(20000).optional(),
     event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     schedule_type: scheduleTypeEnum.optional(),
     event_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -223,9 +309,11 @@ const editOwnEventBodySchema = z
     is_yay_deal_event: z.boolean().optional(),
     deal_event_discount_code: z.string().max(80).optional(),
     ticket_levels: ticketLevelsField,
-    ticket_levels_json: ticketLevelsField
+    ticket_levels_json: ticketLevelsField,
+    ...checkoutConfigFields
   })
   .superRefine((data, ctx) => {
+    refineCheckoutConfigFields(data, ctx);
     if (data.is_yay_deal_event === true) {
       const code = String(data.deal_event_discount_code || "").trim();
       if (!code) {

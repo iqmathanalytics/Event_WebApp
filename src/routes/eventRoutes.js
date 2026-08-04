@@ -17,7 +17,11 @@ const {
   trackEventAnalyticsSchema
 } = require("../validators/eventValidator");
 const {
-  organizerEventInsightsSchema
+  organizerEventInsightsSchema,
+  eventIdParamsSchema,
+  createAnalyticsShareSchema,
+  revokeAnalyticsShareSchema,
+  acceptAnalyticsInviteSchema
 } = require("../validators/eventAnalyticsValidator");
 const { publicCacheMiddleware } = require("../middleware/publicCacheMiddleware");
 
@@ -55,11 +59,45 @@ router.get(
   eventAnalyticsController.listOrganizerInsights
 );
 router.get(
+  "/organizer/shared-insights",
+  authMiddleware,
+  organizerAccessMiddleware,
+  eventAnalyticsController.listSharedInsights
+);
+router.post(
+  "/organizer/analytics-invites/accept",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(acceptAnalyticsInviteSchema),
+  eventAnalyticsController.acceptAnalyticsInvite
+);
+router.get(
   "/organizer/insights/:eventId",
   authMiddleware,
   organizerAccessMiddleware,
   validateRequest(organizerEventInsightsSchema),
   eventAnalyticsController.getOrganizerEventInsights
+);
+router.get(
+  "/:eventId/analytics-shares",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(eventIdParamsSchema),
+  eventAnalyticsController.listEventAnalyticsShares
+);
+router.post(
+  "/:eventId/analytics-shares",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(createAnalyticsShareSchema),
+  eventAnalyticsController.createEventAnalyticsShare
+);
+router.delete(
+  "/:eventId/analytics-shares/:shareId",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(revokeAnalyticsShareSchema),
+  eventAnalyticsController.revokeEventAnalyticsShare
 );
 router.get(
   "/my-events",
