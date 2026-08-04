@@ -11,4 +11,5 @@ src.zip
 .env.production
 frontend/.env.production
 deploy/milesweb-api.env
+deploy/*.zip
 frontend/.netlify/
