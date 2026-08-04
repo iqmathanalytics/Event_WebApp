@@ -31,6 +31,7 @@ import {
 } from "../components/BookingPaymentTableCells";
 import ScrollableTableFrame from "../components/ScrollableTableFrame";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
+import OrganizerVendorCodesPanel from "../components/OrganizerVendorCodesPanel";
 import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
 import SharedAnalyticsList from "../components/SharedAnalyticsList";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
@@ -1008,6 +1009,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </button>
             <button
               type="button"
+              onClick={() => setActiveSection("vendor-codes")}
+              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
+                activeSection === "vendor-codes"
+                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
+                  : "bg-white/10 hover:bg-white/15"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Vendor</p>
+              <p className="mt-1 text-sm font-semibold">Codes</p>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveSection("bookings")}
               className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
                 activeSection === "bookings"
@@ -1189,6 +1202,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
           {!myEventsOnly && activeSection === "coupons" ? (
             <OrganizerCouponsPanel key="coupons-mobile" />
+          ) : null}
+
+          {!myEventsOnly && activeSection === "vendor-codes" ? (
+            <OrganizerVendorCodesPanel key="vendor-codes-mobile" />
           ) : null}
 
           {!myEventsOnly && activeSection === "bookings" ? (
@@ -1643,6 +1660,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
           {!myEventsOnly && activeSection === "coupons" ? (
             <OrganizerCouponsPanel key="coupons-desktop" />
+          ) : null}
+
+          {!myEventsOnly && activeSection === "vendor-codes" ? (
+            <OrganizerVendorCodesPanel key="vendor-codes-desktop" />
           ) : null}
 
           {!myEventsOnly && activeSection === "bookings" ? (
@@ -2510,7 +2531,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           <span>
                             <span className="block text-sm font-medium text-slate-900">Vendor code</span>
                             <span className="block text-xs text-slate-500">
-                              When on, buyers can enter this code at checkout to get a discount (same as coupons).
+                              Optional here — you can also manage vendor codes under Vendor codes in the organizer menu
+                              (same style as Coupons).
                             </span>
                           </span>
                         </label>

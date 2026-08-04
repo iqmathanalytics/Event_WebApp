@@ -4,6 +4,7 @@ function OrganizerSidebar({ activeSection, onSectionChange }) {
     { key: "shared", label: "Shared with me" },
     { key: "my-events", label: "My Events" },
     { key: "coupons", label: "Coupons" },
+    { key: "vendor-codes", label: "Vendor codes" },
     { key: "bookings", label: "Event Bookings" }
   ];
 

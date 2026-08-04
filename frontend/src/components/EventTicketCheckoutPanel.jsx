@@ -258,7 +258,7 @@ function PriceTotals({
   );
 }
 
-function CheckoutCard({ children, pill = `${BRAND_NAME} Â· your city's event guide`, seatBar = null }) {
+function CheckoutCard({ children, pill = `${BRAND_NAME} · your city's event guide`, seatBar = null }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_6px_20px_rgba(0,0,0,0.08)] ring-1 ring-slate-900/[0.04]">
       {seatBar}
@@ -660,7 +660,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       return formatDateUS(availableDates[0]);
     }
     if (!sortedSelected.length) {
-      return "â€”";
+      return "—";
     }
     return formatDateUS(sortedSelected[0]);
   }, [scheduleType, availableDates, sortedSelected]);
@@ -677,7 +677,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
   const priceBreakdownLine =
     !awaitingSeatSelection && totalDays > 0 && attendeeCount > 0
-      ? `${attendeeCount} ticket${attendeeCount === 1 ? "" : "s"} Â· ${totalDays} show day${totalDays === 1 ? "" : "s"}`
+      ? `${attendeeCount} ticket${attendeeCount === 1 ? "" : "s"} · ${totalDays} show day${totalDays === 1 ? "" : "s"}`
       : "";
 
   const needsCardPayment = useMemo(() => requiresCardPayment(totalAmount), [totalAmount]);
@@ -940,7 +940,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
     const invalid = selectedDates.find((d) => !availableDates.includes(d));
     if (invalid) {
-      return "One of the dates you picked isnâ€™t offered for this event.";
+      return "One of the dates you picked isn’t offered for this event.";
     }
     const ticketCap = maxTickets > 0 ? maxTickets : 50;
     if (!ticketLevels.length) {
@@ -1150,7 +1150,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setPaymentModalOpen(true);
     } catch (err) {
       const apiMessage = err?.response?.data?.message;
-      setError(apiMessage || `We couldnâ€™t start checkout on ${BRAND_NAME}. Please try again.`);
+      setError(apiMessage || `We couldn’t start checkout on ${BRAND_NAME}. Please try again.`);
     } finally {
       setSubmitting(false);
     }
@@ -1251,7 +1251,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     setPaymentModalOpen(false);
     setPaymentClientSecret("");
     setError(
-      "Payment was not completed. Your tickets are not booked yet â€” try again when you are ready."
+      "Payment was not completed. Your tickets are not booked yet — try again when you are ready."
     );
   };
 
@@ -1269,7 +1269,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       <CheckoutCard pill="Confirming payment">
         <div className="py-10 text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-[#E31C5F]" />
-          <p className="mt-4 text-sm font-medium text-slate-800">Confirming your payment and bookingâ€¦</p>
+          <p className="mt-4 text-sm font-medium text-slate-800">Confirming your payment and booking…</p>
         </div>
       </CheckoutCard>
     );
@@ -1277,9 +1277,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
   if (!availableDates.length) {
     return (
-      <CheckoutCard pill={`${BRAND_NAME} Â· booking`}>
+      <CheckoutCard pill={`${BRAND_NAME} · booking`}>
         <p className="text-center text-sm text-slate-600">
-          This event doesnâ€™t have any bookable show dates on {BRAND_NAME} yet. Check back later or contact the organizer.
+          This event doesn’t have any bookable show dates on {BRAND_NAME} yet. Check back later or contact the organizer.
         </p>
       </CheckoutCard>
     );
@@ -1342,7 +1342,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                   ? reservedSeatGroups.map((group) => (
                       <li key={group.levelId}>
                         <span className="font-medium text-slate-800">
-                          {group.levelName} Ã— {group.seatLabels.length}
+                          {group.levelName} × {group.seatLabels.length}
                         </span>
                         <span className="block text-xs text-slate-600">{group.seatLabels.join(", ")}</span>
                       </li>
@@ -1351,7 +1351,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                       const level = ticketLevels.find((l) => l.id === row.level_id);
                       return (
                         <li key={row.level_id}>
-                          {level?.name || "Ticket"} Ã— {row.quantity}
+                          {level?.name || "Ticket"} × {row.quantity}
                         </li>
                       );
                     })}
@@ -1362,7 +1362,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             ) : null}
             <p>
               <span className="text-slate-500">Contact: </span>
-              {contactName || "â€”"} Â· {email || "â€”"}
+              {contactName || "—"} · {email || "—"}
             </p>
           </div>
         </div>
@@ -1383,8 +1383,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           >
             {submitting
               ? needsCardPayment
-                ? "Startingâ€¦"
-                : "Savingâ€¦"
+                ? "Starting…"
+                : "Saving…"
               : needsCardPayment
                 ? "Pay & confirm"
                 : "Confirm booking"}
@@ -1450,7 +1450,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                         {reservedSeatGroups.map((group) => (
                           <li key={group.levelId}>
                             <span className="font-medium">{group.levelName}</span>
-                            <span className="text-slate-500"> ({group.seatLabels.length}) â€” </span>
+                            <span className="text-slate-500"> ({group.seatLabels.length}) — </span>
                             {group.seatLabels.join(", ")}
                           </li>
                         ))}
