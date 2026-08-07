@@ -708,6 +708,53 @@ function buildPlatformTicketRequestUserEmail({ name, approved, note }) {
   return { subject, text, html };
 }
 
+function buildAnalyticsShareInviteEmail({
+  inviteeName,
+  ownerName,
+  eventTitle,
+  acceptUrl
+}) {
+  const name = String(inviteeName || "there").trim() || "there";
+  const owner = String(ownerName || "An organizer").trim() || "An organizer";
+  const title = String(eventTitle || "an event").trim() || "an event";
+  const url = String(acceptUrl || "").trim();
+  const subject = `${owner} invited you to view event analytics on ${BRAND_NAME}`;
+  const text = [
+    `Hi ${name},`,
+    "",
+    `${owner} invited you to view performance analytics for "${title}" on ${BRAND_NAME}.`,
+    "Access is granted only after you accept this invitation.",
+    url ? `Accept invitation: ${url}` : null,
+    "",
+    `If you did not expect this, you can ignore this email.`,
+    "",
+    `Questions? ${BRAND_SUPPORT_EMAIL}`
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const html = buildLayout({
+    preheader: `${owner} shared event analytics with you`,
+    eyebrow: "Analytics invite",
+    title: "You're invited to view event analytics",
+    subtitle: `${owner} wants to share performance insights for ${title}. Accept to open Shared with me in Event Analytics.`,
+    headerTone: "violet",
+    rows: [
+      { label: "Event", value: title },
+      { label: "Invited by", value: owner },
+      { label: "Access", value: "View-only analytics after you accept" }
+    ],
+    highlights: [
+      "See traffic, bookings, and audience insights for this event only.",
+      "You cannot edit the event, bookings, or coupons.",
+      "Accepting unlocks Event Analytics for your account."
+    ],
+    ctaLabel: "Accept invitation",
+    ctaUrl: url || dashboardUrl("/dashboard/organizer?section=shared"),
+    footerNote: `If you did not expect this invite, ignore this email. Need help? ${BRAND_SUPPORT_EMAIL}`
+  });
+  return { subject, text, html };
+}
+
 module.exports = {
   buildWelcomeEmail,
   buildApprovalEmail,
@@ -716,6 +763,7 @@ module.exports = {
   buildContactAdminEmail,
   buildPlatformTicketRequestAdminEmail,
   buildPlatformTicketRequestUserEmail,
+  buildAnalyticsShareInviteEmail,
   ticketBlocksFromCart,
   formatUsd,
   formatDateUs

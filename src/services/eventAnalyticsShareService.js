@@ -1,26 +1,13 @@
 const ApiError = require("../utils/ApiError");
 const { findEventById } = require("../models/eventModel");
-const { findUserByEmail, findUserById } = require("../models/userModel");
+const { findUserByEmail, findUserById, enableOrganizerById } = require("../models/userModel");
 const shareModel = require("../models/eventAnalyticsShareModel");
 const { sendTransactionalEmail, isBrevoConfigured } = require("../utils/emailIntegrations");
 const { dashboardUrl } = require("../utils/brandEmail");
+const { buildAnalyticsShareInviteEmail } = require("../utils/transactionalEmailTemplates");
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
-}
-
-function isOrganizerCapable(user) {
-  if (!user || !user.is_active) {
-    return false;
-  }
-  return (
-    user.organizer_enabled === 1 ||
-    user.organizer_enabled === true ||
-    user.can_post_events === 1 ||
-    user.can_post_events === true ||
-    String(user.role || "").toLowerCase() === "organizer" ||
-    String(user.role || "").toLowerCase() === "admin"
-  );
 }
 
 function mapShareRow(row) {
@@ -63,18 +50,18 @@ async function sendInviteEmail({ owner, invitee, event, inviteToken, email }) {
     return { sent: false, skipped: true, error: "Email provider is not configured on this server." };
   }
 
+  const mail = buildAnalyticsShareInviteEmail({
+    inviteeName: invitee.name,
+    ownerName,
+    eventTitle,
+    acceptUrl
+  });
+
   const result = await sendTransactionalEmail({
     to,
-    subject: `${ownerName} invited you to view event analytics`,
-    html: `
-      <p>Hi ${invitee.name || "there"},</p>
-      <p><strong>${ownerName}</strong> invited you to view performance analytics for
-      <strong>${eventTitle}</strong>.</p>
-      <p>Access is not granted until you accept this invitation.</p>
-      <p><a href="${acceptUrl}">Accept invitation</a></p>
-      <p>If you did not expect this, you can ignore this email.</p>
-    `,
-    text: `${ownerName} invited you to view analytics for "${eventTitle}". Accept: ${acceptUrl}`
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text
   });
 
   if (!result.sent) {
@@ -98,20 +85,14 @@ async function createEventAnalyticsShare(ownerUserId, eventId, emailInput) {
   const event = await assertOwnsEvent(eventId, ownerUserId);
   const email = normalizeEmail(emailInput);
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new ApiError(400, "Enter a valid organizer email address.");
+    throw new ApiError(400, "Enter a valid email address.");
   }
 
   const invitee = await findUserByEmail(email);
   if (!invitee || !invitee.is_active) {
     throw new ApiError(
       404,
-      "No active organizer account found for that email. Ask them to sign up and enable organizer access first."
-    );
-  }
-  if (!isOrganizerCapable(invitee)) {
-    throw new ApiError(
-      400,
-      "That account is not an organizer yet. Ask them to enable organizer access, then try again."
+      "No active account found for that email. Ask them to sign up first, then send the invite again."
     );
   }
   if (Number(invitee.id) === Number(ownerUserId)) {
@@ -225,16 +206,35 @@ async function acceptAnalyticsInvite(userId, inviteToken) {
     throw new ApiError(404, "Invitation not found or no longer valid");
   }
 
+  // Unlock Event Analytics nav/access for invitees who had not enabled organizer tools yet.
+  await enableOrganizerById(userId);
+  const user = await findUserById(userId);
+
   const event = await findEventById(result.event_id);
   const owner = await findUserById(result.owner_user_id);
 
   return {
     alreadyAccepted: Boolean(result.alreadyAccepted),
+    organizerEnabled: true,
     share_id: result.id,
     event_id: result.event_id,
     title: event?.title || null,
     owner: owner
       ? { id: owner.id, name: owner.name || null, email: owner.email || null }
+      : null,
+    user: user
+      ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
+          can_post_events: user.can_post_events === 1 ? 1 : 0,
+          can_create_influencer_profile: user.can_create_influencer_profile === 1 ? 1 : 0,
+          can_post_deals: user.can_post_deals === 1 ? 1 : 0,
+          can_sell_platform_tickets: user.can_sell_platform_tickets === 1 ? 1 : 0,
+          profile_image_url: user.profile_image_url || null
+        }
       : null
   };
 }

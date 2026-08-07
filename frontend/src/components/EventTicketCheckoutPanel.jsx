@@ -194,7 +194,6 @@ function PriceTotals({
   discount,
   serviceFee = 0,
   platformFee = 0,
-  transactionFee,
   total,
   suffix = "",
   pendingSelection = false
@@ -213,8 +212,7 @@ function PriceTotals({
   }
   const showServiceFee = Number(serviceFee) > 0;
   const showPlatformFee = Number(platformFee) > 0;
-  const showTxnFee = Number(transactionFee) > 0;
-  const showAnyFee = showServiceFee || showPlatformFee || showTxnFee;
+  const showAnyFee = showServiceFee || showPlatformFee;
   if (discount > 0 || showAnyFee) {
     return (
       <div>
@@ -239,11 +237,6 @@ function PriceTotals({
           {showPlatformFee ? (
             <span className="ml-1.5 text-slate-600">
               + {formatCheckoutCurrency(platformFee)} platform fee
-            </span>
-          ) : null}
-          {showTxnFee ? (
-            <span className="ml-1.5 text-slate-600">
-              + {formatCheckoutCurrency(transactionFee)} transaction fees
             </span>
           ) : null}
         </p>
@@ -635,7 +628,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const {
     serviceFeeAmount,
     platformFeeAmount,
-    transactionFeeAmount,
     totalAmount
   } = applyCheckoutFees({
     subtotalAmount,
@@ -1310,7 +1302,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           discount={discountAmount}
           serviceFee={serviceFeeAmount}
           platformFee={platformFeeAmount}
-          transactionFee={transactionFeeAmount}
           total={totalAmount}
           suffix=" estimated total"
           pendingSelection={awaitingSeatSelection}
@@ -1411,7 +1402,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           discount={discountAmount}
           serviceFee={serviceFeeAmount}
           platformFee={platformFeeAmount}
-          transactionFee={transactionFeeAmount}
           total={totalAmount}
           suffix={totalDays > 0 ? ` for ${totalDays} show day${totalDays === 1 ? "" : "s"}` : ""}
           pendingSelection={awaitingSeatSelection}

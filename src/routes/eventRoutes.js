@@ -67,7 +67,6 @@ router.get(
 router.post(
   "/organizer/analytics-invites/accept",
   authMiddleware,
-  organizerAccessMiddleware,
   validateRequest(acceptAnalyticsInviteSchema),
   eventAnalyticsController.acceptAnalyticsInvite
 );

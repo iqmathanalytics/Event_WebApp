@@ -201,7 +201,7 @@ function MyEventsActionBar({ showOrganizerDashboardLink, onCreate, className = "
           to="/dashboard/organizer"
           className="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 shadow-sm transition hover:bg-emerald-100/90"
         >
-          Organizer dashboard
+          Event Analytics
         </Link>
       ) : null}
       <button
@@ -241,7 +241,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   ref
 ) {
   const navigate = useNavigate();
-  const { user, canSellPlatformTickets, refreshSession, isOrganizer } = useAuth();
+  const { user, canSellPlatformTickets, refreshSession, isOrganizer, login } = useAuth();
 
   const openPlatformTicketRequest = () => {
     if (typeof onRequestPlatformTickets === "function") {
@@ -459,6 +459,28 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         if (cancelled) {
           return;
         }
+        const acceptedUser = res?.data?.user;
+        if (acceptedUser) {
+          const access = localStorage.getItem("accessToken");
+          const refresh = localStorage.getItem("refreshToken");
+          if (access && refresh && typeof login === "function") {
+            login({
+              accessToken: access,
+              refreshToken: refresh,
+              user: {
+                ...(user || {}),
+                ...acceptedUser,
+                organizer_enabled: 1
+              }
+            });
+          }
+        } else {
+          try {
+            await refreshSession();
+          } catch (_err) {
+            /* session refresh is best-effort; invite accept already succeeded */
+          }
+        }
         const eventId = String(res?.data?.event_id || "").trim();
         setInviteNotice(res?.message || "Invitation accepted.");
         setSharedOwnerLabel(res?.data?.owner?.name || res?.data?.owner?.email || "");
@@ -498,7 +520,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     return () => {
       cancelled = true;
     };
-  }, [myEventsOnly, searchParams, setSearchParams]);
+  }, [myEventsOnly, searchParams, setSearchParams, refreshSession, login, user]);
 
   const openSharedEvent = useCallback(
     (row) => {
@@ -766,10 +788,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           : undefined,
         show_on_events_page: Boolean(form.show_on_events_page),
         service_fee_enabled: Boolean(form.service_fee_enabled),
-        service_fee_type: form.service_fee_type === "fixed" ? "fixed" : "percent",
-        service_fee_value: form.service_fee_enabled
-          ? Number(form.service_fee_value === "" ? 0 : form.service_fee_value)
-          : 0,
+        service_fee_type: "percent",
+        service_fee_value: 0,
         platform_fee_enabled: Boolean(form.platform_fee_enabled),
         platform_fee_type: form.platform_fee_type === "fixed" ? "fixed" : "percent",
         platform_fee_value: form.platform_fee_enabled
@@ -927,7 +947,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">
-                {embedded ? "Your hosted experiences" : "Host dashboard"}
+                {embedded ? "Your hosted experiences" : "Event Analytics"}
               </p>
               <h1 className="mt-2 text-xl font-bold leading-tight">
                 {embedded ? (
@@ -1395,7 +1415,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               </div>
             ) : (
               <div className="min-w-0 pr-1">
-                <h1 className="text-2xl font-bold">Organizer Dashboard</h1>
+                <h1 className="text-2xl font-bold">Event Analytics</h1>
                 <p className="text-sm text-slate-600">
                   Track event performance, booking activity, and submissions in one place.
                 </p>
@@ -2439,35 +2459,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           <span>
                             <span className="block text-sm font-medium text-slate-900">Service fee</span>
                             <span className="block text-xs text-slate-500">
-                              Added to the buyer total after discounts when enabled.
+                              When on, a ~4.373% service fee is added to the buyer total after discounts. When off, no
+                              service fee is charged.
                             </span>
                           </span>
                         </label>
-                        {form.service_fee_enabled ? (
-                          <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-2">
-                            <select
-                              value={form.service_fee_type === "fixed" ? "fixed" : "percent"}
-                              onChange={(e) =>
-                                setForm((prev) => ({ ...prev, service_fee_type: e.target.value }))
-                              }
-                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                            >
-                              <option value="percent">Percent</option>
-                              <option value="fixed">Fixed (USD)</option>
-                            </select>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={form.service_fee_value}
-                              onChange={(e) =>
-                                setForm((prev) => ({ ...prev, service_fee_value: e.target.value }))
-                              }
-                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                              placeholder={form.service_fee_type === "fixed" ? "e.g. 2.50" : "e.g. 5"}
-                            />
-                          </div>
-                        ) : null}
                       </div>
 
                       <div>
@@ -2483,7 +2479,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           <span>
                             <span className="block text-sm font-medium text-slate-900">Platform fee</span>
                             <span className="block text-xs text-slate-500">
-                              Added to the buyer total after discounts when enabled. Separate from the transaction fee.
+                              Optional extra fee added after discounts, separate from the service fee.
                             </span>
                           </span>
                         </label>

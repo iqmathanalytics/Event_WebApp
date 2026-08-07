@@ -18,8 +18,12 @@ async function organizerAccessMiddleware(req, _res, next) {
       return next(new ApiError(403, "Account is deactivated"));
     }
 
-    // Event actions must follow the explicit capability flag.
-    const allowed = user.can_post_events === 1 || user.can_post_events === true;
+    // Event posting capability, or organizer tools unlocked (e.g. shared analytics invite).
+    const allowed =
+      user.can_post_events === 1 ||
+      user.can_post_events === true ||
+      user.organizer_enabled === 1 ||
+      user.organizer_enabled === true;
     if (!allowed) {
       return next(new ApiError(403, "Event posting is disabled for this account"));
     }

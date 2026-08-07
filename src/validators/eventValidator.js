@@ -62,20 +62,15 @@ const checkoutConfigFields = {
 };
 
 function refineCheckoutConfigFields(data, ctx) {
-  for (const [enabledKey, typeKey, valueKey, label] of [
-    ["service_fee_enabled", "service_fee_type", "service_fee_value", "Service fee"],
-    ["platform_fee_enabled", "platform_fee_type", "platform_fee_value", "Platform fee"]
-  ]) {
-    if (data[enabledKey] !== true) {
-      continue;
-    }
-    const type = data[typeKey] || "percent";
-    const value = Number(data[valueKey] ?? 0);
+  // Service fee is a fixed platform rate when enabled — no custom percent/amount to validate.
+  if (data.platform_fee_enabled === true) {
+    const type = data.platform_fee_type || "percent";
+    const value = Number(data.platform_fee_value ?? 0);
     if (type === "percent" && value > 100) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: [valueKey],
-        message: `${label} percent cannot exceed 100`
+        path: ["platform_fee_value"],
+        message: "Platform fee percent cannot exceed 100"
       });
     }
   }

@@ -139,7 +139,7 @@ function App() {
             <Route
               index
               element={
-                <Suspense fallback={<RouteFallback label="Loading organizer dashboard..." />}>
+                <Suspense fallback={<RouteFallback label="Loading event analytics..." />}>
                   <OrganizerDashboardPage />
                 </Suspense>
               }

@@ -11,7 +11,7 @@ function OrganizerSidebar({ activeSection, onSectionChange }) {
   return (
     <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-soft">
       <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Organizer
+        Event Analytics
       </p>
       <nav className="space-y-1">
         {items.map((item) => (

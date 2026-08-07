@@ -1,5 +1,7 @@
-/** Platform transaction fee applied to ticket bookings (after discounts). */
-const TRANSACTION_FEE_RATE = 0.04373;
+/** Platform service fee rate applied to ticket bookings (after discounts) when enabled. */
+const SERVICE_FEE_RATE = 0.04373;
+/** @deprecated Use SERVICE_FEE_RATE — kept for older imports. */
+const TRANSACTION_FEE_RATE = SERVICE_FEE_RATE;
 
 function toBoolFlag(raw, defaultValue = false) {
   if (raw === undefined || raw === null) {
@@ -15,12 +17,18 @@ function normalizeFeeType(raw) {
   return String(raw || "percent").toLowerCase() === "fixed" ? "fixed" : "percent";
 }
 
-function computeTransactionFee(amountAfterDiscount) {
+/** Fixed-rate service fee (formerly labeled transaction fee). */
+function computeServiceFee(amountAfterDiscount) {
   const base = Math.max(0, Number(amountAfterDiscount) || 0);
   if (base <= 0) {
     return 0;
   }
-  return Number((base * TRANSACTION_FEE_RATE).toFixed(2));
+  return Number((base * SERVICE_FEE_RATE).toFixed(2));
+}
+
+/** @deprecated Use computeServiceFee */
+function computeTransactionFee(amountAfterDiscount) {
+  return computeServiceFee(amountAfterDiscount);
 }
 
 function computeConfigurableFee(amountAfterDiscount, { enabled, type, value }) {
@@ -44,8 +52,6 @@ function computeConfigurableFee(amountAfterDiscount, { enabled, type, value }) {
 function feeConfigFromEvent(event = {}) {
   return {
     serviceFeeEnabled: toBoolFlag(event.service_fee_enabled, false),
-    serviceFeeType: normalizeFeeType(event.service_fee_type),
-    serviceFeeValue: Number(event.service_fee_value) || 0,
     platformFeeEnabled: toBoolFlag(event.platform_fee_enabled, false),
     platformFeeType: normalizeFeeType(event.platform_fee_type),
     platformFeeValue: Number(event.platform_fee_value) || 0
@@ -56,6 +62,11 @@ function applyTransactionFee({ subtotalAmount, discountAmount = 0 }) {
   return applyCheckoutFees({ subtotalAmount, discountAmount });
 }
 
+/**
+ * Checkout totals.
+ * Service fee = fixed platform rate when `service_fee_enabled` is on; otherwise 0.
+ * Platform fee remains a separate optional fee.
+ */
 function applyCheckoutFees({
   subtotalAmount,
   discountAmount = 0,
@@ -66,20 +77,15 @@ function applyCheckoutFees({
   const discount = Math.max(0, Number(discountAmount) || 0);
   const afterDiscount = Number(Math.max(0, subtotal - discount).toFixed(2));
   const config = feeConfig || (event ? feeConfigFromEvent(event) : {});
-  const serviceFeeAmount = computeConfigurableFee(afterDiscount, {
-    enabled: config.serviceFeeEnabled,
-    type: config.serviceFeeType,
-    value: config.serviceFeeValue
-  });
+  const serviceFeeAmount = config.serviceFeeEnabled ? computeServiceFee(afterDiscount) : 0;
   const platformFeeAmount = computeConfigurableFee(afterDiscount, {
     enabled: config.platformFeeEnabled,
     type: config.platformFeeType,
     value: config.platformFeeValue
   });
-  const transactionFeeAmount = computeTransactionFee(afterDiscount);
-  const totalAmount = Number(
-    (afterDiscount + serviceFeeAmount + platformFeeAmount + transactionFeeAmount).toFixed(2)
-  );
+  // Alias for older booking/stripe snapshots that still read transactionFeeAmount.
+  const transactionFeeAmount = serviceFeeAmount;
+  const totalAmount = Number((afterDiscount + serviceFeeAmount + platformFeeAmount).toFixed(2));
   return {
     subtotalAmount: subtotal,
     discountAmount: discount,
@@ -92,7 +98,9 @@ function applyCheckoutFees({
 }
 
 module.exports = {
+  SERVICE_FEE_RATE,
   TRANSACTION_FEE_RATE,
+  computeServiceFee,
   computeTransactionFee,
   computeConfigurableFee,
   feeConfigFromEvent,
