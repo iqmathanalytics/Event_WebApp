@@ -137,6 +137,18 @@ function normalizeOptionalUrl(value, fieldLabel) {
   }
 }
 
+/** Same visibility rule as admin Active (is_listed); falls back to show_on_events_page. */
+function isOrganizerEventListed(item) {
+  if (item?.is_listed !== undefined && item?.is_listed !== null) {
+    return item.is_listed !== false && item.is_listed !== 0 && String(item.is_listed) !== "false";
+  }
+  return (
+    item?.show_on_events_page !== false &&
+    item?.show_on_events_page !== 0 &&
+    String(item?.show_on_events_page) !== "false"
+  );
+}
+
 function parseHighlights(value) {
   if (!value) {
     return [];
@@ -868,6 +880,39 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     setIsDeleteOpen(true);
   };
 
+  const handleToggleEventListed = async (item, isListed) => {
+    if (String(item?.status || "").toLowerCase() !== "approved") {
+      return;
+    }
+    const next = Boolean(isListed);
+    setRows((prev) =>
+      prev.map((row) =>
+        String(row.id) === String(item.id)
+          ? { ...row, is_listed: next, show_on_events_page: next }
+          : row
+      )
+    );
+    try {
+      await updateEvent(item.id, {
+        show_on_events_page: next,
+        is_listed: next
+      });
+    } catch (err) {
+      setRows((prev) =>
+        prev.map((row) =>
+          String(row.id) === String(item.id)
+            ? {
+                ...row,
+                is_listed: item.is_listed,
+                show_on_events_page: item.show_on_events_page
+              }
+            : row
+        )
+      );
+      window.alert(err?.response?.data?.message || "Could not update event visibility.");
+    }
+  };
+
   const openShareAnalytics = (event) => {
     setShareTarget(event);
   };
@@ -1190,6 +1235,17 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         <span className="font-semibold">City:</span> {item.city_name || "-"}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status, item.review_note)}</p>
+                      {String(item.status || "").toLowerCase() === "approved" ? (
+                        <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={isOrganizerEventListed(item)}
+                            onChange={(e) => handleToggleEventListed(item, e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          Active (visible on site)
+                        </label>
+                      ) : null}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
                           type="button"
@@ -1568,6 +1624,17 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           <p className="col-span-2"><span className="font-semibold">Price:</span> {formatCurrency(item.price || 0)}</p>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">{getStatusNote(item.status, item.review_note)}</p>
+                        {String(item.status || "").toLowerCase() === "approved" ? (
+                          <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={isOrganizerEventListed(item)}
+                              onChange={(e) => handleToggleEventListed(item, e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            Active (visible on site)
+                          </label>
+                        ) : null}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
@@ -1598,12 +1665,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   <ScrollableTableFrame minWidthClass="min-w-[820px]" maxHeightClass="max-h-[min(60vh,36rem)]">
                   <table className="w-full table-fixed text-left text-sm">
                     <colgroup>
-                      <col className="w-[38%]" />
+                      <col className="w-[32%]" />
+                      <col className="w-[11%]" />
                       <col className="w-[12%]" />
-                      <col className="w-[14%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[12%]" />
                       <col className="w-[10%]" />
                       <col className="w-[14%]" />
-                      <col className="w-[12%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
                       <tr>
@@ -1612,6 +1680,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">City</th>
                         <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide">Price</th>
                         <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">Status</th>
+                        <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">Active</th>
                         <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
@@ -1641,6 +1710,21 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             <p className="mt-1 line-clamp-2 text-xs text-slate-500">
                               {getStatusNote(item.status, item.review_note)}
                             </p>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {String(item.status || "").toLowerCase() === "approved" ? (
+                              <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={isOrganizerEventListed(item)}
+                                  onChange={(e) => handleToggleEventListed(item, e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                Active
+                              </label>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex flex-wrap items-center gap-2">
@@ -2420,9 +2504,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
                     />
                     <span>
-                      <span className="block text-sm font-medium text-slate-900">Show on events page</span>
+                      <span className="block text-sm font-medium text-slate-900">Active (visible on site)</span>
                       <span className="block text-xs text-slate-500">
-                        When off, this event is hidden from public listings and featured sections.
+                        When off, this event is hidden everywhere — events page, hero slider, and public detail links
+                        (same as admin inactive).
                       </span>
                     </span>
                   </label>

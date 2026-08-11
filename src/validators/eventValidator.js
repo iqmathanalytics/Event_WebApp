@@ -58,7 +58,8 @@ const checkoutConfigFields = {
   vendor_discount_type: z.enum(["percent", "fixed_amount"]).optional(),
   vendor_discount_value: z.coerce.number().min(0).max(100000).optional(),
   coupon_codes_enabled: boolish,
-  show_on_events_page: boolish
+  show_on_events_page: boolish,
+  is_listed: boolish
 };
 
 function refineCheckoutConfigFields(data, ctx) {

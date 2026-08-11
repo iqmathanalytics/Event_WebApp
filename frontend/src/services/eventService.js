@@ -1,8 +1,17 @@
 import api, { postKeepalive } from "./api";
 import { encodePublicListingParam } from "../utils/listingPaths";
-import { buildCacheKey, cachedClientFetch, isAuthenticatedClient } from "../utils/clientCache";
+import {
+  buildCacheKey,
+  cachedClientFetch,
+  clearClientCacheByPrefix,
+  isAuthenticatedClient
+} from "../utils/clientCache";
 
 const PUBLIC_LIST_CACHE_TTL_MS = 3 * 60 * 1000;
+
+function bustPublicEventCaches() {
+  clearClientCacheByPrefix("events:featured");
+}
 
 export async function fetchEvents(params = {}) {
   const response = await api.get("/events", { params });
@@ -36,16 +45,19 @@ export async function fetchMyEvents() {
 
 export async function createEvent(payload) {
   const response = await api.post("/events", payload);
+  bustPublicEventCaches();
   return response.data;
 }
 
 export async function updateEvent(id, payload) {
   const response = await api.put(`/events/${id}`, payload);
+  bustPublicEventCaches();
   return response.data;
 }
 
 export async function deleteEvent(id) {
   const response = await api.delete(`/events/${id}`);
+  bustPublicEventCaches();
   return response.data;
 }
 

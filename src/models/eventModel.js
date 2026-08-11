@@ -100,7 +100,16 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
     vendor_discount_type: vendorDiscountType,
     vendor_discount_value: vendorEnabled ? Math.max(0, Number(payload.vendor_discount_value) || 0) : 0,
     coupon_codes_enabled: toBoolFlag(payload.coupon_codes_enabled, true) ? 1 : 0,
-    show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0
+    show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0,
+    // Mirrors show_on_events_page so new events stay consistent with admin Active.
+    is_listed: toBoolFlag(
+      Object.prototype.hasOwnProperty.call(payload, "is_listed")
+        ? payload.is_listed
+        : payload.show_on_events_page,
+      true
+    )
+      ? 1
+      : 0
   };
 }
 
@@ -249,9 +258,9 @@ async function createEvent(payload) {
        service_fee_enabled, service_fee_type, service_fee_value,
        platform_fee_enabled, platform_fee_type, platform_fee_value,
        vendor_code_enabled, vendor_code, vendor_discount_type, vendor_discount_value,
-       coupon_codes_enabled, show_on_events_page,
+       coupon_codes_enabled, show_on_events_page, is_listed,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -296,6 +305,7 @@ async function createEvent(payload) {
       checkoutConfig.vendor_discount_value,
       checkoutConfig.coupon_codes_enabled,
       checkoutConfig.show_on_events_page,
+      checkoutConfig.is_listed,
       initialStatus
     ]
   );
@@ -410,9 +420,11 @@ async function findPublicEventById(id) {
 }
 
 async function updateEventListed({ eventId, isListed }) {
+  const flag = isListed ? 1 : 0;
+  // Keep show_on_events_page in sync so organizer + admin inactive hide the same way.
   const [result] = await pool.query(
-    `UPDATE events SET is_listed = ?, updated_at = NOW() WHERE id = ?`,
-    [isListed ? 1 : 0, eventId]
+    `UPDATE events SET is_listed = ?, show_on_events_page = ?, updated_at = NOW() WHERE id = ?`,
+    [flag, flag, eventId]
   );
   return result.affectedRows > 0;
 }
@@ -474,6 +486,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "vendor_discount_value",
     "coupon_codes_enabled",
     "show_on_events_page",
+    "is_listed",
     "ticket_levels",
     "ticket_levels_json",
     "seating_mode"
@@ -533,9 +546,11 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         key === "platform_fee_enabled" ||
         key === "vendor_code_enabled" ||
         key === "coupon_codes_enabled" ||
-        key === "show_on_events_page"
+        key === "show_on_events_page" ||
+        key === "is_listed"
       ) {
-        const defaultOn = key === "coupon_codes_enabled" || key === "show_on_events_page";
+        const defaultOn =
+          key === "coupon_codes_enabled" || key === "show_on_events_page" || key === "is_listed";
         return [key, toBoolFlag(value, defaultOn) ? 1 : 0];
       }
       if (key === "service_fee_type" || key === "platform_fee_type") {
@@ -572,6 +587,26 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     if (!Object.prototype.hasOwnProperty.call(updates, "vendor_discount_value")) {
       entries.push(["vendor_discount_value", 0]);
     }
+  }
+
+  // Keep organizer visibility in sync with admin Active (is_listed) so hero/public hide globally.
+  if (
+    Object.prototype.hasOwnProperty.call(updates, "show_on_events_page") &&
+    !Object.prototype.hasOwnProperty.call(updates, "is_listed")
+  ) {
+    entries.push([
+      "is_listed",
+      toBoolFlag(updates.show_on_events_page, true) ? 1 : 0
+    ]);
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(updates, "is_listed") &&
+    !Object.prototype.hasOwnProperty.call(updates, "show_on_events_page")
+  ) {
+    entries.push([
+      "show_on_events_page",
+      toBoolFlag(updates.is_listed, true) ? 1 : 0
+    ]);
   }
 
   if (!entries.length) {
