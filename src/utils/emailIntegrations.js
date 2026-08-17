@@ -4,8 +4,45 @@
  */
 
 const crypto = require("crypto");
+const https = require("https");
 
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+
+/** Prefer IPv4 when Brevo's IP allowlist rejects IPv6 (common on local Windows). */
+function postBrevoJsonIpv4(headers, body) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(BREVO_API_URL);
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        path: u.pathname,
+        method: "POST",
+        family: 4,
+        headers: {
+          ...headers,
+          "Content-Length": Buffer.byteLength(body)
+        }
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode,
+            async text() {
+              return text;
+            }
+          });
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
 
 function logSkip(reason) {
   if (process.env.NODE_ENV !== "production") {
@@ -114,15 +151,33 @@ async function sendTransactionalEmail({ to, subject, text, html, replyTo, attach
   }
 
   try {
-    const res = await fetch(BREVO_API_URL, {
+    const headers = {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    };
+    const body = JSON.stringify(payload);
+    let res = await fetch(BREVO_API_URL, {
       method: "POST",
-      headers: {
-        "api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify(payload)
+      headers,
+      body
     });
+
+    if (!res.ok) {
+      const firstErr = await parseBrevoErrorResponse(res);
+      if (res.status === 401 && /unrecognised IP/i.test(firstErr)) {
+        res = await postBrevoJsonIpv4(headers, body);
+        if (res.ok) {
+          return { sent: true, provider: "brevo" };
+        }
+      } else {
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, firstErr);
+        }
+        return { sent: false, error: firstErr, provider: "brevo" };
+      }
+    }
 
     if (!res.ok) {
       const errText = await parseBrevoErrorResponse(res);

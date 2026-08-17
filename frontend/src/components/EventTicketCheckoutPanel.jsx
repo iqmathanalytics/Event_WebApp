@@ -10,6 +10,7 @@ import {
   createGuestBookingPaymentIntent
 } from "../services/bookingService";
 import { confirmBookingPaymentWithRetry } from "../utils/confirmBookingPaymentWithRetry";
+import { profileMobileOrEmpty } from "../utils/phone";
 const StripePaymentModal = lazy(() => import("./StripePaymentModal"));
 import StripePaymentReturnRelay from "./StripePaymentReturnRelay";
 import {
@@ -135,6 +136,7 @@ function buildBookingPayload({
   email,
   phone,
   couponHold,
+  vendorCode = "",
   reservedSeating = false,
   seatsioHoldToken = "",
   selectedSeats = [],
@@ -145,6 +147,7 @@ function buildBookingPayload({
   const first = String(firstName || "").trim();
   const last = String(lastName || "").trim();
   const name = formatBookingContactName({ firstName: first, lastName: last });
+  const vendor_code = String(vendorCode || "").trim().toUpperCase() || undefined;
 
   if (reservedSeating && selectedSeats.length) {
     return {
@@ -164,6 +167,7 @@ function buildBookingPayload({
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       coupon_hold_token: couponHold?.holdToken || undefined,
+      vendor_code,
       seatsio_hold_token: seatsioHoldToken || undefined,
       selected_seats: selectedSeats
     };
@@ -182,7 +186,8 @@ function buildBookingPayload({
     name: name || undefined,
     email: email.trim() || undefined,
     phone: phone.trim() || undefined,
-    coupon_hold_token: couponHold?.holdToken || undefined
+    coupon_hold_token: couponHold?.holdToken || undefined,
+    vendor_code
   };
 }
 
@@ -306,7 +311,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const [vendorCodeInput, setVendorCodeInput] = useState("");
   const [couponHold, setCouponHold] = useState(null);
   const [couponApplying, setCouponApplying] = useState(false);
-  const [vendorApplying, setVendorApplying] = useState(false);
   const [couponMessage, setCouponMessage] = useState("");
   const [holdCountdown, setHoldCountdown] = useState("");
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -424,15 +428,19 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     };
 
     if (draft.couponHold?.holdToken) {
-      skipHoldClearRef.current = 2;
-      const hold = buildHoldState(draft.couponHold, snapshot) || {
-        ...draft.couponHold,
-        _draftSnapshot: snapshot
-      };
-      setCouponHold(hold);
-      setCouponMessage(draft.couponMessage || hold.message || COUPON_HOLD_MESSAGE);
-      if (hold.holdKind === "vendor" && hold.couponCode && !draft.vendorCodeInput) {
-        setVendorCodeInput(String(hold.couponCode));
+      // Legacy vendor discount holds are no longer valid — keep the typed vendor code only.
+      if (draft.couponHold.holdKind === "vendor") {
+        if (draft.couponHold.couponCode && !draft.vendorCodeInput) {
+          setVendorCodeInput(String(draft.couponHold.couponCode));
+        }
+      } else {
+        skipHoldClearRef.current = 2;
+        const hold = buildHoldState(draft.couponHold, snapshot) || {
+          ...draft.couponHold,
+          _draftSnapshot: snapshot
+        };
+        setCouponHold(hold);
+        setCouponMessage(draft.couponMessage || hold.message || COUPON_HOLD_MESSAGE);
       }
     }
 
@@ -476,7 +484,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     setFirstName(split.firstName);
     setLastName(split.lastName);
     setEmail(String(user?.email || "").trim());
-    setPhone(String(user?.mobile_number || "").trim());
+    setPhone(profileMobileOrEmpty(user?.mobile_number));
   }, [user, guestMode]);
 
   useEffect(() => {
@@ -636,8 +644,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   });
   const couponsEnabled = toBoolFlag(event?.coupon_codes_enabled, true);
   const vendorCodeEnabled = toBoolFlag(event?.vendor_code_enabled, false);
-  const isVendorHoldApplied = couponHold?.holdKind === "vendor";
-  const isCouponHoldApplied = Boolean(couponHold?.holdToken) && !isVendorHoldApplied;
+  const isCouponHoldApplied = Boolean(couponHold?.holdToken);
 
   const sortedSelected = useMemo(() => normalizeDateList(selectedDates), [selectedDates]);
   const reservedSeatGroups = useMemo(
@@ -825,20 +832,15 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     return () => clearInterval(id);
   }, [couponHold?.expiresAt, couponHold?.holdToken, clearCouponHold]);
 
-  const applyPromoCode = async (rawCode, { kind }) => {
-    const isVendor = kind === "vendor";
-    if (isVendor && !vendorCodeEnabled) {
-      setError("Vendor codes are not available for this event.");
-      return;
-    }
-    if (!isVendor && !couponsEnabled) {
+  const applyPromoCode = async (rawCode) => {
+    if (!couponsEnabled) {
       setError("Coupon codes are not available for this event.");
       return;
     }
     setError("");
     setCouponMessage("");
     if (!userId) {
-      setError(isVendor ? "Sign in to apply a vendor code." : "Sign in to apply a coupon code.");
+      setError("Sign in to apply a coupon code.");
       return;
     }
     const msg = validateForm();
@@ -848,7 +850,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
     const code = String(rawCode || "").trim();
     if (!code) {
-      setError(isVendor ? "Enter a vendor code." : "Enter a coupon code.");
+      setError("Enter a coupon code.");
       return;
     }
     if (subtotalAmount <= 0) {
@@ -856,11 +858,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       return;
     }
     try {
-      if (isVendor) {
-        setVendorApplying(true);
-      } else {
-        setCouponApplying(true);
-      }
+      setCouponApplying(true);
       const res = await validateEventCoupon({
         event_id: Number(eventId),
         coupon_code: code,
@@ -876,20 +874,13 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         cartKey: JSON.stringify(checkoutCart)
       };
       const hold = buildHoldState(data, snapshot);
-      if (!hold) {
-        setError(isVendor ? "Could not apply this vendor code." : "Could not apply this coupon.");
+      if (!hold || hold.holdKind === "vendor") {
+        setError("Could not apply this coupon.");
         return;
       }
-      // If user applied from vendor field but got a coupon (or vice versa), still accept.
       skipHoldClearRef.current = 2;
       setCouponHold(hold);
-      if (hold.holdKind === "vendor") {
-        setVendorCodeInput(hold.couponCode || code);
-        setCouponCodeInput("");
-      } else {
-        setCouponCodeInput(hold.couponCode || code);
-        setVendorCodeInput("");
-      }
+      setCouponCodeInput(hold.couponCode || code);
       const message = hold.message || COUPON_HOLD_MESSAGE;
       setCouponMessage(message);
       saveEventCheckoutDraft({
@@ -905,23 +896,21 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         email,
         phone,
         step,
-        couponCodeInput: hold.holdKind === "vendor" ? "" : hold.couponCode || code,
-        vendorCodeInput: hold.holdKind === "vendor" ? hold.couponCode || code : "",
+        couponCodeInput: hold.couponCode || code,
+        vendorCodeInput,
         couponMessage: message,
         couponHold: (({ _draftSnapshot: _s, ...rest }) => rest)(hold),
         holdSnapshot: snapshot
       });
     } catch (err) {
       await clearCouponHold({ skipApi: true });
-      setError(err?.response?.data?.message || (isVendor ? "Could not apply this vendor code." : "Could not apply this coupon."));
+      setError(err?.response?.data?.message || "Could not apply this coupon.");
     } finally {
       setCouponApplying(false);
-      setVendorApplying(false);
     }
   };
 
-  const applyCoupon = async () => applyPromoCode(couponCodeInput, { kind: "coupon" });
-  const applyVendorCode = async () => applyPromoCode(vendorCodeInput, { kind: "vendor" });
+  const applyCoupon = async () => applyPromoCode(couponCodeInput);
 
   const validateForm = useCallback(() => {
     if (!availableDates.length) {
@@ -960,10 +949,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       }
     }
     if (!phoneTrim) {
-      return "Phone number is required to complete your booking.";
+      return "";
     }
     if (phoneTrim.length < 8) {
-      return "Enter a valid phone number (at least 8 digits).";
+      return "Enter a valid phone number (at least 8 digits), or leave it blank.";
     }
     return "";
   }, [
@@ -1011,10 +1000,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
     if (!guestMode && couponCodeInput.trim() && !couponHold?.holdToken) {
       setError("Apply your coupon code before continuing, or remove it.");
-      return;
-    }
-    if (!guestMode && vendorCodeInput.trim() && !couponHold?.holdToken) {
-      setError("Apply your vendor code before continuing, or remove it.");
       return;
     }
     setStep("confirm");
@@ -1101,6 +1086,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       email,
       phone,
       couponHold,
+      vendorCode: vendorCodeInput,
       reservedSeating,
       seatsioHoldToken,
       selectedSeats,
@@ -1308,7 +1294,12 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         />
           {couponHold?.couponCode ? (
             <p className="mt-1 text-xs font-semibold text-emerald-700">
-              {isVendorHoldApplied ? "Vendor code" : "Coupon"} {couponHold.couponCode}
+              Coupon {couponHold.couponCode}
+            </p>
+          ) : null}
+          {vendorCodeInput.trim() ? (
+            <p className="mt-1 text-xs font-semibold text-slate-700">
+              Vendor {vendorCodeInput.trim().toUpperCase()} (tracking only)
             </p>
           ) : null}
           <p className="mt-1.5 text-sm text-slate-600">
@@ -1556,65 +1547,31 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </div>
         <div>
           <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
-            Phone <span className="text-rose-600">*</span>
+            Phone
           </label>
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
-            placeholder="Mobile number"
+            placeholder="Mobile number (optional)"
             autoComplete="tel"
-            required
           />
         </div>
       </div>
 
-      {!guestMode && vendorCodeEnabled && subtotalAmount > 0 ? (
+      {vendorCodeEnabled ? (
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Vendor code</p>
-          <div className="mt-2 flex gap-2">
-            <input
-              value={vendorCodeInput}
-              onChange={(e) => {
-                setVendorCodeInput(e.target.value.toUpperCase());
-                if (couponHold) void clearCouponHold();
-              }}
-              maxLength={40}
-              placeholder="VENDOR123"
-              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase"
-            />
-            <button
-              type="button"
-              disabled={vendorApplying || !vendorCodeInput.trim()}
-              onClick={() => void applyVendorCode()}
-              className="shrink-0 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {vendorApplying ? "..." : "Apply"}
-            </button>
-          </div>
-          {isVendorHoldApplied && couponHold?.holdToken ? (
-            <div className="mt-2 space-y-1 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-emerald-700">{couponMessage}</span>
-                <button
-                  type="button"
-                  onClick={() => void clearCouponHold()}
-                  className="font-semibold text-slate-600 hover:text-slate-900"
-                >
-                  Remove
-                </button>
-              </div>
-              {holdCountdown ? (
-                <p className="font-semibold tabular-nums text-amber-800">
-                  Reserved for {holdCountdown}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <p className="mt-2 text-[11px] text-slate-500">
-              Reserved for {COUPON_HOLD_MINUTES} minutes after you apply.
-            </p>
-          )}
+          <p className="mt-1 text-xs text-slate-500">
+            Optional — enter a partner/vendor code for tracking only. No discount is applied.
+          </p>
+          <input
+            value={vendorCodeInput}
+            onChange={(e) => setVendorCodeInput(e.target.value.toUpperCase())}
+            maxLength={40}
+            placeholder="VENDOR123"
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase"
+          />
         </div>
       ) : null}
 

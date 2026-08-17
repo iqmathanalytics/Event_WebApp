@@ -63,6 +63,7 @@ const FILES = [
   "event_checkout_fee_and_code_flags.sql",
   "event_vendor_discount.sql",
   "event_booking_coupon_code_widen.sql",
+  "event_booking_vendor_code.sql",
   "event_analytics_shares.sql",
   "event_analytics_share_invites.sql"
 ];

@@ -33,9 +33,26 @@ export async function fetchFeaturedEvents(params = {}) {
   );
 }
 
-export async function fetchEventById(slugOrId) {
-  const response = await api.get(`/events/${encodePublicListingParam(slugOrId)}`);
-  return response.data;
+export async function fetchEventById(slugOrId, { ownerPreview = false } = {}) {
+  const path = `/events/${encodePublicListingParam(slugOrId)}`;
+  const minePath = `/events/mine/${encodePublicListingParam(slugOrId)}`;
+  const hasToken = Boolean(typeof localStorage !== "undefined" && localStorage.getItem("accessToken"));
+
+  if (ownerPreview && hasToken) {
+    const response = await api.get(minePath);
+    return response.data;
+  }
+
+  try {
+    const response = await api.get(path, { optionalAuth: true });
+    return response.data;
+  } catch (err) {
+    if (err?.response?.status === 404 && hasToken) {
+      const response = await api.get(minePath);
+      return response.data;
+    }
+    throw err;
+  }
 }
 
 export async function fetchMyEvents() {

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import HomePage from "./pages/HomePage";
@@ -15,7 +15,6 @@ import NewsletterPage from "./pages/NewsletterPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import AdminRoute from "./components/AdminRoute";
 import UserRoute from "./components/UserRoute";
-import OrganizerRoute from "./components/OrganizerRoute";
 import AnimatedBackground from "./components/AnimatedBackground";
 import LogoutOverlay from "./components/LogoutOverlay";
 import NavigationProgress from "./components/NavigationProgress";
@@ -27,14 +26,33 @@ const DealDetailsPage = lazy(() => import("./pages/DealDetailsPage"));
 const InfluencerDetailsPage = lazy(() => import("./pages/InfluencerDetailsPage"));
 const UserDashboardPage = lazy(() => import("./pages/UserDashboardPage"));
 const UserSubmissionsPage = lazy(() => import("./pages/UserSubmissionsPage"));
-const OrganizerDashboardPage = lazy(() => import("./pages/OrganizerDashboardPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminVerifyTicketPage = lazy(() => import("./pages/AdminVerifyTicketPage"));
 const BookingConfirmedPage = lazy(() => import("./pages/BookingConfirmedPage"));
 const EventLandingPage = lazy(() => import("./eventLandings/EventLandingPage"));
+const SeatingDesignerPage = lazy(() => import("./pages/SeatingDesignerPage"));
 
 function RouteFallback({ label = "Loading..." }) {
   return <p className="py-10 text-center text-sm text-slate-500">{label}</p>;
+}
+
+function RedirectOrganizerDashboardToUser() {
+  const [params] = useSearchParams();
+  const next = new URLSearchParams(params);
+  if (next.get("invite")) {
+    next.set("host", "shared");
+  } else if (!next.get("host")) {
+    const section = String(next.get("section") || "").toLowerCase();
+    if (section === "my-events") {
+      next.set("host", "events");
+    } else if (section) {
+      next.set("host", section);
+    } else {
+      next.set("host", "overview");
+    }
+  }
+  const qs = next.toString();
+  return <Navigate to={`/dashboard/user${qs ? `?${qs}` : ""}`} replace />;
 }
 
 function App() {
@@ -85,6 +103,7 @@ function App() {
             <Route path="/admin" element={<StaffLoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/set-password" element={<SetPasswordPage />} />
+            <Route path="/reset-password" element={<SetPasswordPage mode="reset" />} />
             <Route
               path="/booking/confirmed"
               element={
@@ -128,23 +147,18 @@ function App() {
             />
           </Route>
 
+          <Route path="/dashboard/organizer" element={<RedirectOrganizerDashboardToUser />} />
+
           <Route
-            path="/dashboard/organizer"
+            path="/seating-designer/:eventId"
             element={
-              <OrganizerRoute>
-                <DashboardLayout />
-              </OrganizerRoute>
-            }
-          >
-            <Route
-              index
-              element={
-                <Suspense fallback={<RouteFallback label="Loading event analytics..." />}>
-                  <OrganizerDashboardPage />
+              <UserRoute>
+                <Suspense fallback={<RouteFallback label="Loading seating designer..." />}>
+                  <SeatingDesignerPage />
                 </Suspense>
-              }
-            />
-          </Route>
+              </UserRoute>
+            }
+          />
 
           <Route
             element={

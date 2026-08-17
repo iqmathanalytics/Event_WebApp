@@ -77,6 +77,15 @@ const completeSetPassword = asyncHandler(async (req, res) => {
   });
 });
 
+const forgotPassword = asyncHandler(async (req, res) => {
+  const passwordSetService = require("../services/passwordSetService");
+  await passwordSetService.requestPasswordReset(req.validated.body.email);
+  res.status(200).json({
+    success: true,
+    message: "If that email is registered, we sent password reset instructions."
+  });
+});
+
 module.exports = {
   register,
   loginUser,
@@ -85,5 +94,6 @@ module.exports = {
   googleLoginUser,
   googleRegisterUser,
   validateSetPasswordToken,
-  completeSetPassword
+  completeSetPassword,
+  forgotPassword
 };

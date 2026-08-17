@@ -56,6 +56,7 @@ function toCsv(rows) {
     "Subtotal",
     "Discount",
     "Coupon Code",
+    "Vendor Code",
     "Total Amount",
     "Payment Status",
     "Amount Paid",
@@ -84,6 +85,7 @@ function toCsv(rows) {
       row.subtotal_amount ?? row.total_amount ?? "",
       row.discount_amount ?? 0,
       row.coupon_code || "",
+      row.vendor_code || "",
       row.total_amount || 0,
       row.payment_status || "paid",
       amountPaidForExport(row),
@@ -212,19 +214,17 @@ function requireGuestContactFields(payload) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new ApiError(400, "A valid email address is required for guest checkout.");
   }
-  if (phone.length < 8) {
-    throw new ApiError(400, "Phone number is required for guest checkout.");
-  }
   return { name: asserted.name, email, phone };
 }
 
 function resolveSignedInContactFields(payload, user) {
   const asserted = assertBookingContactNames(payload);
+  const typedPhone = String(payload.phone || "").trim();
   if (asserted.ok) {
     return {
       name: asserted.name,
       email: payload.email?.trim()?.toLowerCase() || user.email,
-      phone: String(payload.phone || user.mobile_number || "").trim()
+      phone: typedPhone
     };
   }
   const fallbackName = String(user?.name || "").trim();
@@ -232,7 +232,7 @@ function resolveSignedInContactFields(payload, user) {
     return {
       name: fallbackName,
       email: payload.email?.trim()?.toLowerCase() || user.email,
-      phone: String(payload.phone || user.mobile_number || "").trim()
+      phone: typedPhone
     };
   }
   throw new ApiError(400, asserted.message);
@@ -335,6 +335,21 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     selectedDates = applied.selectedDates;
   }
 
+  const vendorEnabled = !(
+    eventWithLevels.vendor_code_enabled === false ||
+    Number(eventWithLevels.vendor_code_enabled) === 0
+  );
+  let vendorCode = null;
+  if (vendorEnabled) {
+    const rawVendor = String(payload.vendor_code || "").trim().toUpperCase();
+    if (rawVendor) {
+      if (!/^[A-Za-z0-9]{3,40}$/.test(rawVendor)) {
+        throw new ApiError(400, "Vendor code must be 3–40 letters or numbers.");
+      }
+      vendorCode = rawVendor;
+    }
+  }
+
   const feeBreakdown = applyCheckoutFees({
     subtotalAmount,
     discountAmount,
@@ -370,6 +385,7 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     totalAmount,
     couponId,
     couponCode,
+    vendorCode,
     holdToken,
     seatsioHoldToken: payload._seatsio_hold_token || null,
     selectedSeats: payload._selected_seats || null
@@ -569,9 +585,6 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
     await conn.beginTransaction();
 
     const phone = String(pricing.userPhone || payload.phone || "").trim();
-    if (phone.length < 8) {
-      throw new ApiError(400, "Phone number is required for booking.");
-    }
 
     const created = await createBooking(
       {
@@ -581,7 +594,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
         is_guest_booking: isGuest,
         name: pricing.userName,
         email: pricing.userEmail,
-        phone,
+        phone: phone || "",
         attendee_count: pricing.attendeeCount,
         ticket_items_json: pricing.ticketCart?.length
           ? JSON.stringify(pricing.ticketCart)
@@ -594,6 +607,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
         subtotal_amount: pricing.subtotalAmount,
         discount_amount: pricing.discountAmount,
         coupon_code: pricing.couponCode,
+        vendor_code: pricing.vendorCode,
         payment_status,
         stripe_payment_intent_id: paymentMeta?.stripe_payment_intent_id || null,
         stripe_charge_id: paymentMeta?.stripe_charge_id || null,
@@ -647,6 +661,7 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
       transactionFeeAmount: pricing.transactionFeeAmount,
       totalAmount: pricing.totalAmount,
       couponCode: pricing.couponCode,
+      vendorCode: pricing.vendorCode,
       paymentStatus: payment_status
     };
   } catch (err) {

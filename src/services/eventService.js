@@ -5,7 +5,7 @@ const {
   countApprovedEventsByOrganizer,
   updateEventStatus,
   findEventById,
-  findPublicEventBySlugOrId,
+  findEventDetailBySlugOrIdForViewer,
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
@@ -448,7 +448,8 @@ async function fetchEvents(query, viewerUser) {
 }
 
 async function fetchEventById(slugOrId, viewerUser) {
-  const event = await findPublicEventBySlugOrId(slugOrId);
+  const resolved = await findEventDetailBySlugOrIdForViewer(slugOrId, viewerUser);
+  const event = resolved?.event;
   if (!event) {
     throw new ApiError(404, "Event not found");
   }
@@ -459,7 +460,11 @@ async function fetchEventById(slugOrId, viewerUser) {
   });
   const withSeats = await attachEventSeatAvailability(enriched);
   const withLevelSeats = await attachTicketLevelAvailability(withSeats);
-  return sanitizePublicEventForViewer(withLevelSeats, viewerUser);
+  const sanitized = sanitizePublicEventForViewer(withLevelSeats, viewerUser);
+  if (resolved.viewerPreview) {
+    sanitized.viewer_preview = true;
+  }
+  return sanitized;
 }
 
 async function fetchMySubmissions(userId) {

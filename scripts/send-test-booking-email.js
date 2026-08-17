@@ -9,9 +9,16 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "..", ".env") });
 
 const { pool } = require("../src/config/db");
-const { dispatchBookingEmails } = require("../src/services/bookingService");
-const { ensureGuestUserAccount } = require("../src/services/guestAccountService");
+const { ensureGuestUserAccount, generateTemporaryPassword } = require("../src/services/guestAccountService");
 const { createBooking } = require("../src/models/bookingModel");
+const { generateCheckInCode } = require("../src/utils/bookingCheckIn");
+const { publicBookingQrImageUrl } = require("../src/utils/bookingQr");
+const { sendTransactionalEmail } = require("../src/utils/emailIntegrations");
+const {
+  buildWelcomeEmail,
+  buildBookingConfirmationEmail,
+  ticketBlocksFromCart
+} = require("../src/utils/transactionalEmailTemplates");
 
 async function loadSampleEvent() {
   try {
@@ -57,55 +64,72 @@ async function main() {
   const totalAmount = 104.37;
   const paymentStatus = "paid";
 
-  const guestAccount = await ensureGuestUserAccount({ name: guestName, email: to, phone: "5551234567" });
+  const guestAccount = await ensureGuestUserAccount({ name: guestName, email: to, phone: null });
 
-  const created = await createBooking({
-    event_id: event.id,
-    organizer_id: event.organizer_id || 1,
-    user_id: guestAccount?.userId || null,
-    is_guest_booking: true,
-    name: guestName,
-    email: to,
-    phone: "5551234567",
-    attendee_count: attendeeCount,
-    ticket_items_json: JSON.stringify(
-      ticketCart.map((row) => ({
-        level_id: "general-admission",
-        level_name: row.level_name,
-        unit_price: row.unit_price,
-        quantity: row.quantity
-      }))
-    ),
-    booking_date: bookingDate,
-    selected_dates_json: JSON.stringify(selectedDates),
-    total_days: totalDays,
-    total_amount: totalAmount,
-    subtotal_amount: subtotalAmount,
-    discount_amount: discountAmount,
-    payment_status: paymentStatus,
-    amount_paid_cents: Math.round(totalAmount * 100),
-    currency: "usd",
-    paid_at: new Date()
-  });
+  let created = { id: `TEST-${Date.now()}`, check_in_code: generateCheckInCode() };
+  try {
+    created = await createBooking({
+      event_id: event.id,
+      organizer_id: event.organizer_id || 1,
+      user_id: guestAccount?.userId || null,
+      is_guest_booking: true,
+      name: guestName,
+      email: to,
+      phone: "",
+      attendee_count: attendeeCount,
+      ticket_items_json: JSON.stringify(
+        ticketCart.map((row) => ({
+          level_id: "general-admission",
+          level_name: row.level_name,
+          unit_price: row.unit_price,
+          quantity: row.quantity
+        }))
+      ),
+      booking_date: bookingDate,
+      selected_dates_json: JSON.stringify(selectedDates),
+      total_days: totalDays,
+      total_amount: totalAmount,
+      subtotal_amount: subtotalAmount,
+      discount_amount: discountAmount,
+      payment_status: paymentStatus,
+      amount_paid_cents: Math.round(totalAmount * 100),
+      currency: "usd",
+      paid_at: new Date()
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[send-test-booking-email] Skipped booking insert (${err.message}). Sending emails anyway.`);
+  }
 
-  const pricing = {
+  const checkInCode = created.check_in_code;
+  const qrImageUrl = checkInCode ? publicBookingQrImageUrl(checkInCode) : null;
+  const confirmation = buildBookingConfirmationEmail({
+    guestName,
+    eventTitle: event.title,
     event,
-    organizerId: event.organizer_id || 1,
-    userName: guestName,
-    userEmail: to,
-    userPhone: "5551234567",
+    bookingId: created.id,
     selectedDates,
     totalDays,
     attendeeCount,
-    ticketCart,
+    ticketBlocks: ticketBlocksFromCart(ticketCart, totalDays),
     subtotalAmount,
     discountAmount,
     totalAmount,
     couponCode: null,
-    isGuest: true
-  };
-
-  const payload = { name: guestName, email: to, phone: "5551234567", event_id: event.id };
+    paymentStatus,
+    qrImageUrl,
+    isGuestBooking: true
+  });
+  const welcomePassword =
+    guestAccount?.created && guestAccount.temporaryPassword
+      ? guestAccount.temporaryPassword
+      : generateTemporaryPassword();
+  const welcome = buildWelcomeEmail({
+    firstName: guestName.split(/\s+/)[0] || "there",
+    guestCheckout: true,
+    loginEmail: to,
+    temporaryPassword: welcomePassword
+  });
 
   // eslint-disable-next-line no-console
   console.log(`Sending booking emails for ${to}…`);
@@ -113,22 +137,41 @@ async function main() {
   console.log(`  Event: ${event.title} (id ${event.id})`);
   // eslint-disable-next-line no-console
   console.log(`  Booking ref: #${created.id}`);
-  if (guestAccount?.created && guestAccount.temporaryPassword) {
-    // eslint-disable-next-line no-console
-    console.log(`  Welcome email will include temporary password for new guest account.`);
+
+  const confirmationResult = await sendTransactionalEmail({
+    to,
+    subject: confirmation.subject,
+    text: confirmation.text,
+    html: confirmation.html
+  });
+  if (!confirmationResult?.sent) {
+    throw new Error(
+      `Booking confirmation email failed: ${confirmationResult?.error || (confirmationResult?.skipped ? "Brevo not configured" : "unknown")}`
+    );
   }
 
-  await dispatchBookingEmails({
-    bookingId: created.id,
-    checkInCode: created.check_in_code,
-    payload,
-    pricing,
-    paymentStatus,
-    guestAccount: guestAccount?.created ? guestAccount : null
+  const welcomeResult = await sendTransactionalEmail({
+    to,
+    subject: guestAccount?.created ? welcome.subject : `[TEST] ${welcome.subject}`,
+    text: welcome.text,
+    html: welcome.html
   });
+  if (!welcomeResult?.sent) {
+    throw new Error(
+      `Welcome email failed: ${welcomeResult?.error || (welcomeResult?.skipped ? "Brevo not configured" : "unknown")}`
+    );
+  }
 
-  // eslint-disable-next-line no-console
-  console.log("Emails dispatched (confirmation, welcome if new guest, organizer notification).");
+  if (guestAccount?.created) {
+    // eslint-disable-next-line no-console
+    console.log("  Sent confirmation + welcome with a working temporary password (new guest account).");
+  } else {
+    // eslint-disable-next-line no-console
+    console.log(
+      "  Sent confirmation + sample welcome. This email already has an account — the password in the welcome mail is a preview only. Use Forgot password to sign in."
+    );
+  }
+
   process.exit(0);
 }
 

@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { absoluteListingUrl, eventDetailPath } from "../utils/listingPaths";
 import ShareListingButton from "../components/ShareListingButton";
 import ListingFavoriteButton from "../components/ListingFavoriteButton";
@@ -66,12 +66,14 @@ function getEmbedMapUrl(googleMapsLink, venueName, venueAddress) {
 
 function EventDetailsPage() {
   const { slug } = useParams();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const { selectedCity } = useCityFilter();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [trackedView, setTrackedView] = useState(false);
+  const ownerPreview = Boolean(location.state?.ownerPreview);
 
   useCanonicalListingUrl(event, eventDetailPath);
 
@@ -82,7 +84,7 @@ function EventDetailsPage() {
       try {
         setLoading(true);
         setError("");
-        const response = await fetchEventById(slug);
+        const response = await fetchEventById(slug, { ownerPreview });
         if (active) {
           setEvent(response?.data || null);
         }
@@ -102,10 +104,14 @@ function EventDetailsPage() {
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, ownerPreview]);
 
   useEffect(() => {
     if (!event?.id || trackedView) {
+      return;
+    }
+    if (event.viewer_preview) {
+      setTrackedView(true);
       return;
     }
     trackEventPageView({
@@ -115,7 +121,7 @@ function EventDetailsPage() {
     });
     trackEventView(event.public_slug || event.id).catch(() => {});
     setTrackedView(true);
-  }, [event?.id, event?.title, event?.ticket_sales_mode, trackedView]);
+  }, [event?.id, event?.title, event?.ticket_sales_mode, event?.viewer_preview, trackedView]);
 
   useEffect(() => {
     if (!event?.title) {
@@ -180,6 +186,14 @@ function EventDetailsPage() {
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-4 lg:space-y-6"
     >
+      {event.viewer_preview ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">Preview only — this event is not visible on the public site.</p>
+          <p className="mt-0.5 text-amber-900/80">
+            Visitors will not see this listing until it is approved and set to Active.
+          </p>
+        </div>
+      ) : null}
       <EventDetailBanner
         event={event}
         title={event.title}

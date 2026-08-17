@@ -80,14 +80,6 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
   const serviceEnabled = toBoolFlag(payload.service_fee_enabled, false);
   const platformEnabled = toBoolFlag(payload.platform_fee_enabled, false);
   const vendorEnabled = toBoolFlag(payload.vendor_code_enabled, false);
-  const vendorCode =
-    vendorEnabled && payload.vendor_code != null && String(payload.vendor_code).trim()
-      ? String(payload.vendor_code).trim().slice(0, 40)
-      : null;
-  const vendorDiscountType =
-    String(payload.vendor_discount_type || "percent").toLowerCase() === "fixed_amount"
-      ? "fixed_amount"
-      : "percent";
   return {
     service_fee_enabled: serviceEnabled ? 1 : 0,
     service_fee_type: normalizeFeeType(payload.service_fee_type),
@@ -96,9 +88,10 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
     platform_fee_type: normalizeFeeType(payload.platform_fee_type),
     platform_fee_value: Math.max(0, Number(payload.platform_fee_value) || 0),
     vendor_code_enabled: vendorEnabled ? 1 : 0,
-    vendor_code: vendorCode,
-    vendor_discount_type: vendorDiscountType,
-    vendor_discount_value: vendorEnabled ? Math.max(0, Number(payload.vendor_discount_value) || 0) : 0,
+    // Tracking-only: organizers no longer configure a code or discount.
+    vendor_code: null,
+    vendor_discount_type: "percent",
+    vendor_discount_value: 0,
     coupon_codes_enabled: toBoolFlag(payload.coupon_codes_enabled, true) ? 1 : 0,
     show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0,
     // Mirrors show_on_events_page so new events stay consistent with admin Active.
@@ -341,18 +334,7 @@ async function findEventById(id) {
   return normalizeEventRow(rows[0] || null);
 }
 
-async function findPublicEventBySlugOrId(param) {
-  const { id, slug } = resolveListingIdFromParam(param);
-  if (id) {
-    const byId = await findPublicEventById(id);
-    if (byId) {
-      return byId;
-    }
-  }
-  if (slug) {
-    try {
-      const [rows] = await pool.query(
-        `SELECT
+const EVENT_DETAIL_SELECT_SQL = `SELECT
            e.*,
            c.name AS city_name,
            cat.name AS category_name,
@@ -374,12 +356,73 @@ async function findPublicEventBySlugOrId(param) {
          FROM events e
          LEFT JOIN cities c ON c.id = e.city_id
          LEFT JOIN categories cat ON cat.id = e.category_id
-         LEFT JOIN users u ON u.id = e.organizer_id
-         WHERE e.public_slug = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1 AND COALESCE(e.show_on_events_page, 1) = 1
-         LIMIT 1`,
-        [slug]
-      );
-      return normalizeEventRow(rows[0] || null);
+         LEFT JOIN users u ON u.id = e.organizer_id`;
+
+async function queryEventDetail({ id, slug, publicOnly }) {
+  const where = [];
+  const params = [];
+  if (id) {
+    where.push("e.id = ?");
+    params.push(id);
+  } else if (slug) {
+    where.push("e.public_slug = ?");
+    params.push(slug);
+  } else {
+    return null;
+  }
+  if (publicOnly) {
+    where.push("e.status = 'approved'");
+    where.push("COALESCE(e.is_listed, 1) = 1");
+    where.push("COALESCE(e.show_on_events_page, 1) = 1");
+  }
+  const [rows] = await pool.query(
+    `${EVENT_DETAIL_SELECT_SQL} WHERE ${where.join(" AND ")} LIMIT 1`,
+    params
+  );
+  return normalizeEventRow(rows[0] || null);
+}
+
+function canPreviewPrivateEvent(event, viewerUser) {
+  if (!event) {
+    return false;
+  }
+  const viewerId = Number(viewerUser?.id ?? viewerUser?.userId ?? viewerUser?.sub);
+  if (!Number.isFinite(viewerId) || viewerId <= 0) {
+    return false;
+  }
+  if (String(viewerUser.role || "").toLowerCase() === "admin") {
+    return true;
+  }
+  return Number(event.organizer_id) === viewerId;
+}
+
+function isEventPubliclyVisible(event) {
+  if (!event) {
+    return false;
+  }
+  const approved = String(event.status || "").toLowerCase() === "approved";
+  const listed =
+    event.is_listed !== false &&
+    event.is_listed !== 0 &&
+    String(event.is_listed) !== "false";
+  const shown =
+    event.show_on_events_page !== false &&
+    event.show_on_events_page !== 0 &&
+    String(event.show_on_events_page) !== "false";
+  return approved && listed && shown;
+}
+
+async function findPublicEventBySlugOrId(param) {
+  const { id, slug } = resolveListingIdFromParam(param);
+  if (id) {
+    const byId = await findPublicEventById(id);
+    if (byId) {
+      return byId;
+    }
+  }
+  if (slug) {
+    try {
+      return await queryEventDetail({ slug, publicOnly: true });
     } catch (_err) {
       return null;
     }
@@ -388,35 +431,34 @@ async function findPublicEventBySlugOrId(param) {
 }
 
 async function findPublicEventById(id) {
-  const [rows] = await pool.query(
-    `SELECT
-       e.*,
-       c.name AS city_name,
-       cat.name AS category_name,
-       u.name AS organizer_name,
-       (SELECT COUNT(*) FROM event_bookings eb WHERE eb.event_id = e.id) AS booking_count,
-       (
-         SELECT COUNT(*)
-         FROM events e2
-         WHERE e2.status = 'approved'
-           AND e2.city_id = e.city_id
-           AND e2.category_id = e.category_id
-       ) AS category_event_count,
-       (
-         CASE
-           WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
-           ELSE 0
-         END
-       ) AS recent_engagement_score
-     FROM events e
-     LEFT JOIN cities c ON c.id = e.city_id
-     LEFT JOIN categories cat ON cat.id = e.category_id
-     LEFT JOIN users u ON u.id = e.organizer_id
-     WHERE e.id = ? AND e.status = 'approved' AND COALESCE(e.is_listed, 1) = 1 AND COALESCE(e.show_on_events_page, 1) = 1
-     LIMIT 1`,
-    [id]
-  );
-  return normalizeEventRow(rows[0] || null);
+  return queryEventDetail({ id, publicOnly: true });
+}
+
+async function findEventDetailBySlugOrIdForViewer(param, viewerUser) {
+  const publicEvent = await findPublicEventBySlugOrId(param);
+  if (publicEvent) {
+    return { event: publicEvent, viewerPreview: false };
+  }
+  const viewerId = Number(viewerUser?.id ?? viewerUser?.userId ?? viewerUser?.sub);
+  if (!Number.isFinite(viewerId) || viewerId <= 0) {
+    return null;
+  }
+  const { id, slug } = resolveListingIdFromParam(param);
+  let row = null;
+  if (id) {
+    row = await queryEventDetail({ id, publicOnly: false });
+  }
+  if (!row && slug) {
+    try {
+      row = await queryEventDetail({ slug, publicOnly: false });
+    } catch (_err) {
+      row = null;
+    }
+  }
+  if (!row || !canPreviewPrivateEvent(row, viewerUser)) {
+    return null;
+  }
+  return { event: row, viewerPreview: !isEventPubliclyVisible(row) };
 }
 
 async function updateEventListed({ eventId, isListed }) {
@@ -577,15 +619,16 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
       return [key, value];
     });
 
-  // Clear vendor code when disabled in the same update.
-  if (
-    Object.prototype.hasOwnProperty.call(updates, "vendor_code_enabled") &&
-    !toBoolFlag(updates.vendor_code_enabled, false) &&
-    !Object.prototype.hasOwnProperty.call(updates, "vendor_code")
-  ) {
-    entries.push(["vendor_code", null]);
+  // Clear legacy organizer vendor discount config when toggling the tracking flag.
+  if (Object.prototype.hasOwnProperty.call(updates, "vendor_code_enabled")) {
+    if (!Object.prototype.hasOwnProperty.call(updates, "vendor_code")) {
+      entries.push(["vendor_code", null]);
+    }
     if (!Object.prototype.hasOwnProperty.call(updates, "vendor_discount_value")) {
       entries.push(["vendor_discount_value", 0]);
+    }
+    if (!Object.prototype.hasOwnProperty.call(updates, "vendor_discount_type")) {
+      entries.push(["vendor_discount_type", "percent"]);
     }
   }
 
@@ -871,6 +914,7 @@ module.exports = {
   findEventById,
   findPublicEventById,
   findPublicEventBySlugOrId,
+  findEventDetailBySlugOrIdForViewer,
   updateEventListed,
   listEvents,
   listEventsByOrganizer,

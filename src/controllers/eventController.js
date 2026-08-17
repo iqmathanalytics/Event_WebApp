@@ -50,6 +50,14 @@ const fetchEventById = asyncHandler(async (req, res) => {
   });
 });
 
+const fetchOwnEventById = asyncHandler(async (req, res) => {
+  const result = await eventService.fetchEventById(req.params.id, req.user);
+  res.status(200).json({
+    success: true,
+    data: result
+  });
+});
+
 const fetchMySubmissions = asyncHandler(async (req, res) => {
   const rows = await eventService.fetchMySubmissions(req.user.id);
   res.status(200).json({
@@ -108,6 +116,7 @@ module.exports = {
   rejectEvent,
   fetchEvents,
   fetchEventById,
+  fetchOwnEventById,
   fetchMySubmissions,
   editOwnEvent,
   deleteOwnEvent,

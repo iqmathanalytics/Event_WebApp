@@ -75,37 +75,8 @@ function refineCheckoutConfigFields(data, ctx) {
       });
     }
   }
-  if (data.vendor_code_enabled === true) {
-    const code = String(data.vendor_code || "").trim();
-    if (!code) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["vendor_code"],
-        message: "Vendor code is required when vendor code is enabled"
-      });
-    } else if (!/^[A-Za-z0-9]{3,40}$/.test(code)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["vendor_code"],
-        message: "Vendor code must be 3–40 letters or numbers"
-      });
-    }
-    const dtype = data.vendor_discount_type || "percent";
-    const dvalue = Number(data.vendor_discount_value ?? 0);
-    if (!(dvalue > 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["vendor_discount_value"],
-        message: "Vendor discount value is required when vendor code is enabled"
-      });
-    } else if (dtype === "percent" && dvalue > 100) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["vendor_discount_value"],
-        message: "Vendor discount percent cannot exceed 100"
-      });
-    }
-  }
+  // Vendor codes are attribution-only: organizers just enable the checkout field.
+  // Buyers enter any vendor code; no organizer-owned code or discount is configured.
 }
 
 /** JSON often sends `null`; coerce so older Zod / strict string schemas still accept it. */

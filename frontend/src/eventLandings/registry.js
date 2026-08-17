@@ -8,6 +8,8 @@ export const RESERVED_SLUGS = new Set([
   "login",
   "register",
   "set-password",
+  "reset-password",
+  "forgot-password",
   "complete-signup",
   "dashboard",
   "admin",
@@ -29,6 +31,7 @@ export const RESERVED_SLUGS = new Set([
   "oauth",
   "static",
   "assets",
+  "seating-designer",
   "favicon.ico",
 ]);
 

@@ -30,7 +30,7 @@ function generateTemporaryPassword() {
  * Guest checkout: ensure a user row exists so they can access My Hub.
  * New accounts receive a temporary password in a separate welcome email.
  */
-async function ensureGuestUserAccount({ name, email, phone }) {
+async function ensureGuestUserAccount({ name, email }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
     return { userId: null, created: false, email: null, temporaryPassword: null };
@@ -52,7 +52,7 @@ async function ensureGuestUserAccount({ name, email, phone }) {
   const userId = await createUser({
     name: displayName,
     email: normalizedEmail,
-    mobileNumber: phone || null,
+    mobileNumber: null,
     passwordHash,
     role: "user",
     organizerEnabled: false,

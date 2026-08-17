@@ -9,6 +9,9 @@ export function BookingPaymentStatusCell({ booking }) {
       {booking?.coupon_code ? (
         <p className="mt-1 text-[10px] text-slate-500">{booking.coupon_code}</p>
       ) : null}
+      {booking?.vendor_code ? (
+        <p className="mt-1 text-[10px] text-slate-500">Vendor {booking.vendor_code}</p>
+      ) : null}
     </td>
   );
 }
@@ -46,6 +49,9 @@ export function AdminBookingPaymentStatusCell({ booking }) {
       <BookingPaymentBadge status={booking?.payment_status} />
       {booking?.coupon_code ? (
         <p className="mt-1 text-[10px] text-slate-500">{booking.coupon_code}</p>
+      ) : null}
+      {booking?.vendor_code ? (
+        <p className="mt-1 text-[10px] text-slate-500">Vendor {booking.vendor_code}</p>
       ) : null}
     </td>
   );

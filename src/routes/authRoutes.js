@@ -7,7 +7,8 @@ const {
   refreshTokenSchema,
   googleUserSchema,
   validateSetPasswordTokenSchema,
-  completeSetPasswordSchema
+  completeSetPasswordSchema,
+  forgotPasswordSchema
 } = require("../validators/authValidator");
 
 const router = express.Router();
@@ -25,6 +26,21 @@ router.get(
 );
 router.post(
   "/set-password",
+  validateRequest(completeSetPasswordSchema),
+  authController.completeSetPassword
+);
+router.post(
+  "/forgot-password",
+  validateRequest(forgotPasswordSchema),
+  authController.forgotPassword
+);
+router.get(
+  "/reset-password/validate",
+  validateRequest(validateSetPasswordTokenSchema),
+  authController.validateSetPasswordToken
+);
+router.post(
+  "/reset-password",
   validateRequest(completeSetPasswordSchema),
   authController.completeSetPassword
 );

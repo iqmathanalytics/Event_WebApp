@@ -73,9 +73,16 @@ async function findUserById(id) {
 }
 
 async function findUserByEmail(email) {
-  const [rows] = await pool.query("SELECT * FROM users WHERE email = ? LIMIT 1", [
-    email
-  ]);
+  const normalized = String(email || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  const [rows] = await pool.query(
+    "SELECT * FROM users WHERE LOWER(TRIM(email)) = ? LIMIT 1",
+    [normalized]
+  );
   return rows[0] || null;
 }
 

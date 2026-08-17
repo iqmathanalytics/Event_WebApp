@@ -214,7 +214,7 @@ function buildWelcomeEmail({
   const subject = `Welcome to ${BRAND_NAME}, ${safeFirstName}!`;
 
   const signupLine = guestCheckout && temporaryPassword
-    ? "We created a My Hub account from your guest booking. Use the login details below to view your tickets anytime."
+    ? "We created a My Hub account from your guest booking. Sign in with the password below to open your dashboard and tickets."
     : signedUpWithGoogle
       ? "Your account is ready — you signed up with Google and can start exploring right away."
       : "Your account is ready — sign in anytime to discover events and book tickets on-site.";
@@ -228,11 +228,12 @@ function buildWelcomeEmail({
   ];
   if (guestCheckout && loginEmail && temporaryPassword) {
     textLines.push(
-      `Sign in: ${dashboardUrl("/login")}`,
+      `Sign in: ${dashboardUrl("/login?next=/dashboard/user")}`,
       `Email: ${loginEmail}`,
-      `Temporary password: ${temporaryPassword}`,
+      `Password: ${temporaryPassword}`,
       "",
-      "Please change your password after signing in.",
+      "Use these details to open My Hub and see your tickets right away.",
+      "If you forget this password later, use Forgot password on the login page.",
       ""
     );
   }
@@ -248,14 +249,20 @@ function buildWelcomeEmail({
     { label: "Account", value: "Active" },
     ...(guestCheckout && loginEmail ? [{ label: "Login email", value: loginEmail }] : []),
     ...(guestCheckout && temporaryPassword
-      ? [{ label: "Temporary password", value: temporaryPassword }]
+      ? [{ label: "Password", value: temporaryPassword }]
       : []),
     { label: "Sign-in", value: signedUpWithGoogle ? "Google" : "Email & password" },
     { label: "Support", value: BRAND_SUPPORT_EMAIL }
   ];
 
+  const guestLoginUrl = loginEmail
+    ? dashboardUrl(`/login?next=${encodeURIComponent("/dashboard/user")}&email=${encodeURIComponent(loginEmail)}`)
+    : dashboardUrl("/login?next=/dashboard/user");
+
   const html = buildLayout({
-    preheader: `Welcome to ${BRAND_NAME}. Your account is active.`,
+    preheader: guestCheckout
+      ? `Your ${BRAND_NAME} password is ready. Sign in to see your tickets.`
+      : `Welcome to ${BRAND_NAME}. Your account is active.`,
     eyebrow: "Welcome aboard",
     title: `Hi ${safeFirstName}, you're in.`,
     subtitle: signupLine,
@@ -264,14 +271,15 @@ function buildWelcomeEmail({
       "Browse curated events, deals, and creator spotlights",
       "Book platform tickets in a few taps when events sell on-site",
       guestCheckout
-        ? "Sign in to My Hub to see bookings from your guest checkout"
-        : "Save favorites and manage bookings from My Hub"
-    ],
+        ? "Sign in with the password in this email to open My Hub immediately"
+        : "Save favorites and manage bookings from My Hub",
+      guestCheckout ? "Forgot it later? Use Forgot password on the login page" : null
+    ].filter(Boolean),
     rows,
     ctaLabel: guestCheckout ? "Sign in to My Hub" : `Explore ${BRAND_NAME}`,
-    ctaUrl: guestCheckout ? dashboardUrl("/login") : dashboardUrl("/events"),
+    ctaUrl: guestCheckout ? guestLoginUrl : dashboardUrl("/events"),
     footerNote: guestCheckout
-      ? `Change your temporary password after signing in. Questions? ${BRAND_SUPPORT_EMAIL}`
+      ? `This password is for your first sign-in. You can reset it anytime from the login page. Questions? ${BRAND_SUPPORT_EMAIL}`
       : `Questions? Reply to this email or write to ${BRAND_SUPPORT_EMAIL}. If you didn't create this account, contact us right away.`
   });
 
@@ -350,9 +358,9 @@ function buildBookingConfirmationEmail({
   const seatsLabel = String(selectedSeatsLabel || "").trim();
   const subject = `You're booked — ${eventTitle || "your event"} · ${BRAND_NAME}`;
   const eventUrl = event ? eventDetailUrl(event) : dashboardUrl("/events");
-  const createAccountUrl = dashboardUrl("/register");
+  const createAccountUrl = dashboardUrl("/login?next=/dashboard/user");
   const guestAccountLine =
-    "One step to create your account with bookmytickets.us to receive first hand notifications of events and deals around your city.";
+    "We created a My Hub account for you. Check your welcome email for the sign-in password, then open My Hub to see this booking. You can reset that password anytime from the login page.";
 
   const totalLine = formatUsd(totalAmount);
   const discount = Number(discountAmount) || 0;
@@ -372,7 +380,7 @@ function buildBookingConfirmationEmail({
     `Booking reference: #${bookingId}`,
     qrImageUrl ? "Your entry QR code is shown in this email." : "",
     isGuestBooking ? guestAccountLine : "",
-    isGuestBooking ? `Click here to create your account: ${createAccountUrl}` : "",
+    isGuestBooking ? `Sign in to My Hub: ${createAccountUrl}` : "",
     "",
     `View event: ${eventUrl}`,
     `My bookings: ${dashboardUrl("/dashboard/user")}`,
@@ -410,10 +418,11 @@ function buildBookingConfirmationEmail({
     qrCaption: "Scan at entry · keep this email handy",
     highlights: isGuestBooking
       ? [
-          "One step to create your account with bookmytickets.us to receive first hand notifications of events and deals around your city."
+          "We created a My Hub account for you — your password is in the welcome email.",
+          "Sign in to see this booking, then use Forgot password anytime if you need a new one."
         ]
       : [],
-    ctaLabel: isGuestBooking ? "Create your free account" : "View my bookings",
+    ctaLabel: isGuestBooking ? "Sign in to My Hub" : "View my bookings",
     ctaUrl: isGuestBooking ? createAccountUrl : dashboardUrl("/dashboard/user"),
     footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
   });
@@ -755,8 +764,76 @@ function buildAnalyticsShareInviteEmail({
   return { subject, text, html };
 }
 
+function buildPasswordResetEmail({ firstName, email, resetUrl }) {
+  const safeFirstName = String(firstName || "there").trim() || "there";
+  const subject = `Reset your ${BRAND_NAME} password`;
+  const text = [
+    `Hi ${safeFirstName},`,
+    "",
+    `We received a request to reset the password for ${email || "your account"}.`,
+    "Use this link within 2 hours to choose a new password:",
+    resetUrl,
+    "",
+    "If you did not request this, you can ignore this email — your password will stay the same.",
+    "",
+    `${BRAND_NAME} Team`
+  ].join("\n");
+  const html = buildLayout({
+    preheader: `Reset your ${BRAND_NAME} password. This link expires in 2 hours.`,
+    eyebrow: "Password reset",
+    title: `Hi ${safeFirstName}, reset your password.`,
+    subtitle: "Use the button below within 2 hours to choose a new password for My Hub.",
+    headerTone: "violet",
+    rows: [
+      { label: "Account", value: email || "Your Book My Tickets login" },
+      { label: "Link expires", value: "2 hours" }
+    ],
+    highlights: [
+      "This link is personal — do not forward it",
+      "After you save a new password, sign in on the login page",
+      `Need help? ${BRAND_SUPPORT_EMAIL}`
+    ],
+    ctaLabel: "Reset password",
+    ctaUrl: resetUrl,
+    footerNote: `If you did not request a password reset, ignore this email. Questions? ${BRAND_SUPPORT_EMAIL}`
+  });
+  return { subject, text, html };
+}
+
+function buildGoogleSignInReminderEmail({ firstName, email }) {
+  const safeFirstName = String(firstName || "there").trim() || "there";
+  const loginUrl = dashboardUrl("/login");
+  const subject = `How to sign in to ${BRAND_NAME}`;
+  const text = [
+    `Hi ${safeFirstName},`,
+    "",
+    `We received a password reset request for ${email || "your account"}.`,
+    "This Book My Tickets account uses Google sign-in, so there is no password to reset.",
+    `Open ${loginUrl} and choose Continue with Google.`,
+    "",
+    `${BRAND_NAME} Team`
+  ].join("\n");
+  const html = buildLayout({
+    preheader: `This ${BRAND_NAME} account uses Google sign-in.`,
+    eyebrow: "Sign in with Google",
+    title: `Hi ${safeFirstName}, use Google to sign in.`,
+    subtitle: "This account does not have an email password. Continue with Google on the login page.",
+    headerTone: "violet",
+    rows: [
+      { label: "Account", value: email || "Your Book My Tickets login" },
+      { label: "Sign-in", value: "Google" }
+    ],
+    ctaLabel: "Continue with Google",
+    ctaUrl: loginUrl,
+    footerNote: `If you did not request this, you can ignore this email. Questions? ${BRAND_SUPPORT_EMAIL}`
+  });
+  return { subject, text, html };
+}
+
 module.exports = {
   buildWelcomeEmail,
+  buildPasswordResetEmail,
+  buildGoogleSignInReminderEmail,
   buildApprovalEmail,
   buildBookingConfirmationEmail,
   buildOrganizerBookingNotificationEmail,

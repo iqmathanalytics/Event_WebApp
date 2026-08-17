@@ -40,6 +40,7 @@ function buildPricingSnapshot(pricing, payload) {
     totalAmount: pricing.totalAmount,
     couponId: pricing.couponId,
     couponCode: pricing.couponCode,
+    vendorCode: pricing.vendorCode || payload.vendor_code || null,
     seatsioHoldToken: pricing.seatsioHoldToken || payload.seatsio_hold_token || null,
     selectedSeats: Array.isArray(pricing.selectedSeats)
       ? pricing.selectedSeats
@@ -72,6 +73,7 @@ function pricingFromSnapshot(payload) {
     totalAmount: snap.totalAmount,
     couponId: snap.couponId ?? null,
     couponCode: snap.couponCode ?? null,
+    vendorCode: snap.vendorCode || payload.vendor_code || null,
     holdToken: payload.coupon_hold_token || null,
     seatsioHoldToken: snap.seatsioHoldToken || payload.seatsio_hold_token || null,
     selectedSeats: Array.isArray(snap.selectedSeats)
@@ -181,6 +183,7 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     first_name: payload.first_name,
     last_name: payload.last_name,
     coupon_hold_token: holdToken,
+    vendor_code: pricing.vendorCode || payload.vendor_code || null,
     seatsio_hold_token: pricing.seatsioHoldToken || payload.seatsio_hold_token || null,
     selected_seats: Array.isArray(pricing.selectedSeats)
       ? pricing.selectedSeats
@@ -331,6 +334,7 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
         subtotal_amount: pricing.subtotalAmount,
         discount_amount: pricing.discountAmount,
         coupon_code: pricing.couponCode,
+        vendor_code: pricing.vendorCode,
         payment_status: "paid",
         stripe_payment_intent_id: paymentIntentId,
         stripe_charge_id: stripeChargeId,

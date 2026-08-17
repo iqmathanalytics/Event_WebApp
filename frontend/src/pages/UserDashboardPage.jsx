@@ -9,7 +9,7 @@ import BrandUserGreeting from "../components/BrandUserGreeting";
 import { fetchMyBookings } from "../services/bookingService";
 import { createDeal, fetchMyDealSubmissions, fetchMyInfluencerSubmissions } from "../services/listingService";
 import DealSubmissionModal, { emptyDealSubmitForm } from "../components/DealSubmissionModal";
-import { refreshAccessToken } from "../services/authService";
+import { refreshAccessToken, requestPasswordReset } from "../services/authService";
 import { changeMyPassword, enableOrganizer, fetchMyProfile, updateMyProfile } from "../services/userService";
 import { categories } from "../utils/filterOptions";
 import { parseInfluencerSocialLinks } from "../utils/influencerSocial";
@@ -23,6 +23,8 @@ import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
 import { fetchMyEvents } from "../services/eventService";
 import UserDashboardBookingsAndFavorites from "../components/UserDashboardBookingsAndFavorites";
 import PlatformTicketAccessRequestModal from "../components/PlatformTicketAccessRequestModal";
+import { acceptAnalyticsInvite } from "../services/organizerAnalyticsService";
+import { profileMobileOrEmpty } from "../utils/phone";
 
 const interestOptions = [
   "Events",
@@ -38,6 +40,125 @@ const profileTabs = [
   { key: "basic", label: "About you" },
   { key: "preferences", label: "Interests" }
 ];
+
+const HOST_TAB_KEYS = new Set(["overview", "shared", "events", "coupons", "vendor-codes", "bookings", "offers"]);
+
+const ORGANIZER_SECTION_BY_TAB = {
+  overview: "overview",
+  shared: "shared",
+  events: "my-events",
+  coupons: "coupons",
+  "vendor-codes": "vendor-codes",
+  bookings: "bookings"
+};
+
+const ORGANIZER_WORKSPACE_TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "shared", label: "Shared with me", shortLabel: "Shared" },
+  { key: "events", label: "My Events" },
+  { key: "coupons", label: "Coupons" },
+  { key: "vendor-codes", label: "Vendor codes", shortLabel: "Vendors" },
+  { key: "bookings", label: "Event Bookings", shortLabel: "Bookings" },
+  { key: "offers", label: "Offers & Creator Spotlights", shortLabel: "Offers & Spotlights" }
+];
+
+const DEFAULT_WORKSPACE_TABS = [
+  { key: "events", label: "Manage Events" },
+  { key: "offers", label: "Offers & Creator Spotlights", shortLabel: "Offers & Spotlights" }
+];
+
+function tabFromSearch(search) {
+  const params = new URLSearchParams(search || "");
+  if (params.get("invite")) {
+    return "shared";
+  }
+  const host = String(params.get("host") || params.get("section") || "").toLowerCase();
+  if (host === "my-events") {
+    return "events";
+  }
+  if (HOST_TAB_KEYS.has(host)) {
+    return host;
+  }
+  return "";
+}
+
+function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
+      {tabs.map((tab) => {
+        const selected = active === tab.key;
+        const label = compact && tab.shortLabel ? tab.shortLabel : tab.label;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              selected ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            {label}
+            {tab.key === "events" ? (
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                {counts.events}
+              </span>
+            ) : null}
+            {tab.key === "offers" ? (
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                {counts.offers}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function HostWorkspacePanel({
+  layout,
+  tabs,
+  activeTab,
+  onTabChange,
+  myEventsCount,
+  offersCount,
+  onRequestPlatformTickets,
+  onAfterResubmitSuccess
+}) {
+  const organizerSection = ORGANIZER_SECTION_BY_TAB[activeTab];
+  return (
+    <section
+      data-host-workspace={layout}
+      className={`scroll-mt-24 border border-slate-200 bg-white shadow-soft sm:scroll-mt-28 ${
+        layout === "mobile" ? "rounded-3xl p-3.5" : "rounded-2xl p-4"
+      }`}
+    >
+      <HostWorkspaceTabBar
+        tabs={tabs}
+        active={activeTab}
+        onChange={onTabChange}
+        counts={{ events: myEventsCount, offers: offersCount }}
+        compact={layout === "mobile"}
+      />
+      <div className={layout === "mobile" ? "mt-3" : "mt-4"}>
+        {activeTab === "offers" ? (
+          <UserSubmissionsPanel
+            variant="standalone"
+            showBackToHub={false}
+            onAfterResubmitSuccess={onAfterResubmitSuccess}
+          />
+        ) : (
+          <OrganizerDashboardPage
+            embedded
+            forcedSection={organizerSection || "my-events"}
+            embeddedSectionMode="full"
+            onRequestPlatformTickets={onRequestPlatformTickets}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
 
 function FormField({ label, hint, example, className = "", children }) {
   return (
@@ -72,11 +193,15 @@ function UserDashboardPage() {
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [bookingsError, setBookingsError] = useState("");
   const [bookingFilter, setBookingFilter] = useState("upcoming");
-  const [desktopWorkspaceTab, setDesktopWorkspaceTab] = useState("events");
-  const [mobileWorkspaceTab, setMobileWorkspaceTab] = useState("events");
+  const canOrganizeEarly = Number(user?.organizer_enabled) === 1;
+  const initialHostTab = tabFromSearch(location.search) || (canOrganizeEarly ? "overview" : "events");
+  const [desktopWorkspaceTab, setDesktopWorkspaceTab] = useState(initialHostTab);
+  const [mobileWorkspaceTab, setMobileWorkspaceTab] = useState(initialHostTab);
   const [myEventsCount, setMyEventsCount] = useState(0);
   const [enablingOrganizer, setEnablingOrganizer] = useState(false);
   const [organizerEnableError, setOrganizerEnableError] = useState("");
+  const [inviteNotice, setInviteNotice] = useState("");
+  const [inviteError, setInviteError] = useState("");
   const [myInfluencerSubmissions, setMyInfluencerSubmissions] = useState([]);
   const [myDealSubmissions, setMyDealSubmissions] = useState([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
@@ -85,16 +210,15 @@ function UserDashboardPage() {
   const [showProfileEditor, setShowProfileEditor] = useState(false);
   const [creatorModal, setCreatorModal] = useState(null);
   const [creatorHubOpen, setCreatorHubOpen] = useState(false);
-  const [eventsWorkspaceOpen, setEventsWorkspaceOpen] = useState(false);
   const [submissionSuccessDialog, setSubmissionSuccessDialog] = useState(null);
-  const [organizerWorkspaceReady, setOrganizerWorkspaceReady] = useState(false);
   const organizerFormShellRef = useRef(null);
+  const inviteHandledRef = useRef("");
   const [profileEditorTab, setProfileEditorTab] = useState("basic");
   const [profileForm, setProfileForm] = useState({
     first_name: "",
     last_name: "",
     email: user?.email || "",
-    mobile_number: user?.mobile_number || "",
+    mobile_number: profileMobileOrEmpty(user?.mobile_number),
     city_id: "",
     interests: [],
     wants_influencer: false,
@@ -132,11 +256,14 @@ function UserDashboardPage() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordResetSending, setPasswordResetSending] = useState(false);
   const [dealSubmitOpen, setDealSubmitOpen] = useState(false);
   const [dealSubmitLoading, setDealSubmitLoading] = useState(false);
   const [dealSubmitError, setDealSubmitError] = useState("");
   const [dealSubmitForm, setDealSubmitForm] = useState(() => ({ ...emptyDealSubmitForm }));
   const canOrganize = Number(user?.organizer_enabled) === 1;
+  const workspaceTabs = canOrganize ? ORGANIZER_WORKSPACE_TABS : DEFAULT_WORKSPACE_TABS;
+  const offersCount = myDealSubmissions.length + myInfluencerSubmissions.length;
   const profileInitial = String(profile?.name || user?.name || "U").trim().charAt(0).toUpperCase();
   const currentTabIndex = Math.max(
     0,
@@ -250,7 +377,7 @@ function UserDashboardPage() {
       first_name: onboarding.first_name || parts.slice(0, -1).join(" ") || parts[0] || "",
       last_name: onboarding.last_name || (parts.length > 1 ? parts[parts.length - 1] : ""),
       email: user?.email || "",
-      mobile_number: onboarding.mobile_number || user?.mobile_number || "",
+      mobile_number: profileMobileOrEmpty(onboarding.mobile_number || user?.mobile_number),
       city_id: onboarding.city_id ? String(onboarding.city_id) : "",
       interests: Array.isArray(onboarding.interests) ? onboarding.interests : [],
       wants_influencer: Boolean(onboarding.wants_influencer),
@@ -271,7 +398,7 @@ function UserDashboardPage() {
             first_name: onboarding.first_name || parts.slice(0, -1).join(" ") || parts[0] || "",
             last_name: onboarding.last_name || (parts.length > 1 ? parts[parts.length - 1] : ""),
             email: response.data.email || "",
-            mobile_number: onboarding.mobile_number || response.data.mobile_number || "",
+            mobile_number: profileMobileOrEmpty(onboarding.mobile_number || response.data.mobile_number),
             city_id: onboarding.city_id ? String(onboarding.city_id) : "",
             interests: Array.isArray(onboarding.interests) ? onboarding.interests : [],
             wants_influencer: Boolean(onboarding.wants_influencer),
@@ -347,7 +474,6 @@ function UserDashboardPage() {
       showProfileEditor ||
       showPasswordModal ||
       creatorHubOpen ||
-      eventsWorkspaceOpen ||
       Boolean(creatorModal);
     if (!overlayOpen) {
       return undefined;
@@ -360,7 +486,7 @@ function UserDashboardPage() {
       document.body.style.overflow = prevBody;
       document.documentElement.style.overflow = prevHtml;
     };
-  }, [showProfileEditor, showPasswordModal, creatorHubOpen, eventsWorkspaceOpen, creatorModal]);
+  }, [showProfileEditor, showPasswordModal, creatorHubOpen, creatorModal]);
 
   const renderInPortal = (node) => {
     if (typeof document === "undefined") {
@@ -515,18 +641,112 @@ function UserDashboardPage() {
     };
   }, [dealSubmitOpen]);
 
-  useEffect(() => {
-    if (!eventsWorkspaceOpen) {
-      setOrganizerWorkspaceReady(false);
-    }
-  }, [eventsWorkspaceOpen]);
+  const showHostingWorkspaceLoading = enablingOrganizer;
 
-  const handleOrganizerWorkspaceInitialReady = useCallback(() => {
-    setOrganizerWorkspaceReady(true);
+  const setWorkspaceTab = useCallback((tab) => {
+    setDesktopWorkspaceTab(tab);
+    setMobileWorkspaceTab(tab);
+    const next = new URLSearchParams(location.search);
+    next.delete("section");
+    if (tab === "overview") {
+      next.delete("host");
+    } else {
+      next.set("host", tab);
+    }
+    const qs = next.toString();
+    navigate(
+      { pathname: location.pathname, search: qs ? `?${qs}` : "", hash: location.hash },
+      { replace: true }
+    );
+  }, [location.hash, location.pathname, location.search, navigate]);
+
+  const scrollToHostWorkspace = useCallback(() => {
+    const desktop = document.querySelector('[data-host-workspace="desktop"]');
+    const mobile = document.querySelector('[data-host-workspace="mobile"]');
+    const wide = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(min-width: 1024px)").matches;
+    const el = wide ? desktop : mobile;
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const showHostingWorkspaceLoading =
-    enablingOrganizer || (eventsWorkspaceOpen && !organizerWorkspaceReady);
+  useEffect(() => {
+    const fromSearch = tabFromSearch(location.search);
+    if (fromSearch) {
+      setDesktopWorkspaceTab(fromSearch);
+      setMobileWorkspaceTab(fromSearch);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    const token = String(new URLSearchParams(location.search).get("invite") || "").trim();
+    if (!token || inviteHandledRef.current === token) {
+      return undefined;
+    }
+    inviteHandledRef.current = token;
+    let cancelled = false;
+    (async () => {
+      setInviteError("");
+      setInviteNotice("Accepting invitation…");
+      setDesktopWorkspaceTab("shared");
+      setMobileWorkspaceTab("shared");
+      try {
+        const res = await acceptAnalyticsInvite(token);
+        if (cancelled) {
+          return;
+        }
+        const acceptedUser = res?.data?.user;
+        if (acceptedUser) {
+          const access = localStorage.getItem("accessToken");
+          const refreshTok = localStorage.getItem("refreshToken");
+          if (access && refreshTok && typeof login === "function") {
+            login({
+              accessToken: access,
+              refreshToken: refreshTok,
+              user: {
+                ...(user || {}),
+                ...acceptedUser,
+                organizer_enabled: 1
+              }
+            });
+          }
+        } else {
+          try {
+            await refreshSession();
+          } catch (_err) {
+            /* session refresh is best-effort; invite accept already succeeded */
+          }
+        }
+        const eventId = String(res?.data?.event_id || "").trim();
+        setInviteNotice(res?.message || "Invitation accepted.");
+        const next = new URLSearchParams(location.search);
+        next.delete("invite");
+        next.set("host", "shared");
+        next.delete("section");
+        if (eventId) {
+          next.set("eventId", eventId);
+        }
+        navigate(
+          { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
+          { replace: true }
+        );
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        setInviteNotice("");
+        setInviteError(err?.response?.data?.message || "Could not accept this invitation.");
+        const next = new URLSearchParams(location.search);
+        next.delete("invite");
+        next.set("host", "shared");
+        navigate(
+          { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
+          { replace: true }
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.hash, location.pathname, location.search, login, navigate, refreshSession, user]);
 
   const enableHostingIfNeeded = async () => {
     if (!canOrganize) {
@@ -552,7 +772,10 @@ function UserDashboardPage() {
 
   const onListExperienceClick = async () => {
     await enableHostingIfNeeded();
-    setEventsWorkspaceOpen(true);
+    setWorkspaceTab("events");
+    requestAnimationFrame(() => {
+      scrollToHostWorkspace();
+    });
   };
 
   const onPostEventClick = async () => {
@@ -728,7 +951,7 @@ function UserDashboardPage() {
                   />
                 </div>
                 <p className="truncate text-[11px] leading-tight text-white/70 sm:text-xs">{profile?.email || user?.email}</p>
-                <p className="truncate text-[11px] leading-tight text-white/55 sm:text-xs">{profile?.mobile_number || "Add mobile number"}</p>
+                <p className="truncate text-[11px] leading-tight text-white/55 sm:text-xs">{profileMobileOrEmpty(profile?.mobile_number) || "Add mobile number"}</p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -816,6 +1039,29 @@ function UserDashboardPage() {
             {organizerEnableError}
           </p>
         ) : null}
+        {inviteNotice ? (
+          <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            {inviteNotice}
+          </p>
+        ) : null}
+        {inviteError ? (
+          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            {inviteError}
+          </p>
+        ) : null}
+
+        {canOrganize ? (
+          <HostWorkspacePanel
+            layout="mobile"
+            tabs={workspaceTabs}
+            activeTab={mobileWorkspaceTab}
+            onTabChange={setWorkspaceTab}
+            myEventsCount={myEventsCount}
+            offersCount={offersCount}
+            onRequestPlatformTickets={openPlatformTicketRequestModal}
+            onAfterResubmitSuccess={handleListingResubmitSaved}
+          />
+        ) : null}
 
         <UserDashboardBookingsAndFavorites
           filteredBookings={filteredBookings}
@@ -829,46 +1075,18 @@ function UserDashboardPage() {
           toggleFavorite={toggleFavorite}
         />
 
-        <section
-          data-host-workspace="mobile"
-          className="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-3.5 shadow-soft sm:scroll-mt-28"
-        >
-          <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5">
-            <button
-              type="button"
-              onClick={() => setMobileWorkspaceTab("events")}
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                mobileWorkspaceTab === "events" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
-              }`}
-            >
-              Manage Events
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">{myEventsCount}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileWorkspaceTab("offers")}
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                mobileWorkspaceTab === "offers" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
-              }`}
-            >
-              Offers & Spotlights
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
-                {myDealSubmissions.length + myInfluencerSubmissions.length}
-              </span>
-            </button>
-          </div>
-          <div className="mt-3">
-            {mobileWorkspaceTab === "events" ? (
-              <OrganizerDashboardPage
-                embedded
-                embeddedSectionMode="my-events-only"
-                onRequestPlatformTickets={openPlatformTicketRequestModal}
-              />
-            ) : (
-              <UserSubmissionsPanel variant="standalone" showBackToHub={false} onAfterResubmitSuccess={handleListingResubmitSaved} />
-            )}
-          </div>
-        </section>
+        {!canOrganize ? (
+          <HostWorkspacePanel
+            layout="mobile"
+            tabs={workspaceTabs}
+            activeTab={mobileWorkspaceTab}
+            onTabChange={setWorkspaceTab}
+            myEventsCount={myEventsCount}
+            offersCount={offersCount}
+            onRequestPlatformTickets={openPlatformTicketRequestModal}
+            onAfterResubmitSuccess={handleListingResubmitSaved}
+          />
+        ) : null}
       </div>
 
       {/* Desktop layout (unchanged). */}
@@ -926,110 +1144,166 @@ function UserDashboardPage() {
         </div>
       </div>
 
-      <UserDashboardBookingsAndFavorites
-        filteredBookings={filteredBookings}
-        bookingsTotalCount={bookings.length}
-        loadingBookings={loadingBookings}
-        bookingsError={bookingsError}
-        bookingFilter={bookingFilter}
-        onBookingFilterChange={setBookingFilter}
-        favorites={favorites}
-        favoritesLoading={favoritesLoading}
-        toggleFavorite={toggleFavorite}
-      />
+      {canOrganize ? (
+        <>
+          <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/80 to-cyan-50/30 p-5 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Host &amp; promote</p>
+            <h2 className="mt-1 text-lg font-bold text-slate-900">Posting &amp; management workspace</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Host events and check spotlight status — open the hub for shortcuts, or jump straight into your organizer tools.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={enablingOrganizer}
+                onClick={() => void onPostEventClick()}
+                className="inline-flex items-center justify-center rounded-xl border border-brand-400/80 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-950 transition hover:bg-brand-100/90 disabled:opacity-60"
+              >
+                Post an event
+              </button>
+              <button
+                type="button"
+                onClick={onSubmitDealClick}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/70 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-100/90"
+              >
+                Submit a deal
+              </button>
+              <button
+                type="button"
+                onClick={openPlatformTicketRequestModal}
+                className={`inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                  canSellPlatformTickets
+                    ? "border-emerald-300/80 bg-emerald-50 text-emerald-950 hover:bg-emerald-100/90"
+                    : "border-violet-300/80 bg-violet-50 text-violet-950 hover:bg-violet-100/90"
+                }`}
+              >
+                {canSellPlatformTickets ? "On-site tickets · enabled" : "Host tickets on-site"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void openDealerOnboardingModal()}
+                disabled={businessProfileCta.disabled}
+                title={businessProfileCta.sub || undefined}
+                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {businessProfileCta.label}
+              </button>
+            </div>
+          </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/80 to-cyan-50/30 p-5 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Host &amp; promote</p>
-        <h2 className="mt-1 text-lg font-bold text-slate-900">Posting &amp; management workspace</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Host events and check spotlight status — open the hub for shortcuts, or jump straight into your organizer tools.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={enablingOrganizer}
-            onClick={() => void onPostEventClick()}
-            className="inline-flex items-center justify-center rounded-xl border border-brand-400/80 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-950 transition hover:bg-brand-100/90 disabled:opacity-60"
-          >
-            Post an event
-          </button>
-          <button
-            type="button"
-            onClick={onSubmitDealClick}
-            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/70 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-100/90"
-          >
-            Submit a deal
-          </button>
-          <button
-            type="button"
-            onClick={openPlatformTicketRequestModal}
-            className={`inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
-              canSellPlatformTickets
-                ? "border-emerald-300/80 bg-emerald-50 text-emerald-950 hover:bg-emerald-100/90"
-                : "border-violet-300/80 bg-violet-50 text-violet-950 hover:bg-violet-100/90"
-            }`}
-          >
-            {canSellPlatformTickets ? "On-site tickets · enabled" : "Host tickets on-site"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void openDealerOnboardingModal()}
-            disabled={businessProfileCta.disabled}
-            title={businessProfileCta.sub || undefined}
-            className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-55"
-          >
-            {businessProfileCta.label}
-          </button>
-        </div>
-      </section>
+          {organizerEnableError ? (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{organizerEnableError}</p>
+          ) : null}
+          {inviteNotice ? (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{inviteNotice}</p>
+          ) : null}
+          {inviteError ? (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{inviteError}</p>
+          ) : null}
+          {profileMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
+          {profileError ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
 
-      {organizerEnableError ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{organizerEnableError}</p>
-      ) : null}
+          <HostWorkspacePanel
+            layout="desktop"
+            tabs={workspaceTabs}
+            activeTab={desktopWorkspaceTab}
+            onTabChange={setWorkspaceTab}
+            myEventsCount={myEventsCount}
+            offersCount={offersCount}
+            onRequestPlatformTickets={openPlatformTicketRequestModal}
+            onAfterResubmitSuccess={handleListingResubmitSaved}
+          />
 
-      {profileMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
-      {profileError ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
-      <section
-        data-host-workspace="desktop"
-        className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:scroll-mt-28"
-      >
-        <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5">
-          <button
-            type="button"
-            onClick={() => setDesktopWorkspaceTab("events")}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-              desktopWorkspaceTab === "events" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
-            }`}
-          >
-            Manage Events
-            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">{myEventsCount}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setDesktopWorkspaceTab("offers")}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-              desktopWorkspaceTab === "offers" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
-            }`}
-          >
-            Offers &amp; Creator Spotlights
-            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">
-              {myDealSubmissions.length + myInfluencerSubmissions.length}
-            </span>
-          </button>
-        </div>
+          <UserDashboardBookingsAndFavorites
+            filteredBookings={filteredBookings}
+            bookingsTotalCount={bookings.length}
+            loadingBookings={loadingBookings}
+            bookingsError={bookingsError}
+            bookingFilter={bookingFilter}
+            onBookingFilterChange={setBookingFilter}
+            favorites={favorites}
+            favoritesLoading={favoritesLoading}
+            toggleFavorite={toggleFavorite}
+          />
+        </>
+      ) : (
+        <>
+          <UserDashboardBookingsAndFavorites
+            filteredBookings={filteredBookings}
+            bookingsTotalCount={bookings.length}
+            loadingBookings={loadingBookings}
+            bookingsError={bookingsError}
+            bookingFilter={bookingFilter}
+            onBookingFilterChange={setBookingFilter}
+            favorites={favorites}
+            favoritesLoading={favoritesLoading}
+            toggleFavorite={toggleFavorite}
+          />
 
-        <div className="mt-4">
-          {desktopWorkspaceTab === "events" ? (
-            <OrganizerDashboardPage
-              embedded
-              embeddedSectionMode="my-events-only"
-              onRequestPlatformTickets={openPlatformTicketRequestModal}
-            />
-          ) : (
-            <UserSubmissionsPanel variant="standalone" showBackToHub={false} onAfterResubmitSuccess={handleListingResubmitSaved} />
-          )}
-        </div>
-      </section>
+          <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/80 to-cyan-50/30 p-5 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Host &amp; promote</p>
+            <h2 className="mt-1 text-lg font-bold text-slate-900">Posting &amp; management workspace</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Host events and check spotlight status — open the hub for shortcuts, or jump straight into your organizer tools.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={enablingOrganizer}
+                onClick={() => void onPostEventClick()}
+                className="inline-flex items-center justify-center rounded-xl border border-brand-400/80 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-950 transition hover:bg-brand-100/90 disabled:opacity-60"
+              >
+                Post an event
+              </button>
+              <button
+                type="button"
+                onClick={onSubmitDealClick}
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/70 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-100/90"
+              >
+                Submit a deal
+              </button>
+              <button
+                type="button"
+                onClick={openPlatformTicketRequestModal}
+                className={`inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                  canSellPlatformTickets
+                    ? "border-emerald-300/80 bg-emerald-50 text-emerald-950 hover:bg-emerald-100/90"
+                    : "border-violet-300/80 bg-violet-50 text-violet-950 hover:bg-violet-100/90"
+                }`}
+              >
+                {canSellPlatformTickets ? "On-site tickets · enabled" : "Host tickets on-site"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void openDealerOnboardingModal()}
+                disabled={businessProfileCta.disabled}
+                title={businessProfileCta.sub || undefined}
+                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {businessProfileCta.label}
+              </button>
+            </div>
+          </section>
+
+          {organizerEnableError ? (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{organizerEnableError}</p>
+          ) : null}
+
+          {profileMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
+          {profileError ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
+
+          <HostWorkspacePanel
+            layout="desktop"
+            tabs={workspaceTabs}
+            activeTab={desktopWorkspaceTab}
+            onTabChange={setWorkspaceTab}
+            myEventsCount={myEventsCount}
+            offersCount={offersCount}
+            onRequestPlatformTickets={openPlatformTicketRequestModal}
+            onAfterResubmitSuccess={handleListingResubmitSaved}
+          />
+        </>
+      )}
       </div>
 
       {showProfileEditor ? renderInPortal(
@@ -1384,6 +1658,7 @@ function UserDashboardPage() {
                   }}
                 >
                   {!isGoogleFirstPassword ? (
+                    <>
                     <input
                       type="password"
                       autoComplete="current-password"
@@ -1393,6 +1668,37 @@ function UserDashboardPage() {
                       className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                       required
                     />
+                    <button
+                      type="button"
+                      disabled={passwordResetSending}
+                      onClick={async () => {
+                        const email = String(profile?.email || user?.email || "").trim();
+                        if (!email) {
+                          setPasswordError("Your profile needs an email before we can send a reset link.");
+                          return;
+                        }
+                        setPasswordError("");
+                        setPasswordMessage("");
+                        try {
+                          setPasswordResetSending(true);
+                          const res = await requestPasswordReset(email);
+                          setPasswordMessage(
+                            res?.message ||
+                              `If ${email} is registered, we sent a reset link. Check your inbox and spam folder.`
+                          );
+                        } catch (err) {
+                          setPasswordError(
+                            err?.response?.data?.message || "We couldn't send a reset email right now. Try again in a moment."
+                          );
+                        } finally {
+                          setPasswordResetSending(false);
+                        }
+                      }}
+                      className="text-left text-xs font-semibold text-brand-600 underline-offset-2 hover:underline disabled:opacity-60"
+                    >
+                      {passwordResetSending ? "Sending reset link…" : "Forgot password? Email me a reset link"}
+                    </button>
+                    </>
                   ) : null}
                   <input
                     type="password"
@@ -1704,37 +2010,6 @@ function UserDashboardPage() {
           ) : null}
         </AnimatePresence>
       )}
-
-      {eventsWorkspaceOpen
-        ? renderInPortal(
-            <div className="fixed inset-0 z-[198] flex flex-col bg-slate-50">
-              <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Host &amp; manage events</h2>
-                  {canOrganize ? (
-                    <p className="text-xs font-semibold text-emerald-700">Hosting enabled</p>
-                  ) : (
-                    <p className="text-xs text-slate-600">We&apos;ll enable hosting on first open if needed.</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEventsWorkspaceOpen(false)}
-                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                >
-                  Close
-                </button>
-              </header>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-                <OrganizerDashboardPage
-                  embedded
-                  onEmbeddedWorkspaceInitialReady={handleOrganizerWorkspaceInitialReady}
-                  onRequestPlatformTickets={openPlatformTicketRequestModal}
-                />
-              </div>
-            </div>
-          )
-        : null}
 
       <div hidden aria-hidden="true" data-route-splash-ignore>
         <OrganizerDashboardPage

@@ -4,18 +4,19 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
 import AuthBrandLogo from "../components/AuthBrandLogo";
-import { completeSetPassword, validateSetPasswordToken } from "../services/authService";
+import { completeResetPassword, completeSetPassword, validateResetPasswordToken, validateSetPasswordToken } from "../services/authService";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function passwordOk(value) {
   return String(value || "").length >= 8;
 }
 
-export default function SetPasswordPage() {
+export default function SetPasswordPage({ mode = "set" }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const token = String(searchParams.get("token") || "").trim();
+  const isReset = mode === "reset";
 
   const [phase, setPhase] = useState("validating");
   const [account, setAccount] = useState({ email: "", name: "" });
@@ -29,7 +30,11 @@ export default function SetPasswordPage() {
   useEffect(() => {
     if (!token) {
       setPhase("invalid");
-      setError("This link is missing a security token. Open the link from your booking confirmation email.");
+      setError(
+        isReset
+          ? "This reset link is missing a security token. Request a new one from the login page."
+          : "This link is missing a security token. Open the link from your booking confirmation email."
+      );
       return;
     }
 
@@ -38,7 +43,7 @@ export default function SetPasswordPage() {
       setPhase("validating");
       setError("");
       try {
-        const res = await validateSetPasswordToken(token);
+        const res = isReset ? await validateResetPasswordToken(token) : await validateSetPasswordToken(token);
         if (cancelled) return;
         setAccount({
           email: res?.data?.email || "",
@@ -50,7 +55,9 @@ export default function SetPasswordPage() {
         setPhase("invalid");
         setError(
           err?.response?.data?.message ||
-            "This link is invalid or has expired. Use the latest email from your booking, or sign in if you already set a password."
+            (isReset
+              ? "This reset link is invalid or has expired. Request a new one from the login page."
+              : "This link is invalid or has expired. Use the latest email from your booking, or sign in if you already set a password.")
         );
       }
     })();
@@ -58,7 +65,7 @@ export default function SetPasswordPage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [isReset, token]);
 
   const passwordsMatch = useMemo(
     () => form.password === form.confirm && passwordOk(form.password),
@@ -79,7 +86,9 @@ export default function SetPasswordPage() {
 
     try {
       setLoading(true);
-      const res = await completeSetPassword({ token, password: form.password });
+      const res = isReset
+        ? await completeResetPassword({ token, password: form.password })
+        : await completeSetPassword({ token, password: form.password });
       const payload = res?.data;
       if (!payload?.accessToken || !payload?.refreshToken || !payload?.user) {
         throw new Error("Invalid response");
@@ -110,12 +119,14 @@ export default function SetPasswordPage() {
               {done ? <CheckCircle2 className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
             </div>
             <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">
-              {done ? "You're all set" : "Create your password"}
+              {done ? "You're all set" : isReset ? "Reset your password" : "Create your password"}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               {done
                 ? "Taking you to My Hub…"
-                : "We created a My Hub account from your booking. Choose a password to sign in anytime and view your tickets."}
+                : isReset
+                  ? "Choose a new password for your Book My Tickets account. This link expires 2 hours after it was sent."
+                  : "We created a My Hub account from your booking. Choose a password to sign in anytime and view your tickets."}
             </p>
           </div>
 
@@ -142,7 +153,9 @@ export default function SetPasswordPage() {
             <form onSubmit={onSubmit} className="mt-8 space-y-4">
               {account.email ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">My Hub account</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {isReset ? "Account" : "My Hub account"}
+                  </p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{account.email}</p>
                   {account.name ? <p className="text-xs text-slate-600">{account.name}</p> : null}
                 </div>
@@ -192,11 +205,11 @@ export default function SetPasswordPage() {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Save password &amp; open My Hub
+                {isReset ? "Save new password" : "Save password & open My Hub"}
               </button>
 
               <p className="text-center text-xs text-slate-500">
-                This link is personal and expires after 72 hours.{" "}
+                {isReset ? "This link is personal and expires after 2 hours. " : "This link is personal and expires after 72 hours. "}
                 <Link to="/login" className="font-medium text-slate-700 hover:underline">
                   Sign in instead
                 </Link>

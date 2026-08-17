@@ -18,6 +18,7 @@ const {
 } = require("../models/newsletterModel");
 const { sendTransactionalEmail } = require("../utils/emailIntegrations");
 const { buildWelcomeEmail } = require("../utils/transactionalEmailTemplates");
+const { profileMobileOrNull } = require("../utils/phone");
 
 async function sendWelcomeEmail({ email, firstName, signedUpWithGoogle = false }) {
   const welcome = buildWelcomeEmail({ firstName, signedUpWithGoogle });
@@ -46,7 +47,7 @@ function buildAuthUser(user) {
     id: user.id,
     name: user.name,
     email: user.email,
-    mobile_number: user.mobile_number,
+    mobile_number: profileMobileOrNull(user.mobile_number),
     role: user.role,
     organizer_enabled: user.organizer_enabled === 1 ? 1 : 0,
     can_post_events: user.can_post_events === 1 ? 1 : 0,

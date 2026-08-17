@@ -18,6 +18,11 @@
   RewriteRule . /index.html [L]
 </IfModule>
 
+# Allow Seats.io designer iframes to register unload handlers (needed for Publish/draft save).
+<IfModule mod_headers.c>
+  Header always set Permissions-Policy "unload=*"
+</IfModule>
+
 # Cache static assets (hashed JS/CSS from Vite; branding images change rarely)
 <IfModule mod_expires.c>
   ExpiresActive On

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
-import { loginUser, loginWithGoogle } from "../services/authService";
+import { loginUser, loginWithGoogle, requestPasswordReset } from "../services/authService";
 import AuthBrandLogo from "../components/AuthBrandLogo";
 import LoginDiscoverGallery from "../components/LoginDiscoverGallery";
 import GoogleContinueButton, { AuthDividerOr, isGoogleAuthConfigured } from "../components/GoogleContinueButton";
@@ -24,11 +24,19 @@ function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({
+    email: String(searchParams.get("email") || "").trim(),
+    password: ""
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  useRouteContentReady(loading || googleLoading);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  useRouteContentReady(loading || googleLoading || forgotLoading);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -42,11 +50,33 @@ function LoginPage() {
       }
       login(payload);
       const next = safeReturnPath(searchParams.get("next"));
-      navigate(next || "/dashboard/user");
+      navigate(next || "/dashboard/user", { replace: true });
     } catch (_err) {
       setError("We couldn't sign you in. Check your email and password and try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onForgotSubmit = async (e) => {
+    e.preventDefault();
+    setForgotError("");
+    setForgotMessage("");
+    const email = String(forgotEmail || form.email || "").trim();
+    if (!email) {
+      setForgotError("Enter the email for your account.");
+      return;
+    }
+    try {
+      setForgotLoading(true);
+      const res = await requestPasswordReset(email);
+      setForgotMessage(
+        res?.message || "If that email is registered, we sent password reset instructions."
+      );
+    } catch (_err) {
+      setForgotError("We couldn't send a reset email right now. Try again in a moment.");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -66,13 +96,65 @@ function LoginPage() {
             />
             <div className="shrink-0 px-5 pb-1 pt-5 text-center sm:px-7 sm:pt-6 lg:px-6 lg:pt-6 xl:px-7">
               <AuthBrandLogo compact />
-              <h1 className="mt-1.5 text-xl font-bold tracking-tight text-slate-900 sm:mt-2 sm:text-2xl">Welcome back</h1>
+              <h1 className="mt-1.5 text-xl font-bold tracking-tight text-slate-900 sm:mt-2 sm:text-2xl">
+                {forgotOpen ? "Forgot password" : "Welcome back"}
+              </h1>
               <p className="mx-auto mt-1 max-w-[20rem] text-xs leading-snug text-slate-600 text-balance sm:text-sm sm:leading-relaxed">
-                Sign in to save favorites, unlock offers, and keep track of your Book My Tickets world.
+                {forgotOpen
+                  ? "Enter your email and we’ll send a reset link if an account exists."
+                  : "Sign in to save favorites, unlock offers, and keep track of your Book My Tickets world."}
               </p>
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col px-5 pb-3 pt-4 sm:px-7 lg:px-6 xl:px-7">
+              {forgotOpen ? (
+                <form onSubmit={onForgotSubmit} className="space-y-3">
+                  <div className="space-y-1">
+                    <label htmlFor="forgot-email" className="sr-only">
+                      Email
+                    </label>
+                    <input
+                      id="forgot-email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      placeholder="Email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/90 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    {forgotLoading ? "Sending..." : "Send reset link"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotOpen(false);
+                      setForgotError("");
+                      setForgotMessage("");
+                    }}
+                    className="w-full text-center text-sm font-semibold text-slate-600 transition hover:text-slate-900"
+                  >
+                    Back to sign in
+                  </button>
+                  {forgotMessage ? (
+                    <p className="text-pretty text-center text-sm font-medium leading-relaxed text-emerald-700">
+                      {forgotMessage}
+                    </p>
+                  ) : null}
+                  {forgotError ? (
+                    <p role="alert" className="text-pretty text-center text-sm font-medium leading-relaxed text-rose-600">
+                      {forgotError}
+                    </p>
+                  ) : null}
+                </form>
+              ) : (
+                <>
               <form onSubmit={onSubmit} className="space-y-3">
                 <div className="space-y-1">
                   <label htmlFor="login-email" className="sr-only">
@@ -103,6 +185,21 @@ function LoginPage() {
                     onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/90 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
                   />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotOpen(true);
+                      setForgotEmail(form.email);
+                      setForgotError("");
+                      setForgotMessage("");
+                      setError("");
+                    }}
+                    className="text-xs font-semibold text-brand-600 underline-offset-2 hover:underline"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
                 <button
                   type="submit"
@@ -157,6 +254,8 @@ function LoginPage() {
                   {error}
                 </p>
               ) : null}
+                </>
+              )}
             </div>
 
             <div className="relative z-[1] shrink-0 border-t border-slate-200/70 bg-white px-5 py-4 text-center sm:px-7 sm:py-4 lg:px-6 xl:px-7">

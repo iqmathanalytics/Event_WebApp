@@ -112,11 +112,20 @@ const completeSetPasswordSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+const forgotPasswordSchema = z.object({
+  body: z.object({
+    email: z.string().email()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
   refreshTokenSchema,
   googleUserSchema,
   validateSetPasswordTokenSchema,
-  completeSetPasswordSchema
+  completeSetPasswordSchema,
+  forgotPasswordSchema
 };

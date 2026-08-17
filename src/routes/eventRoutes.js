@@ -110,6 +110,13 @@ router.get(
   organizerAccessMiddleware,
   eventController.fetchMySubmissions
 );
+router.get(
+  "/mine/:id",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(fetchEventByIdSchema),
+  eventController.fetchOwnEventById
+);
 router.get("/:id", optionalAuthMiddleware, validateRequest(fetchEventByIdSchema), eventController.fetchEventById);
 router.put(
   "/:id",

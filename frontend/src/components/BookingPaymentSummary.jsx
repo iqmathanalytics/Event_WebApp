@@ -6,6 +6,7 @@ import { formatCurrency } from "../utils/format";
 export default function BookingPaymentSummary({ booking, showStripeRef = true, compact = false }) {
   const charged = bookingAmountPaidDollars(booking);
   const hasCoupon = Boolean(booking?.coupon_code);
+  const hasVendor = Boolean(booking?.vendor_code);
 
   if (compact) {
     return (
@@ -14,6 +15,7 @@ export default function BookingPaymentSummary({ booking, showStripeRef = true, c
         <span className="text-xs text-slate-600">
           {formatCurrency(charged)}
           {hasCoupon ? ` · ${booking.coupon_code}` : ""}
+          {hasVendor ? ` · Vendor ${booking.vendor_code}` : ""}
         </span>
       </div>
     );
@@ -32,6 +34,11 @@ export default function BookingPaymentSummary({ booking, showStripeRef = true, c
         <p>
           <span className="font-semibold">Coupon:</span> {booking.coupon_code}
           {booking.discount_amount > 0 ? ` (−${formatCurrency(booking.discount_amount)})` : ""}
+        </p>
+      ) : null}
+      {hasVendor ? (
+        <p>
+          <span className="font-semibold">Vendor:</span> {booking.vendor_code}
         </p>
       ) : null}
       {showStripeRef && booking?.stripe_payment_intent_id ? (

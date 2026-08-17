@@ -28,6 +28,7 @@ const { createAdminNotification } = require("../models/adminModel");
 const { syncSubscriberEmail } = require("../models/newsletterModel");
 const bookingService = require("../services/bookingService");
 const platformTicketRequestService = require("../services/platformTicketRequestService");
+const { profileMobileOrNull } = require("../utils/phone");
 
 const getMe = asyncHandler(async (req, res) => {
   const user = await findUserById(req.user.id);
@@ -51,12 +52,13 @@ const getMe = asyncHandler(async (req, res) => {
     success: true,
     data: {
       ...user,
+      mobile_number: profileMobileOrNull(user?.mobile_number),
       has_local_password,
       onboarding: onboarding
         ? {
             first_name: onboarding.first_name || "",
             last_name: onboarding.last_name || "",
-            mobile_number: onboarding.mobile_number || "",
+            mobile_number: profileMobileOrNull(onboarding.mobile_number) || "",
             city_id: onboarding.city_id || null,
             interests: parseJsonArray(onboarding.interests_json),
             wants_influencer: Boolean(onboarding.wants_influencer),
@@ -95,7 +97,7 @@ const updateMyProfile = asyncHandler(async (req, res) => {
   const lastName = String(req.body?.last_name || "").trim();
   const name = `${firstName} ${lastName}`.trim();
   const email = String(req.body?.email || "").trim().toLowerCase();
-  const mobile_number = String(req.body?.mobile_number || "").trim();
+  const mobile_number = profileMobileOrNull(req.body?.mobile_number);
   const cityId = req.body?.city_id ? Number(req.body.city_id) : null;
   const interests = Array.isArray(req.body?.interests)
     ? req.body.interests.map((item) => String(item).trim()).filter(Boolean).slice(0, 8)

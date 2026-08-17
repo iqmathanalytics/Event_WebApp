@@ -59,9 +59,20 @@ async function checkSchema(cfg) {
       "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'events'",
       "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'events' AND column_name = 'ticket_sales_mode'",
       "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_coupons'",
-      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_bookings'"
+      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_bookings'",
+      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_bookings' AND column_name = 'vendor_code'",
+      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_bookings' AND column_name = 'seatsio_hold_token'",
+      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_password_set_tokens'"
     ];
-    const labels = ["events table", "events.ticket_sales_mode", "event_coupons table", "event_bookings table"];
+    const labels = [
+      "events table",
+      "events.ticket_sales_mode",
+      "event_coupons table",
+      "event_bookings table",
+      "event_bookings.vendor_code",
+      "event_bookings.seatsio_hold_token",
+      "user_password_set_tokens table"
+    ];
     for (let i = 0; i < checks.length; i += 1) {
       const [r] = await conn.query(checks[i]);
       const ok = Number(r[0].n) > 0;

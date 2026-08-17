@@ -142,13 +142,13 @@ function throwSeatsioError(err, fallbackMessage) {
   if (code === "DRAWING_VALIDATION_FAILED" || code === "VALIDATE_NO_OBJECTS") {
     throw new ApiError(
       400,
-      "Add at least one seat or section in the designer, publish the chart, then save again."
+      "Your seating layout isn’t ready yet. Add seats in the designer, click Publish, then Save."
     );
   }
   if (code === "DRAFT_DRAWING_NOT_FOUND") {
     throw new ApiError(
       400,
-      "Publish your seating chart in the designer toolbar, then click Save seating chart."
+      "Publish the chart in the designer toolbar first, then click Save seating chart."
     );
   }
   if (err instanceof ApiError) {
@@ -157,17 +157,53 @@ function throwSeatsioError(err, fallbackMessage) {
   throw new ApiError(502, fallbackMessage || seatsioErrorMessage(err));
 }
 
+async function retrieveChartSafe(client, chartKey) {
+  if (!chartKey) {
+    return null;
+  }
+  try {
+    return await client.charts.retrieve(chartKey);
+  } catch (err) {
+    const code = seatsioErrorCode(err);
+    if (code === "CHART_NOT_FOUND" || err?.status === 404) {
+      return null;
+    }
+    throwSeatsioError(err, "Could not load seating chart.");
+  }
+}
+
+/**
+ * Publish only when a draft exists. Already-published charts with no draft
+ * return DRAFT_DRAWING_NOT_FOUND from Seats.io — that is success for our save flow.
+ */
 async function publishChartForEvent(client, chartKey) {
+  const chart = await retrieveChartSafe(client, chartKey);
+  if (!chart) {
+    throw new ApiError(400, "Seating chart not found. Reload the designer and try again.");
+  }
+
+  const status = String(chart.status || "").toUpperCase();
+  const hasDraft =
+    Boolean(chart.draftVersionThumbnailUrl) ||
+    status === "DRAFT" ||
+    status === "PUBLISHED_WITH_DRAFT";
+
+  // Already live and no pending draft — nothing to publish.
+  if (!hasDraft && status === "PUBLISHED") {
+    return chart;
+  }
+
   try {
     await client.charts.publishDraftVersion(chartKey);
   } catch (err) {
     const code = seatsioErrorCode(err);
     if (code === "DRAFT_DRAWING_NOT_FOUND") {
       // Designer already published — published version is what we need.
-      return;
+      return chart;
     }
     throwSeatsioError(err, "Could not publish the seating chart.");
   }
+  return chart;
 }
 
 function buildSeatsioEventKey(eventId, chartKey) {

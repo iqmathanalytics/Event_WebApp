@@ -9,6 +9,7 @@ import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../service
 import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
 import { categories } from "../utils/filterOptions";
 import { formatCurrency, formatDateUS } from "../utils/format";
+import { eventDetailPath } from "../utils/listingPaths";
 import { formatBookingSeatsLabel } from "../utils/bookingSeats";
 import { normalizeEventTicketSalesMode, resolveEventTicketSalesMode } from "../utils/eventTicketSalesMode";
 import { downloadBlob } from "../utils/fileDownload";
@@ -205,17 +206,9 @@ function parseDateValue(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function MyEventsActionBar({ showOrganizerDashboardLink, onCreate, className = "" }) {
+function MyEventsActionBar({ onCreate, className = "" }) {
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      {showOrganizerDashboardLink ? (
-        <Link
-          to="/dashboard/organizer"
-          className="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-950 shadow-sm transition hover:bg-emerald-100/90"
-        >
-          Event Analytics
-        </Link>
-      ) : null}
       <button
         type="button"
         onClick={onCreate}
@@ -224,6 +217,23 @@ function MyEventsActionBar({ showOrganizerDashboardLink, onCreate, className = "
         Create New Event
       </button>
     </div>
+  );
+}
+
+function EventViewLink({ item, className = "" }) {
+  if (!item?.id) {
+    return null;
+  }
+  const inactive = !isOrganizerEventListed(item);
+  return (
+    <Link
+      to={eventDetailPath(item)}
+      state={{ ownerPreview: true }}
+      className={className}
+      title={inactive ? "Preview event details (hidden from the public site)" : "View event details"}
+    >
+      View
+    </Link>
   );
 }
 
@@ -248,12 +258,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     suppressRouteContentReadySignal = false,
     onEmbeddedWorkspaceInitialReady,
     embeddedSectionMode = "full",
+    forcedSection = null,
     onRequestPlatformTickets = null
   },
   ref
 ) {
   const navigate = useNavigate();
-  const { user, canSellPlatformTickets, refreshSession, isOrganizer, login } = useAuth();
+  const { user, canSellPlatformTickets, refreshSession, login } = useAuth();
 
   const openPlatformTicketRequest = () => {
     if (typeof onRequestPlatformTickets === "function") {
@@ -263,9 +274,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     navigate("/dashboard/user", { state: { openPlatformTicketRequest: true } });
   };
   const { cities } = useCityFilter();
-  const myEventsOnly = embedded && embeddedSectionMode === "my-events-only";
+  const lockedSection =
+    forcedSection || (embedded && embeddedSectionMode === "my-events-only" ? "my-events" : null);
+  const hideAnalyticsChrome = Boolean(lockedSection);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeSection, setActiveSection] = useState(myEventsOnly ? "my-events" : "overview");
+  const [activeSection, setActiveSection] = useState(lockedSection || "overview");
+  const displaySection = lockedSection || activeSection;
   const [sharedEventId, setSharedEventId] = useState("");
   const [sharedOwnerLabel, setSharedOwnerLabel] = useState("");
   const [inviteNotice, setInviteNotice] = useState("");
@@ -433,27 +447,27 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   };
 
   useEffect(() => {
-    if (myEventsOnly && activeSection !== "my-events") {
-      setActiveSection("my-events");
+    if (lockedSection && activeSection !== lockedSection) {
+      setActiveSection(lockedSection);
     }
-  }, [myEventsOnly, activeSection]);
+  }, [lockedSection, activeSection]);
 
   useEffect(() => {
-    if (myEventsOnly) {
+    const eventId = String(searchParams.get("eventId") || "").trim();
+    if (eventId) {
+      setSharedEventId(eventId);
+    }
+    if (embedded) {
       return;
     }
     const section = String(searchParams.get("section") || "").toLowerCase();
-    const eventId = String(searchParams.get("eventId") || "").trim();
     if (section === "shared" || searchParams.get("invite")) {
       setActiveSection("shared");
-      if (eventId) {
-        setSharedEventId(eventId);
-      }
     }
-  }, [myEventsOnly, searchParams]);
+  }, [embedded, searchParams]);
 
   useEffect(() => {
-    if (myEventsOnly) {
+    if (embedded) {
       return;
     }
     const token = String(searchParams.get("invite") || "").trim();
@@ -532,7 +546,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     return () => {
       cancelled = true;
     };
-  }, [myEventsOnly, searchParams, setSearchParams, refreshSession, login, user]);
+  }, [embedded, searchParams, setSearchParams, refreshSession, login, user]);
 
   const openSharedEvent = useCallback(
     (row) => {
@@ -808,28 +822,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           ? Number(form.platform_fee_value === "" ? 0 : form.platform_fee_value)
           : 0,
         coupon_codes_enabled: Boolean(form.coupon_codes_enabled),
-        vendor_code_enabled: Boolean(form.vendor_code_enabled),
-        vendor_code: form.vendor_code_enabled
-          ? String(form.vendor_code || "").trim()
-          : undefined,
-        vendor_discount_type:
-          form.vendor_discount_type === "fixed_amount" ? "fixed_amount" : "percent",
-        vendor_discount_value: form.vendor_code_enabled
-          ? Number(form.vendor_discount_value === "" ? 0 : form.vendor_discount_value)
-          : 0
+        vendor_code_enabled: Boolean(form.vendor_code_enabled)
       };
-
-      if (form.vendor_code_enabled && !String(form.vendor_code || "").trim()) {
-        setError("Enter a vendor code, or turn vendor code off.");
-        return;
-      }
-      if (
-        form.vendor_code_enabled &&
-        !(Number(form.vendor_discount_value === "" ? 0 : form.vendor_discount_value) > 0)
-      ) {
-        setError("Enter a vendor discount value, or turn vendor code off.");
-        return;
-      }
 
       if (resolvedTicketMode === "external") {
         payload.ticket_link = ticketUrl;
@@ -966,7 +960,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
   const showBackToUserDashboard =
     !embedded && user?.role === "user" && (user?.organizer_enabled === 1 || user?.role === "organizer");
-  const showOrganizerDashboardLink = myEventsOnly && isOrganizer;
   const scheduleTypeLabel =
     form.schedule_type === "multiple"
       ? "Multiple Dates Event"
@@ -988,6 +981,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         transition={{ duration: 0.24, ease: "easeOut" }}
         className="lg:hidden space-y-4"
       >
+        {!hideAnalyticsChrome ? (
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-4 text-white shadow-soft">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1023,7 +1017,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             ) : null}
           </div>
 
-          {!myEventsOnly ? <div className="mt-4 grid grid-cols-2 gap-2">
+          {!hideAnalyticsChrome ? <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => setActiveSection("overview")}
@@ -1109,6 +1103,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </button>
           </div> : null}
         </section>
+        ) : null}
 
         {error ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -1122,7 +1117,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         ) : null}
 
         <AnimatePresence mode="wait">
-          {!myEventsOnly && activeSection === "overview" ? (
+          {displaySection === "overview" ? (
             <motion.section
               key="m-overview"
               initial={{ opacity: 0, y: 8 }}
@@ -1141,7 +1136,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {!myEventsOnly && activeSection === "shared" ? (
+          {displaySection === "shared" ? (
             <motion.section
               key="m-shared"
               initial={{ opacity: 0, y: 8 }}
@@ -1186,7 +1181,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {myEventsOnly || activeSection === "my-events" ? (
+          {displaySection === "my-events" ? (
             <motion.section
               key="m-my-events"
               initial={{ opacity: 0, y: 8 }}
@@ -1196,7 +1191,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft"
             >
               <MyEventsActionBar
-                showOrganizerDashboardLink={showOrganizerDashboardLink}
                 onCreate={openCreate}
                 className="mb-4"
               />
@@ -1247,6 +1241,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         </label>
                       ) : null}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <EventViewLink
+                          item={item}
+                          className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-center text-xs font-semibold text-slate-700"
+                        />
                         <button
                           type="button"
                           onClick={() => openEdit(item)}
@@ -1276,15 +1274,15 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {!myEventsOnly && activeSection === "coupons" ? (
+          {displaySection === "coupons" ? (
             <OrganizerCouponsPanel key="coupons-mobile" />
           ) : null}
 
-          {!myEventsOnly && activeSection === "vendor-codes" ? (
+          {displaySection === "vendor-codes" ? (
             <OrganizerVendorCodesPanel key="vendor-codes-mobile" />
           ) : null}
 
-          {!myEventsOnly && activeSection === "bookings" ? (
+          {displaySection === "bookings" ? (
             <motion.section
               key="m-bookings"
               initial={{ opacity: 0, y: 8 }}
@@ -1439,6 +1437,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             <span className="font-semibold">Seats:</span> {formatBookingSeatsLabel(item)}
                           </p>
                         ) : null}
+                        {item.vendor_code ? (
+                          <p className="col-span-2">
+                            <span className="font-semibold">Vendor:</span> {item.vendor_code}
+                          </p>
+                        ) : null}
                         <p className="col-span-2"><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
                         <div className="col-span-2 mt-1">
                           <BookingPaymentSummary booking={item} />
@@ -1458,25 +1461,19 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.24, ease: "easeOut" }}
-        className={`hidden min-w-0 lg:grid grid-cols-1 gap-4 ${myEventsOnly ? "lg:grid-cols-1" : "lg:grid-cols-[220px_minmax(0,1fr)]"}`}
+        className={`hidden min-w-0 lg:grid grid-cols-1 gap-4 ${hideAnalyticsChrome ? "lg:grid-cols-1" : "lg:grid-cols-[220px_minmax(0,1fr)]"}`}
       >
-        {!myEventsOnly ? <OrganizerSidebar activeSection={activeSection} onSectionChange={setActiveSection} /> : null}
+        {!hideAnalyticsChrome ? <OrganizerSidebar activeSection={activeSection} onSectionChange={setActiveSection} /> : null}
 
         <section className="min-w-0 space-y-4">
+          {!hideAnalyticsChrome ? (
           <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            {myEventsOnly ? (
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-slate-900">My events</h2>
-                <p className="text-sm text-slate-600">Create, edit, and track review status.</p>
-              </div>
-            ) : (
-              <div className="min-w-0 pr-1">
-                <h1 className="text-2xl font-bold">Event Analytics</h1>
-                <p className="text-sm text-slate-600">
-                  Track event performance, booking activity, and submissions in one place.
-                </p>
-              </div>
-            )}
+            <div className="min-w-0 pr-1">
+              <h1 className="text-2xl font-bold">Event Analytics</h1>
+              <p className="text-sm text-slate-600">
+                Track event performance, booking activity, and submissions in one place.
+              </p>
+            </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
               {showBackToUserDashboard ? (
                 <Link
@@ -1486,12 +1483,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   Back to User Dashboard
                 </Link>
               ) : null}
-              {myEventsOnly ? (
-                <MyEventsActionBar
-                  showOrganizerDashboardLink={showOrganizerDashboardLink}
-                  onCreate={openCreate}
-                />
-              ) : activeSection === "my-events" ? (
+              {displaySection === "my-events" ? (
                 <button
                   type="button"
                   onClick={openCreate}
@@ -1502,6 +1494,15 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               ) : null}
             </div>
           </header>
+          ) : displaySection === "my-events" ? (
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-slate-900">My events</h2>
+              <p className="text-sm text-slate-600">Create, edit, and track review status.</p>
+            </div>
+            <MyEventsActionBar onCreate={openCreate} />
+          </header>
+          ) : null}
 
           {error ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -1515,7 +1516,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           ) : null}
 
           <AnimatePresence mode="wait">
-          {!myEventsOnly && activeSection === "overview" ? (
+          {displaySection === "overview" ? (
             <motion.section
               key="overview"
               initial={{ opacity: 0, y: 8 }}
@@ -1534,7 +1535,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {!myEventsOnly && activeSection === "shared" ? (
+          {displaySection === "shared" ? (
             <motion.section
               key="shared"
               initial={{ opacity: 0, y: 8 }}
@@ -1579,7 +1580,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {myEventsOnly || activeSection === "my-events" ? (
+          {displaySection === "my-events" ? (
             <motion.section
               key="my-events"
               initial={{ opacity: 0, y: 8 }}
@@ -1588,7 +1589,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft"
             >
-              <h2 className="text-lg font-semibold text-slate-900">My Events</h2>
+              {hideAnalyticsChrome ? null : (
+                <h2 className="text-lg font-semibold text-slate-900">My Events</h2>
+              )}
               {loading ? (
                 <div className="mt-4 flex items-center gap-2 text-sm text-slate-600">
                   <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
@@ -1636,6 +1639,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           </label>
                         ) : null}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <EventViewLink
+                            item={item}
+                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                          />
                           <button
                             type="button"
                             onClick={() => openEdit(item)}
@@ -1662,16 +1669,16 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     ))}
                   </div>
                 <div className="mt-3 hidden md:block">
-                  <ScrollableTableFrame minWidthClass="min-w-[820px]" maxHeightClass="max-h-[min(60vh,36rem)]">
+                  <ScrollableTableFrame minWidthClass="min-w-[900px]" maxHeightClass="max-h-[min(60vh,36rem)]">
                   <table className="w-full table-fixed text-left text-sm">
                     <colgroup>
-                      <col className="w-[32%]" />
+                      <col className="w-[28%]" />
                       <col className="w-[11%]" />
                       <col className="w-[12%]" />
                       <col className="w-[9%]" />
                       <col className="w-[12%]" />
                       <col className="w-[10%]" />
-                      <col className="w-[14%]" />
+                      <col className="w-[18%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
                       <tr>
@@ -1728,6 +1735,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex flex-wrap items-center gap-2">
+                              <EventViewLink
+                                item={item}
+                                className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                              />
                               <button
                                 type="button"
                                 onClick={() => openEdit(item)}
@@ -1762,15 +1773,15 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </motion.section>
           ) : null}
 
-          {!myEventsOnly && activeSection === "coupons" ? (
+          {displaySection === "coupons" ? (
             <OrganizerCouponsPanel key="coupons-desktop" />
           ) : null}
 
-          {!myEventsOnly && activeSection === "vendor-codes" ? (
+          {displaySection === "vendor-codes" ? (
             <OrganizerVendorCodesPanel key="vendor-codes-desktop" />
           ) : null}
 
-          {!myEventsOnly && activeSection === "bookings" ? (
+          {displaySection === "bookings" ? (
             <motion.section
               key="bookings"
               initial={{ opacity: 0, y: 8 }}
@@ -1906,6 +1917,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             <span className="font-semibold">Seats:</span> {formatBookingSeatsLabel(item)}
                           </p>
                         ) : null}
+                        {item.vendor_code ? (
+                          <p className="col-span-2">
+                            <span className="font-semibold">Vendor:</span> {item.vendor_code}
+                          </p>
+                        ) : null}
                         <p><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
                         <p>
                           <span className="font-semibold">Booked:</span>{" "}
@@ -1920,22 +1936,23 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 )}
               </div>
               <div className="mt-3 hidden md:block">
-                <ScrollableTableFrame minWidthClass="min-w-[1280px]">
+                <ScrollableTableFrame minWidthClass="min-w-[1380px]">
                 <table className="w-full table-fixed text-left text-sm">
                   <colgroup>
                     <col className="w-[88px]" />
-                    <col className="w-[220px]" />
-                    <col className="w-[140px]" />
-                    <col className="w-[180px]" />
-                    <col className="w-[118px]" />
-                    <col className="w-[70px]" />
-                    <col className="w-[120px]" />
-                    <col className="w-[118px]" />
+                    <col className="w-[200px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[170px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[64px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[90px]" />
                     <col className="w-[96px]" />
+                    <col className="w-[90px]" />
                     <col className="w-[100px]" />
-                    <col className="w-[96px]" />
-                    <col className="w-[118px]" />
                     <col className="w-[108px]" />
+                    <col className="w-[100px]" />
                   </colgroup>
                   <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
                     <tr>
@@ -1950,6 +1967,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Total</th>
                       <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Payment</th>
                       <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Charged</th>
+                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Vendor</th>
                       <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Stripe</th>
                       <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Booked</th>
                     </tr>
@@ -1957,14 +1975,14 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   <tbody>
                     {loadingBookingRows ? (
                       <tr>
-                        <td className="px-3 py-2.5 text-slate-500" colSpan={13}>
+                        <td className="px-3 py-2.5 text-slate-500" colSpan={14}>
                           Loading bookings...
                         </td>
                       </tr>
                     ) : null}
                     {!loadingBookingRows && bookingRows.length === 0 ? (
                       <tr>
-                        <td className="px-3 py-2.5 text-slate-500" colSpan={13}>
+                        <td className="px-3 py-2.5 text-slate-500" colSpan={14}>
                           No bookings match the selected filters.
                         </td>
                       </tr>
@@ -2018,6 +2036,15 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             </td>
                             <BookingPaymentStatusCell booking={item} />
                             <BookingAmountPaidCell booking={item} className="px-3 py-2.5 text-right text-slate-600" />
+                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
+                              {item.vendor_code ? (
+                                <span className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-900">
+                                  {item.vendor_code}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
                             <BookingStripeRefCell booking={item} className="px-3 py-2.5 text-slate-600" />
                             <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
                               {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
@@ -2603,69 +2630,21 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             onChange={(e) =>
                               setForm((prev) => ({
                                 ...prev,
-                                vendor_code_enabled: e.target.checked,
-                                vendor_code: e.target.checked ? prev.vendor_code : ""
+                                vendor_code_enabled: e.target.checked
                               }))
                             }
                             className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
                           />
                           <span>
-                            <span className="block text-sm font-medium text-slate-900">Vendor code</span>
+                            <span className="block text-sm font-medium text-slate-900">
+                              Vendor code tracking
+                            </span>
                             <span className="block text-xs text-slate-500">
-                              Optional here — you can also manage vendor codes under Vendor codes in the organizer menu
-                              (same style as Coupons).
+                              When on, buyers can enter a vendor/partner code at checkout for tracking only — no
+                              discount is applied.
                             </span>
                           </span>
                         </label>
-                        {form.vendor_code_enabled ? (
-                          <div className="mt-3 ml-7 space-y-3">
-                            <input
-                              value={form.vendor_code}
-                              onChange={(e) =>
-                                setForm((prev) => ({ ...prev, vendor_code: e.target.value }))
-                              }
-                              maxLength={40}
-                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm uppercase"
-                              placeholder="VENDOR123"
-                              autoComplete="off"
-                            />
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <select
-                                value={
-                                  form.vendor_discount_type === "fixed_amount"
-                                    ? "fixed_amount"
-                                    : "percent"
-                                }
-                                onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    vendor_discount_type: e.target.value
-                                  }))
-                                }
-                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                              >
-                                <option value="percent">Percent off</option>
-                                <option value="fixed_amount">Fixed amount (USD)</option>
-                              </select>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={form.vendor_discount_value}
-                                onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    vendor_discount_value: e.target.value
-                                  }))
-                                }
-                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                                placeholder={
-                                  form.vendor_discount_type === "fixed_amount" ? "e.g. 10" : "e.g. 15"
-                                }
-                              />
-                            </div>
-                          </div>
-                        ) : null}
                       </div>
                     </>
                   ) : null}

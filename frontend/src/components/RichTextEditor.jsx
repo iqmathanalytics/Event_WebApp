@@ -43,7 +43,9 @@ export default function RichTextEditor({
         heading: { levels: [2, 3] },
         codeBlock: false,
         code: false,
-        horizontalRule: false
+        horizontalRule: false,
+        // TipTap v3 StarterKit already includes Link — disable it before adding our Link config.
+        link: false
       }),
       Link.configure({
         openOnClick: false,

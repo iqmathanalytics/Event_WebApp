@@ -159,6 +159,9 @@ api.interceptors.response.use(
       requestUrl.includes("/auth/register") ||
       requestUrl.includes("/auth/google") ||
       requestUrl.includes("/auth/refresh-token") ||
+      requestUrl.includes("/auth/forgot-password") ||
+      requestUrl.includes("/auth/reset-password") ||
+      requestUrl.includes("/auth/set-password") ||
       requestUrl.includes("/bookings/guest");
     const isOptionalAuth = Boolean(originalRequest?.optionalAuth);
 

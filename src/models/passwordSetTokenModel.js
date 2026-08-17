@@ -26,7 +26,11 @@ async function findValidPasswordSetToken(rawToken) {
             t.used_at,
             u.email,
             u.name,
-            u.auth_provider
+            u.auth_provider,
+            CASE
+              WHEN u.password_hash IS NULL OR u.password_hash = '' THEN 0
+              ELSE 1
+            END AS has_password
      FROM user_password_set_tokens t
      INNER JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = ?
@@ -42,8 +46,16 @@ async function markPasswordSetTokenUsed(tokenId) {
   await pool.query(`UPDATE user_password_set_tokens SET used_at = NOW() WHERE id = ?`, [tokenId]);
 }
 
+async function invalidateUnusedPasswordSetTokens(userId) {
+  await pool.query(
+    `UPDATE user_password_set_tokens SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL`,
+    [userId]
+  );
+}
+
 module.exports = {
   createPasswordSetToken,
   findValidPasswordSetToken,
-  markPasswordSetTokenUsed
+  markPasswordSetTokenUsed,
+  invalidateUnusedPasswordSetTokens
 };

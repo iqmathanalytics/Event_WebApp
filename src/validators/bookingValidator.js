@@ -16,12 +16,17 @@ const guestContactFields = {
   first_name: z.string().trim().min(1, "First name is required").max(60),
   last_name: z.string().trim().min(1, "Last name is required").max(60),
   email: z.string().trim().email("A valid email is required"),
-  phone: z
-    .string()
-    .trim()
-    .min(8, "Phone number is required")
-    .max(25)
-    .regex(/^[0-9+()\-\s]+$/, "Phone can include digits, spaces, +, -, and parentheses")
+  phone: z.preprocess(
+    (v) => String(v ?? "").trim(),
+    z.union([
+      z.literal(""),
+      z
+        .string()
+        .min(8, "Enter a valid phone number (at least 8 digits)")
+        .max(25)
+        .regex(/^[0-9+()\-\s]+$/, "Phone can include digits, spaces, +, -, and parentheses")
+    ])
+  )
 };
 
 const createBookingSchema = z.object({
@@ -36,14 +41,25 @@ const createBookingSchema = z.object({
     last_name: z.string().trim().min(1).max(60).optional(),
     name: z.string().trim().min(2).max(120).optional(),
     email: z.string().trim().email().optional(),
-    phone: z
-      .string()
-      .trim()
-      .min(8, "Phone number is required")
-      .max(25)
-      .regex(/^[0-9+()\-\s]+$/, "Phone can include digits, spaces, +, -, and parentheses")
-      .optional(),
+    phone: z.preprocess(
+      (v) => (v == null ? undefined : String(v).trim()),
+      z
+        .union([
+          z.literal(""),
+          z
+            .string()
+            .min(8, "Enter a valid phone number (at least 8 digits)")
+            .max(25)
+            .regex(/^[0-9+()\-\s]+$/, "Phone can include digits, spaces, +, -, and parentheses")
+        ])
+        .optional()
+    ),
     coupon_hold_token: z.string().uuid().optional(),
+    /** Attribution-only vendor referral code (no discount). */
+    vendor_code: z.preprocess((v) => {
+      const code = String(v ?? "").trim().toUpperCase();
+      return code || undefined;
+    }, z.string().min(3).max(40).regex(/^[A-Za-z0-9]+$/, "Vendor code must be letters and numbers only").optional()),
     seatsio_hold_token: z.string().trim().min(1).max(128).optional(),
     selected_seats: z.array(selectedSeatSchema).max(20).optional()
   })
@@ -107,6 +123,10 @@ const guestCreateBookingSchema = z.object({
       booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       selected_dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(366).optional(),
       ...guestContactFields,
+      vendor_code: z.preprocess((v) => {
+        const code = String(v ?? "").trim().toUpperCase();
+        return code || undefined;
+      }, z.string().min(3).max(40).regex(/^[A-Za-z0-9]+$/, "Vendor code must be letters and numbers only").optional()),
       seatsio_hold_token: z.string().trim().min(1).max(128).optional(),
       selected_seats: z.array(selectedSeatSchema).max(20).optional()
     })

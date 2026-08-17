@@ -2,6 +2,30 @@ const { pool } = require("../config/db");
 const { generateCheckInCode } = require("../utils/bookingCheckIn");
 const { toJsonDbString } = require("../utils/jsonDb");
 
+let bookingHasVendorCodeColumn = true;
+
+function isMissingVendorCodeColumn(err) {
+  return err?.code === "ER_BAD_FIELD_ERROR" && /vendor_code/i.test(String(err.sqlMessage || err.message || ""));
+}
+
+function vendorCodeSelectSql() {
+  return bookingHasVendorCodeColumn ? "eb.vendor_code" : "NULL AS vendor_code";
+}
+
+async function queryBookingRows(buildSql, values) {
+  try {
+    const [rows] = await pool.query(buildSql(), values);
+    return rows;
+  } catch (err) {
+    if (bookingHasVendorCodeColumn && isMissingVendorCodeColumn(err)) {
+      bookingHasVendorCodeColumn = false;
+      const [rows] = await pool.query(buildSql(), values);
+      return rows;
+    }
+    throw err;
+  }
+}
+
 async function createBooking(payload, conn) {
   const runner = conn || pool;
   const {
@@ -21,6 +45,7 @@ async function createBooking(payload, conn) {
     subtotal_amount,
     discount_amount,
     coupon_code,
+    vendor_code,
     payment_status,
     stripe_payment_intent_id,
     stripe_charge_id,
@@ -39,41 +64,62 @@ async function createBooking(payload, conn) {
   const paidAt = paid_at || (payStatus === "paid" || payStatus === "free" ? new Date() : null);
   const checkInCode = check_in_code || generateCheckInCode();
 
-  const [result] = await runner.query(
-    `INSERT INTO event_bookings
+  const insertWithVendor = [
+    event_id,
+    organizer_id,
+    user_id ?? null,
+    is_guest_booking ? 1 : 0,
+    name,
+    email,
+    phone,
+    attendee_count,
+    ticket_items_json || null,
+    booking_date,
+    selected_dates_json,
+    total_days,
+    total_amount,
+    coupon_id || null,
+    subtotal,
+    discount,
+    coupon_code || null,
+    vendor_code || null,
+    payStatus,
+    stripe_payment_intent_id || null,
+    stripe_charge_id || null,
+    amount_paid_cents ?? null,
+    currency || "usd",
+    paidAt,
+    checkInCode,
+    seatsio_hold_token || null,
+    selected_seats_json ? toJsonDbString(selected_seats_json) : null
+  ];
+  const insertWithoutVendor = insertWithVendor.filter((_, index) => index !== 17);
+
+  try {
+    const [result] = await runner.query(
+      bookingHasVendorCodeColumn
+        ? `INSERT INTO event_bookings
+      (event_id, organizer_id, user_id, is_guest_booking, name, email, phone, attendee_count, ticket_items_json, booking_date, selected_dates_json, total_days, total_amount, coupon_id, subtotal_amount, discount_amount, coupon_code, vendor_code, payment_status, stripe_payment_intent_id, stripe_charge_id, amount_paid_cents, currency, paid_at, check_in_code, seatsio_hold_token, selected_seats_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), NOW())`
+        : `INSERT INTO event_bookings
       (event_id, organizer_id, user_id, is_guest_booking, name, email, phone, attendee_count, ticket_items_json, booking_date, selected_dates_json, total_days, total_amount, coupon_id, subtotal_amount, discount_amount, coupon_code, payment_status, stripe_payment_intent_id, stripe_charge_id, amount_paid_cents, currency, paid_at, check_in_code, seatsio_hold_token, selected_seats_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), NOW())`,
-    [
-      event_id,
-      organizer_id,
-      user_id ?? null,
-      is_guest_booking ? 1 : 0,
-      name,
-      email,
-      phone,
-      attendee_count,
-      ticket_items_json || null,
-      booking_date,
-      selected_dates_json,
-      total_days,
-      total_amount,
-      coupon_id || null,
-      subtotal,
-      discount,
-      coupon_code || null,
-      payStatus,
-      stripe_payment_intent_id || null,
-      stripe_charge_id || null,
-      amount_paid_cents ?? null,
-      currency || "usd",
-      paidAt,
-      checkInCode,
-      seatsio_hold_token || null,
-      selected_seats_json ? toJsonDbString(selected_seats_json) : null
-    ]
-  );
-
-  return { id: result.insertId, check_in_code: checkInCode };
+      bookingHasVendorCodeColumn ? insertWithVendor : insertWithoutVendor
+    );
+    return { id: result.insertId, check_in_code: checkInCode };
+  } catch (err) {
+    if (!bookingHasVendorCodeColumn || !isMissingVendorCodeColumn(err)) {
+      throw err;
+    }
+    bookingHasVendorCodeColumn = false;
+    const [result] = await runner.query(
+      `INSERT INTO event_bookings
+      (event_id, organizer_id, user_id, is_guest_booking, name, email, phone, attendee_count, ticket_items_json, booking_date, selected_dates_json, total_days, total_amount, coupon_id, subtotal_amount, discount_amount, coupon_code, payment_status, stripe_payment_intent_id, stripe_charge_id, amount_paid_cents, currency, paid_at, check_in_code, seatsio_hold_token, selected_seats_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), NOW())`,
+      insertWithoutVendor
+    );
+    return { id: result.insertId, check_in_code: checkInCode };
+  }
 }
 
 async function findBookingById(bookingId, conn) {
@@ -158,8 +204,8 @@ async function listBookingsByOrganizer({ organizerId, eventId, date }) {
     values.push(date);
   }
 
-  const [rows] = await pool.query(
-    `SELECT eb.id,
+  return queryBookingRows(
+    () => `SELECT eb.id,
             eb.event_id,
             eb.user_id,
             eb.is_guest_booking,
@@ -176,6 +222,7 @@ async function listBookingsByOrganizer({ organizerId, eventId, date }) {
             eb.subtotal_amount,
             eb.discount_amount,
             eb.coupon_code,
+            ${vendorCodeSelectSql()},
             eb.payment_status,
             eb.amount_paid_cents,
             eb.currency,
@@ -196,8 +243,6 @@ async function listBookingsByOrganizer({ organizerId, eventId, date }) {
      ORDER BY eb.created_at DESC`,
     values
   );
-
-  return rows;
 }
 
 async function listBookingsForAdmin({ eventId, organizerId, cityId, date }) {
@@ -221,8 +266,8 @@ async function listBookingsForAdmin({ eventId, organizerId, cityId, date }) {
     values.push(date);
   }
 
-  const [rows] = await pool.query(
-    `SELECT eb.id,
+  return queryBookingRows(
+    () => `SELECT eb.id,
             eb.event_id,
             eb.organizer_id,
             eb.user_id,
@@ -240,6 +285,7 @@ async function listBookingsForAdmin({ eventId, organizerId, cityId, date }) {
             eb.subtotal_amount,
             eb.discount_amount,
             eb.coupon_code,
+            ${vendorCodeSelectSql()},
             eb.payment_status,
             eb.amount_paid_cents,
             eb.currency,
@@ -262,13 +308,11 @@ async function listBookingsForAdmin({ eventId, organizerId, cityId, date }) {
      ORDER BY eb.created_at DESC`,
     values
   );
-
-  return rows;
 }
 
 async function listBookingsByUser({ userId }) {
-  const [rows] = await pool.query(
-    `SELECT eb.id AS booking_id,
+  return queryBookingRows(
+    () => `SELECT eb.id AS booking_id,
             eb.event_id,
             e.title AS event_title,
             e.public_slug AS event_public_slug,
@@ -289,6 +333,7 @@ async function listBookingsByUser({ userId }) {
             eb.subtotal_amount,
             eb.discount_amount,
             eb.coupon_code,
+            ${vendorCodeSelectSql()},
             eb.payment_status,
             eb.amount_paid_cents,
             eb.paid_at,
@@ -304,7 +349,6 @@ async function listBookingsByUser({ userId }) {
      ORDER BY eb.created_at DESC`,
     [userId]
   );
-  return rows;
 }
 
 function parseTicketItemsFromBookingRow(row) {
@@ -387,6 +431,24 @@ async function countReservedSeatsForEvent(eventId, options = {}) {
   return Number(bookingRows[0]?.seats || 0) + heldSeats;
 }
 
+async function findLatestBookingContactByEmail(email) {
+  const normalized = String(email || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  const [rows] = await pool.query(
+    `SELECT name, email, phone
+     FROM event_bookings
+     WHERE LOWER(TRIM(email)) = ?
+     ORDER BY id DESC
+     LIMIT 1`,
+    [normalized]
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   createBooking,
   findBookingById,
@@ -397,5 +459,6 @@ module.exports = {
   listBookingsForAdmin,
   listBookingsByUser,
   countReservedSeatsForEvent,
-  countBookedTicketsByLevelForEvent
+  countBookedTicketsByLevelForEvent,
+  findLatestBookingContactByEmail
 };
