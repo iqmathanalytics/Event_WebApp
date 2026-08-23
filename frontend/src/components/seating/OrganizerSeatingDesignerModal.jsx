@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, LayoutGrid, Save } from "lucide-react";
+import { LayoutGrid, Save } from "lucide-react";
 import { SeatsioDesigner } from "@seatsio/seatsio-react";
 import SeatingModalShell from "./SeatingModalShell";
+import SeatingSideToast from "./SeatingSideToast";
 import {
   fetchOrganizerSeatingDesigner,
   saveOrganizerSeatingConfig
 } from "../../services/seatingService";
+
+const TOAST_VISIBLE_MS = 3400;
 
 function chartKeyFromPayload(chartOrKey) {
   if (!chartOrKey) {
@@ -28,14 +31,38 @@ export default function OrganizerSeatingDesignerModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [hint, setHint] = useState("");
+  const [toast, setToast] = useState(null);
   const [config, setConfig] = useState(null);
   const [designerEpoch, setDesignerEpoch] = useState(0);
   const [showPublishFirstDialog, setShowPublishFirstDialog] = useState(false);
-  const [publishedThisSession, setPublishedThisSession] = useState(false);
   const savingRef = useRef(false);
   const latestChartKeyRef = useRef("");
+  const publishedThisSessionRef = useRef(false);
+  const ignoreChartUpdatesUntilRef = useRef(0);
+  const toastTimerRef = useRef(null);
+
+  const markPublished = useCallback((value) => {
+    publishedThisSessionRef.current = Boolean(value);
+  }, []);
+
+  const clearToastTimer = useCallback(() => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+  }, []);
+
+  const showToast = useCallback(
+    (message, tone = "info") => {
+      clearToastTimer();
+      setToast({ message, tone, id: Date.now() });
+      toastTimerRef.current = window.setTimeout(() => {
+        setToast(null);
+        toastTimerRef.current = null;
+      }, TOAST_VISIBLE_MS);
+    },
+    [clearToastTimer]
+  );
 
   const loadDesigner = useCallback(async () => {
     if (!eventId) {
@@ -43,10 +70,10 @@ export default function OrganizerSeatingDesignerModal({
     }
     setLoading(true);
     setError("");
-    setSuccess("");
-    setHint("");
+    setToast(null);
+    clearToastTimer();
     setShowPublishFirstDialog(false);
-    setPublishedThisSession(false);
+    markPublished(false);
     try {
       const data = await fetchOrganizerSeatingDesigner(eventId);
       setConfig(data);
@@ -56,7 +83,7 @@ export default function OrganizerSeatingDesignerModal({
     } finally {
       setLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, markPublished, clearToastTimer]);
 
   useEffect(() => {
     if (open && eventId) {
@@ -65,33 +92,30 @@ export default function OrganizerSeatingDesignerModal({
     if (!open) {
       setConfig(null);
       setError("");
-      setSuccess("");
-      setHint("");
+      setToast(null);
+      clearToastTimer();
       setShowPublishFirstDialog(false);
-      setPublishedThisSession(false);
+      markPublished(false);
       latestChartKeyRef.current = "";
     }
-  }, [open, eventId, loadDesigner]);
+  }, [open, eventId, loadDesigner, markPublished, clearToastTimer]);
+
+  useEffect(() => () => clearToastTimer(), [clearToastTimer]);
 
   const persistChart = useCallback(
-    async (chartOrKey, { quiet = false } = {}) => {
+    async (chartOrKey) => {
       if (!eventId || savingRef.current) {
         return null;
       }
       const chartKey = chartKeyFromPayload(chartOrKey) || latestChartKeyRef.current;
       if (!chartKey) {
-        if (!quiet) {
-          setError("Draw at least one seat, click Publish in the Seats.io toolbar, then Save.");
-        }
+        setShowPublishFirstDialog(true);
         return null;
       }
 
       savingRef.current = true;
       setSaving(true);
-      if (!quiet) {
-        setError("");
-        setHint("");
-      }
+      setError("");
       try {
         const saved = await saveOrganizerSeatingConfig(eventId, {
           seating_mode: "reserved",
@@ -106,33 +130,27 @@ export default function OrganizerSeatingDesignerModal({
           region: prev?.region || saved?.region,
           workspace_key: prev?.workspace_key
         }));
-        if (!quiet) {
-          setSuccess("Seating chart saved and linked to this event.");
-          setHint("");
-        }
+        showToast("Seating chart saved and linked to this event.", "success");
         onSaved?.(saved);
         return saved;
       } catch (err) {
-        if (!quiet) {
-          setError(err.response?.data?.message || "Could not save seating chart.");
-        }
+        setError(err.response?.data?.message || "Could not save seating chart.");
         return null;
       } finally {
         savingRef.current = false;
         setSaving(false);
       }
     },
-    [eventId, onSaved]
+    [eventId, onSaved, showToast]
   );
 
   async function handleSave() {
-    const chartKey = latestChartKeyRef.current || config?.chart_key;
-    if (!chartKey) {
+    if (!publishedThisSessionRef.current) {
       setShowPublishFirstDialog(true);
       return;
     }
-    // Require Publish in this session unless the chart was already linked to the event.
-    if (!publishedThisSession && !config?.event_key) {
+    const chartKey = latestChartKeyRef.current || config?.chart_key;
+    if (!chartKey) {
       setShowPublishFirstDialog(true);
       return;
     }
@@ -146,9 +164,8 @@ export default function OrganizerSeatingDesignerModal({
     }
     latestChartKeyRef.current = key;
     setConfig((prev) => ({ ...prev, chart_key: key }));
-    setPublishedThisSession(false);
-    setHint("Add your seats, then click Publish in the toolbar. When that’s done, click Save seating chart.");
-    // Do not auto-save empty charts — Seats.io rejects unpublished empty drawings.
+    markPublished(false);
+    showToast("Add seats, then Publish in the toolbar before saving.", "info");
   }
 
   function handleChartPublished(chartOrKey) {
@@ -157,28 +174,34 @@ export default function OrganizerSeatingDesignerModal({
       latestChartKeyRef.current = key;
       setConfig((prev) => ({ ...prev, chart_key: key }));
     }
-    setPublishedThisSession(true);
+    markPublished(true);
+    ignoreChartUpdatesUntilRef.current = Date.now() + 2500;
     setShowPublishFirstDialog(false);
-    setHint("");
     void persistChart(key);
+  }
+
+  function handleChartUpdated(chartOrKey) {
+    const key = chartKeyFromPayload(chartOrKey);
+    if (key) {
+      latestChartKeyRef.current = key;
+    }
+    if (Date.now() < ignoreChartUpdatesUntilRef.current) {
+      return;
+    }
+    if (publishedThisSessionRef.current) {
+      markPublished(false);
+      showToast("You have unpublished changes. Click Publish in the toolbar, then Save seating chart.", "warn");
+    }
   }
 
   function reloadDesigner() {
     setError("");
-    setSuccess("");
-    setHint("");
+    setToast(null);
+    clearToastTimer();
     setShowPublishFirstDialog(false);
-    setPublishedThisSession(false);
+    markPublished(false);
     setDesignerEpoch((n) => n + 1);
     void loadDesigner();
-  }
-
-  function openCleanDesignerWindow() {
-    if (!eventId) {
-      return;
-    }
-    const url = `${window.location.origin}/seating-designer/${encodeURIComponent(eventId)}`;
-    window.open(url, `seating-designer-${eventId}`, "noopener,noreferrer,width=1400,height=900");
   }
 
   const footer = (
@@ -187,15 +210,6 @@ export default function OrganizerSeatingDesignerModal({
         Draw seats, click <strong>Publish</strong> in the toolbar, then click <strong>Save seating chart</strong>.
       </p>
       <div className="flex shrink-0 flex-wrap gap-1.5">
-        <button
-          type="button"
-          onClick={openCleanDesignerWindow}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
-          title="Open designer in a separate window"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Open in new window
-        </button>
         <button
           type="button"
           onClick={reloadDesigner}
@@ -225,68 +239,55 @@ export default function OrganizerSeatingDesignerModal({
 
   return (
     <>
-    <SeatingModalShell
-      open={open}
-      onClose={onClose}
-      title={eventTitle ? `Seating chart - ${eventTitle}` : "Design seating chart"}
-      subtitle="Use the full-screen Seats.io designer to draw seats, rows, sections, and categories."
-      footer={footer}
-      size="fullscreen"
-    >
-      <div className="flex h-full min-h-0 flex-col bg-slate-50">
-        {loading ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-slate-500">Loading designer...</div>
-        ) : null}
-        {error ? (
-          <div className="m-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-            {error}
-          </div>
-        ) : null}
-        {hint && !error ? (
-          <div className="m-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {hint}
-          </div>
-        ) : null}
-        {success && !error ? (
-          <div className="m-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            {success}
-          </div>
-        ) : null}
-        {!loading && config?.secret_key ? (
-          <div className="min-h-0 flex-1 p-0.5 sm:p-1">
-            <div
-              className="h-full min-h-[70vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-              style={{ minHeight: "70vh" }}
-            >
-              <SeatsioDesigner
-                key={`${eventId}-${config.chart_key || "new"}-${designerEpoch}`}
-                secretKey={config.secret_key}
-                chartKey={config.chart_key || undefined}
-                region={config.region || "na"}
-                openLatestDrawing
-                onChartCreated={handleChartCreated}
-                onChartUpdated={(chartOrKey) => {
-                  const key = chartKeyFromPayload(chartOrKey);
-                  if (key) {
-                    latestChartKeyRef.current = key;
-                  }
-                }}
-                onChartPublished={handleChartPublished}
-                onDesignerRenderingFailed={() => {
-                  setError("The seating designer couldn’t load. Please reload and try again.");
-                }}
-              />
+      <SeatingModalShell
+        open={open}
+        onClose={onClose}
+        title={eventTitle ? `Seating chart - ${eventTitle}` : "Design seating chart"}
+        subtitle="Use the full-screen Seats.io designer to draw seats, rows, sections, and categories."
+        footer={footer}
+        size="fullscreen"
+      >
+        <div className="flex h-full min-h-0 flex-col bg-slate-50">
+          {loading ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-slate-500">Loading designer...</div>
+          ) : null}
+          {error ? (
+            <div className="m-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              {error}
             </div>
-          </div>
-        ) : null}
-        {!loading && !config?.secret_key && !error ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-slate-600">
-            <LayoutGrid className="h-8 w-8 text-slate-400" />
-            <p>Seats.io is not configured. Add API keys to the server environment.</p>
-          </div>
-        ) : null}
-      </div>
-    </SeatingModalShell>
+          ) : null}
+          {!loading && config?.secret_key ? (
+            <div className="min-h-0 flex-1 p-0.5 sm:p-1">
+              <div
+                className="h-full min-h-[70vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                style={{ minHeight: "70vh" }}
+              >
+                <SeatsioDesigner
+                  key={`${eventId}-${config.chart_key || "new"}-${designerEpoch}`}
+                  secretKey={config.secret_key}
+                  chartKey={config.chart_key || undefined}
+                  region={config.region || "na"}
+                  openLatestDrawing
+                  onChartCreated={handleChartCreated}
+                  onChartUpdated={handleChartUpdated}
+                  onChartPublished={handleChartPublished}
+                  onDesignerRenderingFailed={() => {
+                    setError("The seating designer couldn’t load. Please reload and try again.");
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+          {!loading && !config?.secret_key && !error ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-slate-600">
+              <LayoutGrid className="h-8 w-8 text-slate-400" />
+              <p>Seats.io is not configured. Add API keys to the server environment.</p>
+            </div>
+          ) : null}
+        </div>
+      </SeatingModalShell>
+
+      <SeatingSideToast toast={toast} />
 
       {showPublishFirstDialog
         ? createPortal(

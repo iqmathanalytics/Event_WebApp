@@ -207,7 +207,7 @@ const verifyTicket = asyncHandler(async (req, res) => {
 const checkInTicket = asyncHandler(async (req, res) => {
   const result = await bookingCheckInService.checkInBookingByCode({
     rawCode: req.validated.body.code,
-    adminUserId: req.user.id
+    adminUserId: req.user?.id || null
   });
   return res.status(200).json({
     success: true,

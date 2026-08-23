@@ -78,6 +78,13 @@ router.get(
   eventAnalyticsController.getOrganizerEventInsights
 );
 router.get(
+  "/organizer/check-in-insights/:eventId",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(eventIdParamsSchema),
+  eventAnalyticsController.getOrganizerCheckInInsights
+);
+router.get(
   "/:eventId/analytics-shares",
   authMiddleware,
   organizerAccessMiddleware,

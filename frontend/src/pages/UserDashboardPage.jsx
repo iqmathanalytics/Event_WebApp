@@ -41,7 +41,16 @@ const profileTabs = [
   { key: "preferences", label: "Interests" }
 ];
 
-const HOST_TAB_KEYS = new Set(["overview", "shared", "events", "coupons", "vendor-codes", "bookings", "offers"]);
+const HOST_TAB_KEYS = new Set([
+  "overview",
+  "shared",
+  "events",
+  "coupons",
+  "vendor-codes",
+  "bookings",
+  "check-in",
+  "offers"
+]);
 
 const ORGANIZER_SECTION_BY_TAB = {
   overview: "overview",
@@ -49,7 +58,8 @@ const ORGANIZER_SECTION_BY_TAB = {
   events: "my-events",
   coupons: "coupons",
   "vendor-codes": "vendor-codes",
-  bookings: "bookings"
+  bookings: "bookings",
+  "check-in": "check-in"
 };
 
 const ORGANIZER_WORKSPACE_TABS = [
@@ -59,6 +69,7 @@ const ORGANIZER_WORKSPACE_TABS = [
   { key: "coupons", label: "Coupons" },
   { key: "vendor-codes", label: "Vendor codes", shortLabel: "Vendors" },
   { key: "bookings", label: "Event Bookings", shortLabel: "Bookings" },
+  { key: "check-in", label: "Check In", shortLabel: "Check In" },
   { key: "offers", label: "Offers & Creator Spotlights", shortLabel: "Offers & Spotlights" }
 ];
 

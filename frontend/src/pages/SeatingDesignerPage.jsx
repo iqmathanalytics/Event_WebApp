@@ -2,29 +2,52 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useParams } from "react-router-dom";
 import { SeatsioDesigner } from "@seatsio/seatsio-react";
+import SeatingSideToast from "../components/seating/SeatingSideToast";
 import {
   fetchOrganizerSeatingDesigner,
   saveOrganizerSeatingConfig
 } from "../services/seatingService";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
-/**
- * Minimal seating designer page (no dashboard chrome / GA heavy shells).
- * Opened from "Open clean window" to avoid browser-extension postMessage conflicts.
- */
+const TOAST_VISIBLE_MS = 3400;
+
+/** Standalone seating designer page (same Publish-then-Save rules as the modal). */
 export default function SeatingDesignerPage() {
   const { eventId } = useParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [toast, setToast] = useState(null);
   const [config, setConfig] = useState(null);
   const [chartKey, setChartKey] = useState("");
-  const [publishedThisSession, setPublishedThisSession] = useState(false);
   const [showPublishFirstDialog, setShowPublishFirstDialog] = useState(false);
   const savingRef = useRef(false);
+  const publishedThisSessionRef = useRef(false);
+  const ignoreChartUpdatesUntilRef = useRef(0);
+  const toastTimerRef = useRef(null);
 
   useRouteContentReady(loading || saving);
+
+  const clearToastTimer = useCallback(() => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+  }, []);
+
+  const showToast = useCallback(
+    (message, tone = "info") => {
+      clearToastTimer();
+      setToast({ message, tone, id: Date.now() });
+      toastTimerRef.current = window.setTimeout(() => {
+        setToast(null);
+        toastTimerRef.current = null;
+      }, TOAST_VISIBLE_MS);
+    },
+    [clearToastTimer]
+  );
+
+  useEffect(() => () => clearToastTimer(), [clearToastTimer]);
 
   const load = useCallback(async () => {
     if (!eventId) {
@@ -32,7 +55,9 @@ export default function SeatingDesignerPage() {
     }
     setLoading(true);
     setError("");
-    setPublishedThisSession(false);
+    setToast(null);
+    clearToastTimer();
+    publishedThisSessionRef.current = false;
     setShowPublishFirstDialog(false);
     try {
       const data = await fetchOrganizerSeatingDesigner(eventId);
@@ -43,7 +68,7 @@ export default function SeatingDesignerPage() {
     } finally {
       setLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, clearToastTimer]);
 
   useEffect(() => {
     void load();
@@ -64,7 +89,7 @@ export default function SeatingDesignerPage() {
           chart_key: nextKey
         });
         setChartKey(String(saved?.chart_key || nextKey).trim());
-        setSuccess("Seating chart saved and linked to this event. You can close this window.");
+        showToast("Seating chart saved and linked to this event.", "success");
       } catch (err) {
         setError(err.response?.data?.message || "Could not save seating chart.");
       } finally {
@@ -72,15 +97,15 @@ export default function SeatingDesignerPage() {
         setSaving(false);
       }
     },
-    [eventId, chartKey]
+    [eventId, chartKey, showToast]
   );
 
   function handleSaveClick() {
-    if (!chartKey) {
+    if (!publishedThisSessionRef.current) {
       setShowPublishFirstDialog(true);
       return;
     }
-    if (!publishedThisSession && !config?.event_key) {
+    if (!chartKey) {
       setShowPublishFirstDialog(true);
       return;
     }
@@ -91,7 +116,7 @@ export default function SeatingDesignerPage() {
     <div className="flex min-h-screen flex-col bg-slate-100">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Seats.io designer</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Seating designer</p>
           <h1 className="text-sm font-bold text-slate-900">Event #{eventId}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -114,9 +139,6 @@ export default function SeatingDesignerPage() {
       {error ? (
         <p className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-800">{error}</p>
       ) : null}
-      {success ? (
-        <p className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{success}</p>
-      ) : null}
       <p className="border-b border-slate-200 bg-white px-4 py-2 text-xs text-slate-600">
         Draw seats, click <strong>Publish</strong> in the toolbar, then click <strong>Save seating chart</strong>.
       </p>
@@ -133,17 +155,28 @@ export default function SeatingDesignerPage() {
             openLatestDrawing
             onChartCreated={(key) => {
               setChartKey(String(key || "").trim());
-              setPublishedThisSession(false);
+              publishedThisSessionRef.current = false;
             }}
             onChartUpdated={(key) => {
               if (key) {
                 setChartKey(String(key).trim());
               }
+              if (Date.now() < ignoreChartUpdatesUntilRef.current) {
+                return;
+              }
+              if (publishedThisSessionRef.current) {
+                publishedThisSessionRef.current = false;
+                showToast(
+                  "You have unpublished changes. Click Publish in the toolbar, then Save seating chart.",
+                  "warn"
+                );
+              }
             }}
             onChartPublished={(key) => {
               const next = String(key || chartKey || "").trim();
               setChartKey(next);
-              setPublishedThisSession(true);
+              publishedThisSessionRef.current = true;
+              ignoreChartUpdatesUntilRef.current = Date.now() + 2500;
               setShowPublishFirstDialog(false);
               void persist(next);
             }}
@@ -153,6 +186,8 @@ export default function SeatingDesignerPage() {
           />
         ) : null}
       </div>
+
+      <SeatingSideToast toast={toast} />
 
       {showPublishFirstDialog
         ? createPortal(

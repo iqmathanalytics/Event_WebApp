@@ -33,6 +33,7 @@ import {
 import ScrollableTableFrame from "../components/ScrollableTableFrame";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
 import OrganizerVendorCodesPanel from "../components/OrganizerVendorCodesPanel";
+import OrganizerCheckInPanel from "../components/OrganizerCheckInPanel";
 import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
 import SharedAnalyticsList from "../components/SharedAnalyticsList";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
@@ -1092,6 +1093,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </button>
             <button
               type="button"
+              onClick={() => setActiveSection("check-in")}
+              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
+                activeSection === "check-in"
+                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
+                  : "bg-white/10 hover:bg-white/15"
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Check In</p>
+              <p className="mt-1 text-sm font-semibold">Door stats</p>
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setActiveSection("my-events");
                 openCreate();
@@ -1451,6 +1464,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   ))
                 )}
               </div>
+            </motion.section>
+          ) : null}
+
+          {displaySection === "check-in" ? (
+            <motion.section
+              key="m-check-in"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              <OrganizerCheckInPanel events={rows} />
             </motion.section>
           ) : null}
         </AnimatePresence>
@@ -2057,6 +2082,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </table>
                 </ScrollableTableFrame>
               </div>
+            </motion.section>
+          ) : null}
+
+          {displaySection === "check-in" ? (
+            <motion.section
+              key="check-in"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              <OrganizerCheckInPanel events={rows} />
             </motion.section>
           ) : null}
           </AnimatePresence>

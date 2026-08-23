@@ -27,7 +27,7 @@ const InfluencerDetailsPage = lazy(() => import("./pages/InfluencerDetailsPage")
 const UserDashboardPage = lazy(() => import("./pages/UserDashboardPage"));
 const UserSubmissionsPage = lazy(() => import("./pages/UserSubmissionsPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
-const AdminVerifyTicketPage = lazy(() => import("./pages/AdminVerifyTicketPage"));
+const CheckInPage = lazy(() => import("./pages/CheckInPage"));
 const BookingConfirmedPage = lazy(() => import("./pages/BookingConfirmedPage"));
 const EventLandingPage = lazy(() => import("./eventLandings/EventLandingPage"));
 const SeatingDesignerPage = lazy(() => import("./pages/SeatingDesignerPage"));
@@ -53,6 +53,13 @@ function RedirectOrganizerDashboardToUser() {
   }
   const qs = next.toString();
   return <Navigate to={`/dashboard/user${qs ? `?${qs}` : ""}`} replace />;
+}
+
+function RedirectLegacyVerifyTicket() {
+  const [params] = useSearchParams();
+  const code = params.get("code");
+  const to = code ? `/check-in?code=${encodeURIComponent(code)}` : "/check-in";
+  return <Navigate to={to} replace />;
 }
 
 function App() {
@@ -123,6 +130,16 @@ function App() {
           </Route>
 
           <Route
+            path="/check-in"
+            element={
+              <Suspense fallback={<RouteFallback label="Loading check-in..." />}>
+                <CheckInPage />
+              </Suspense>
+            }
+          />
+          <Route path="/dashboard/admin/verify-ticket" element={<RedirectLegacyVerifyTicket />} />
+
+          <Route
             element={
               <UserRoute>
                 <DashboardLayout />
@@ -172,14 +189,6 @@ function App() {
               element={
                 <Suspense fallback={<RouteFallback label="Loading admin dashboard..." />}>
                   <AdminDashboardPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/dashboard/admin/verify-ticket"
-              element={
-                <Suspense fallback={<RouteFallback label="Loading ticket scanner..." />}>
-                  <AdminVerifyTicketPage />
                 </Suspense>
               }
             />

@@ -402,9 +402,154 @@ async function getAdminEventInsights(eventIdParam, options = {}) {
   return buildEventInsightsPayload(event, options);
 }
 
+async function getOrganizerCheckInInsights(organizerId, eventIdParam) {
+  const eventId = Number(eventIdParam);
+  if (!Number.isFinite(eventId) || eventId <= 0) {
+    throw new ApiError(400, "Invalid event id");
+  }
+
+  const event = await assertOrganizerOwnsEvent(eventId, organizerId);
+  const [rows] = await pool.query(
+    `SELECT ticket_items_json, attendee_count, checked_in_at, payment_status
+     FROM event_bookings
+     WHERE event_id = ? AND payment_status IN ('paid', 'free')`,
+    [eventId]
+  );
+
+  const configuredLevels = parseTicketLevelsFromEvent(event);
+  const levelById = new Map(configuredLevels.map((l) => [String(l.id), l]));
+  const byCategory = new Map();
+
+  const ensureCategory = (levelId, levelName, unitPrice, indexHint) => {
+    const id = String(levelId || "unknown");
+    if (!byCategory.has(id)) {
+      const level =
+        levelById.get(id) ||
+        configuredLevels.find((l) => String(l.id) === id) || {
+          id,
+          name: levelName || "Ticket",
+          price: Number(unitPrice) || 0,
+          sort_order: indexHint
+        };
+      const tierKey = resolveTicketTierKey(level, configuredLevels.indexOf(level), configuredLevels);
+      byCategory.set(id, {
+        level_id: id,
+        level_name: level.name || levelName || "Ticket",
+        tier_key: tierKey,
+        color: chartColorForTierKey(tierKey),
+        total_persons: 0,
+        checked_in: 0,
+        remaining: 0
+      });
+    }
+    return byCategory.get(id);
+  };
+
+  let totalPersons = 0;
+  let checkedInPersons = 0;
+  let totalBookings = 0;
+  let checkedInBookings = 0;
+
+  for (const row of rows) {
+    totalBookings += 1;
+    const isCheckedIn = Boolean(row.checked_in_at);
+    if (isCheckedIn) {
+      checkedInBookings += 1;
+    }
+
+    let items = parseTicketItemsJson(row.ticket_items_json);
+    if (!items.length && configuredLevels.length) {
+      const primary = configuredLevels[0];
+      const qty = Math.max(1, Number(row.attendee_count) || 1);
+      items = [
+        {
+          level_id: primary.id,
+          level_name: primary.name,
+          unit_price: primary.price,
+          quantity: qty
+        }
+      ];
+    } else if (!items.length) {
+      const qty = Math.max(1, Number(row.attendee_count) || 1);
+      items = [{ level_id: "legacy", level_name: "General Admission", unit_price: 0, quantity: qty }];
+    }
+
+    let bookingPersons = 0;
+    for (const item of items) {
+      const levelId = String(item.level_id || item.levelId || "").trim();
+      const qty = Math.max(0, Number(item.quantity) || 0);
+      if (!levelId || qty <= 0) {
+        continue;
+      }
+      bookingPersons += qty;
+      const cat = ensureCategory(levelId, item.level_name, item.unit_price, byCategory.size);
+      cat.total_persons += qty;
+      if (isCheckedIn) {
+        cat.checked_in += qty;
+      }
+    }
+
+    if (bookingPersons <= 0) {
+      bookingPersons = Math.max(1, Number(row.attendee_count) || 1);
+      const cat = ensureCategory("legacy", "General Admission", 0, byCategory.size);
+      cat.total_persons += bookingPersons;
+      if (isCheckedIn) {
+        cat.checked_in += bookingPersons;
+      }
+    }
+
+    totalPersons += bookingPersons;
+    if (isCheckedIn) {
+      checkedInPersons += bookingPersons;
+    }
+  }
+
+  // Ensure configured levels appear even with zero sales
+  configuredLevels.forEach((level, index) => {
+    ensureCategory(level.id, level.name, level.price, index);
+  });
+
+  const categories = [...byCategory.values()]
+    .map((c) => ({
+      ...c,
+      remaining: Math.max(0, c.total_persons - c.checked_in),
+      check_in_rate_pct:
+        c.total_persons > 0 ? Number(((c.checked_in / c.total_persons) * 100).toFixed(1)) : 0
+    }))
+    .sort((a, b) => b.total_persons - a.total_persons || String(a.level_name).localeCompare(String(b.level_name)));
+
+  const remainingPersons = Math.max(0, totalPersons - checkedInPersons);
+  const checkInRatePct =
+    totalPersons > 0 ? Number(((checkedInPersons / totalPersons) * 100).toFixed(1)) : 0;
+
+  return {
+    event: {
+      id: event.id,
+      title: event.title,
+      event_date: event.event_date,
+      event_time: event.event_time,
+      status: event.status
+    },
+    totals: {
+      total_persons: totalPersons,
+      checked_in: checkedInPersons,
+      remaining: remainingPersons,
+      check_in_rate_pct: checkInRatePct,
+      total_bookings: totalBookings,
+      checked_in_bookings: checkedInBookings
+    },
+    by_category: categories,
+    status_breakdown: [
+      { name: "Checked in", value: checkedInPersons, fill: "#10b981" },
+      { name: "Not checked in", value: remainingPersons, fill: "#94a3b8" }
+    ].filter((row) => row.value > 0)
+  };
+}
+
 module.exports = {
   getOrganizerInsightsSummary,
   getOrganizerEventInsights,
+  getOrganizerCheckInInsights,
   getAdminEventInsights,
   assertOrganizerOwnsEvent,
   assertCanViewEventAnalytics

@@ -149,18 +149,27 @@ async function findBookingByCheckInCode(checkInCode, conn) {
     return null;
   }
   const [rows] = await runner.query(
-    `SELECT eb.*,
+    `SELECT eb.id,
+            eb.event_id,
+            eb.user_id,
+            eb.is_guest_booking,
+            eb.name,
+            eb.email,
+            eb.phone,
+            eb.attendee_count,
+            eb.ticket_items_json,
+            eb.selected_dates_json,
+            eb.selected_seats_json,
+            eb.total_amount,
+            eb.payment_status,
+            eb.checked_in_at,
+            eb.check_in_code,
             e.title AS event_title,
-            e.public_slug AS event_public_slug,
             e.event_date,
             e.event_time,
-            COALESCE(e.venue_name, e.venue) AS venue_name,
-            c.name AS city_name,
-            org.name AS organizer_name
+            COALESCE(e.venue_name, e.venue) AS venue_name
      FROM event_bookings eb
      INNER JOIN events e ON e.id = eb.event_id
-     LEFT JOIN cities c ON c.id = e.city_id
-     LEFT JOIN users org ON org.id = eb.organizer_id
      WHERE eb.check_in_code = ?
      LIMIT 1`,
     [code]

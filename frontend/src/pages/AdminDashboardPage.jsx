@@ -1,9 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
-import { Link } from "react-router-dom";
-import { FiBell, FiCalendar, FiCheckCircle, FiInfo, FiMapPin, FiTrash2, FiUsers } from "react-icons/fi";
+import { FiBell, FiCalendar, FiInfo, FiMapPin, FiTrash2, FiUsers } from "react-icons/fi";
 import AdminSidebar from "../components/AdminSidebar";
 import AdminCitiesPanel from "../components/AdminCitiesPanel";
 import AdminCommunicationsSection from "../components/AdminCommunicationsSection";
@@ -2013,13 +2012,6 @@ function AdminDashboardPage() {
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <h2 className="shrink-0 text-lg font-semibold text-slate-900">All Event Bookings</h2>
               <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-                <Link
-                  to="/dashboard/admin/verify-ticket"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-brand-100"
-                >
-                  <FiCheckCircle className="h-3.5 w-3.5" aria-hidden />
-                  Scan ticket QR
-                </Link>
                 <button
                   type="button"
                   onClick={() => {
@@ -2399,13 +2391,6 @@ function AdminDashboardPage() {
                               <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
                                 Checked in
                               </span>
-                            ) : item.check_in_code ? (
-                              <Link
-                                to={`/dashboard/admin/verify-ticket?code=${encodeURIComponent(item.check_in_code)}`}
-                                className="text-xs font-semibold text-brand-700 hover:underline"
-                              >
-                                Verify QR
-                              </Link>
                             ) : (
                               <span className="text-xs text-slate-400">—</span>
                             )}

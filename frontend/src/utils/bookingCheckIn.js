@@ -8,13 +8,18 @@ export function appBaseUrl() {
   return configured || DEFAULT_APP_ORIGIN;
 }
 
-export function buildAdminVerifyTicketUrl(checkInCode) {
+export function buildCheckInUrl(checkInCode) {
   const code = String(checkInCode || "").trim();
   const base = appBaseUrl();
   if (!code) {
-    return `${base}/dashboard/admin/verify-ticket`;
+    return `${base}/check-in`;
   }
-  return `${base}/dashboard/admin/verify-ticket?code=${encodeURIComponent(code)}`;
+  return `${base}/check-in?code=${encodeURIComponent(code)}`;
+}
+
+/** @deprecated Use buildCheckInUrl */
+export function buildAdminVerifyTicketUrl(checkInCode) {
+  return buildCheckInUrl(checkInCode);
 }
 
 export function normalizeCheckInCodeInput(raw) {
@@ -27,6 +32,11 @@ export function normalizeCheckInCodeInput(raw) {
     const fromQuery = asUrl.searchParams.get("code");
     if (fromQuery) {
       return fromQuery.trim();
+    }
+    // Support paths like /check-in/<code> if ever used
+    const parts = asUrl.pathname.split("/").filter(Boolean);
+    if (parts[0] === "check-in" && parts[1]) {
+      return decodeURIComponent(parts[1]).trim();
     }
   } catch (_err) {
     /* not a URL */

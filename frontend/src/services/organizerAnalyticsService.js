@@ -19,6 +19,13 @@ export async function fetchOrganizerEventInsights(eventId, { hourlyDate } = {}) 
   return response.data;
 }
 
+export async function fetchOrganizerCheckInInsights(eventId) {
+  const response = await api.get(`/events/organizer/check-in-insights/${eventId}`, {
+    timeout: 30_000
+  });
+  return response.data;
+}
+
 export async function fetchSharedOrganizerInsights() {
   const response = await api.get("/events/organizer/shared-insights", insightsRequest);
   return response.data;

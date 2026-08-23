@@ -83,9 +83,15 @@ const acceptAnalyticsInvite = asyncHandler(async (req, res) => {
   });
 });
 
+const getOrganizerCheckInInsights = asyncHandler(async (req, res) => {
+  const data = await eventAnalyticsService.getOrganizerCheckInInsights(req.user.id, req.params.eventId);
+  res.status(200).json({ success: true, data });
+});
+
 module.exports = {
   listOrganizerInsights,
   getOrganizerEventInsights,
+  getOrganizerCheckInInsights,
   listSharedInsights,
   listEventAnalyticsShares,
   createEventAnalyticsShare,

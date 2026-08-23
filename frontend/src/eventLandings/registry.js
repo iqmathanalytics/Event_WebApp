@@ -32,6 +32,7 @@ export const RESERVED_SLUGS = new Set([
   "static",
   "assets",
   "seating-designer",
+  "check-in",
   "favicon.ico",
 ]);
 

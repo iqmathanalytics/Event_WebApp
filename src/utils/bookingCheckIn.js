@@ -8,9 +8,9 @@ function generateCheckInCode() {
 function buildAdminVerifyTicketUrl(checkInCode) {
   const code = String(checkInCode || "").trim();
   if (!code) {
-    return dashboardUrl("/dashboard/admin/verify-ticket");
+    return dashboardUrl("/check-in");
   }
-  return `${dashboardUrl("/dashboard/admin/verify-ticket")}?code=${encodeURIComponent(code)}`;
+  return `${dashboardUrl("/check-in")}?code=${encodeURIComponent(code)}`;
 }
 
 function normalizeCheckInCodeInput(raw) {
