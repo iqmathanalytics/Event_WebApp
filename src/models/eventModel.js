@@ -193,6 +193,7 @@ async function createEvent(payload) {
     organizer_id,
     ticket_link,
     ticket_sales_mode,
+    seating_mode,
     total_seats,
     image_url,
     gallery_image_urls,
@@ -231,8 +232,14 @@ async function createEvent(payload) {
   const promoForDb = promoVideoUrlsDbValue(promo_video_urls);
 
   const ticketSalesMode = normalizeTicketSalesMode(ticket_sales_mode ?? payload.ticketSalesMode);
+  const seatingMode =
+    ticketSalesMode === "platform"
+      ? normalizeSeatingMode(seating_mode ?? payload.seatingMode)
+      : "general";
   const seatsTotal =
-    ticketSalesMode === "platform" ? parseTotalSeats(total_seats ?? payload.totalSeats) : null;
+    ticketSalesMode === "platform" && seatingMode !== "reserved"
+      ? parseTotalSeats(total_seats ?? payload.totalSeats)
+      : null;
   const levelsNormalized = normalizeTicketLevelsInput(ticket_levels ?? ticket_levels_json);
   const levelsJson = levelsNormalized.length ? JSON.stringify(levelsNormalized) : null;
   const listPrice =
@@ -245,7 +252,7 @@ async function createEvent(payload) {
   const [result] = await pool.query(
     `INSERT INTO events
       (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
-       venue_name, venue_address, google_maps_link, organizer_id, ticket_link, ticket_sales_mode, total_seats,
+       venue_name, venue_address, google_maps_link, organizer_id, ticket_link, ticket_sales_mode, seating_mode, total_seats,
        image_url, gallery_image_urls, promo_video_urls, price, ticket_levels_json, duration_hours, duration_minutes, age_limit, languages, genres, event_highlights,
        is_yay_deal_event, deal_event_discount_code,
        service_fee_enabled, service_fee_type, service_fee_value,
@@ -253,7 +260,7 @@ async function createEvent(payload) {
        vendor_code_enabled, vendor_code, vendor_discount_type, vendor_discount_value,
        coupon_codes_enabled, show_on_events_page, is_listed,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -272,6 +279,7 @@ async function createEvent(payload) {
       organizer_id,
       ticket_link || null,
       ticketSalesMode,
+      seatingMode,
       seatsTotal,
       image_url || null,
       galleryForDb,
@@ -305,9 +313,17 @@ async function createEvent(payload) {
 
   const insertId = result.insertId;
   try {
-    await pool.query(`UPDATE events SET ticket_sales_mode = ? WHERE id = ?`, [ticketSalesMode, insertId]);
+    await pool.query(`UPDATE events SET ticket_sales_mode = ?, seating_mode = ? WHERE id = ?`, [
+      ticketSalesMode,
+      seatingMode,
+      insertId
+    ]);
   } catch (_err) {
-    /* ignore if column missing on legacy DB */
+    try {
+      await pool.query(`UPDATE events SET ticket_sales_mode = ? WHERE id = ?`, [ticketSalesMode, insertId]);
+    } catch (_err2) {
+      /* ignore if column missing on legacy DB */
+    }
   }
 
   try {

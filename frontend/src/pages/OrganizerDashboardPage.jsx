@@ -38,6 +38,7 @@ import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
 import SharedAnalyticsList from "../components/SharedAnalyticsList";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
 import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
+import SeatingSideToast from "../components/seating/SeatingSideToast";
 import { SEATING_MODES, normalizeSeatingMode } from "../utils/seatingMode";
 import { acceptAnalyticsInvite } from "../services/organizerAnalyticsService";
 const OrganizerInsightsPanel = lazy(() => import("../components/OrganizerInsightsPanel"));
@@ -92,8 +93,11 @@ const initialForm = {
   vendor_discount_type: "percent",
   vendor_discount_value: "",
   ticket_levels: [],
-  seating_mode: SEATING_MODES.GENERAL
+  seating_mode: SEATING_MODES.GENERAL,
+  pending_seatsio_chart_key: ""
 };
+
+const FORM_TOAST_MS = 3000;
 
 /**
  * Use the checked `ticket_sales_mode` radio in the DOM when present, so we never POST stale React state
@@ -303,6 +307,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [saving, setSaving] = useState(false);
   const [seatingModalOpen, setSeatingModalOpen] = useState(false);
   const [seatingChannelsModalOpen, setSeatingChannelsModalOpen] = useState(false);
+  const [formToast, setFormToast] = useState(null);
+  const formToastTimerRef = useRef(null);
   const [form, setForm] = useState(initialForm);
   const [overviewBookings, setOverviewBookings] = useState([]);
   const [bookingRows, setBookingRows] = useState([]);
@@ -347,6 +353,27 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     return () => window.clearInterval(timer);
   }, [isFormOpen, canSellPlatformTickets, refreshSession]);
 
+  const clearFormToastTimer = useCallback(() => {
+    if (formToastTimerRef.current) {
+      window.clearTimeout(formToastTimerRef.current);
+      formToastTimerRef.current = null;
+    }
+  }, []);
+
+  const showFormToast = useCallback(
+    (message, tone = "error") => {
+      clearFormToastTimer();
+      setFormToast({ message, tone, id: Date.now() });
+      formToastTimerRef.current = window.setTimeout(() => {
+        setFormToast(null);
+        formToastTimerRef.current = null;
+      }, FORM_TOAST_MS);
+    },
+    [clearFormToastTimer]
+  );
+
+  useEffect(() => () => clearFormToastTimer(), [clearFormToastTimer]);
+
   const resetForm = () => {
     setForm(initialForm);
     setEditingEvent(null);
@@ -355,8 +382,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const openCreate = useCallback(() => {
     setForm(initialForm);
     setEditingEvent(null);
+    setError("");
+    setSuccess("");
+    clearFormToastTimer();
+    setFormToast(null);
     setIsFormOpen(true);
-  }, []);
+  }, [clearFormToastTimer]);
 
   useImperativeHandle(ref, () => ({ openCreateEvent: openCreate }), [openCreate]);
 
@@ -436,14 +467,25 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           ? String(event.vendor_discount_value)
           : "",
       ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event)),
-      seating_mode: normalizeSeatingMode(event.seating_mode)
+      seating_mode: normalizeSeatingMode(event.seating_mode),
+      pending_seatsio_chart_key: String(event.seatsio_chart_key || "").trim()
     });
+    setError("");
+    setSuccess("");
+    clearFormToastTimer();
+    setFormToast(null);
     setIsFormOpen(true);
   };
 
   const closeForm = () => {
     setIsFormOpen(false);
     setActiveFormPanel(null);
+    setSeatingModalOpen(false);
+    setSeatingChannelsModalOpen(false);
+    clearFormToastTimer();
+    setFormToast(null);
+    setError("");
+    setSuccess("");
     resetForm();
   };
 
@@ -718,13 +760,19 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           if (seats > 50000) {
             throw new Error("Total seats cannot exceed 50,000.");
           }
+        } else {
+          const chartReady = String(
+            form.pending_seatsio_chart_key || editingEvent?.seatsio_chart_key || ""
+          ).trim();
+          if (!chartReady) {
+            throw new Error(
+              "Design and confirm a seating chart (Use this chart) before saving a seated event."
+            );
+          }
         }
         const levels = serializeTicketLevelsForApi(form.ticket_levels);
         if (!levels.length) {
           throw new Error("Add at least one ticket level for on-site sales (name and price).");
-        }
-        if (reservedSeating && !editingEvent?.id) {
-          throw new Error("Save the event first, then open Design seating chart to configure reserved seating.");
         }
       }
       if (form.is_yay_deal_event && !String(form.deal_event_discount_code || "").trim()) {
@@ -826,13 +874,24 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         vendor_code_enabled: Boolean(form.vendor_code_enabled)
       };
 
+      const pendingChartKey = String(
+        form.pending_seatsio_chart_key || editingEvent?.seatsio_chart_key || ""
+      ).trim();
+      const reservedSeatingSelected =
+        resolvedTicketMode === "platform" &&
+        normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED;
+      if (reservedSeatingSelected && pendingChartKey) {
+        payload.seatsio_chart_key = pendingChartKey;
+      }
+
       if (resolvedTicketMode === "external") {
         payload.ticket_link = ticketUrl;
       } else if (ticketUrl) {
         payload.ticket_link = ticketUrl;
       }
 
-      const wasEditing = Boolean(editingEvent);
+      const wasEditing = Boolean(editingEvent?.id);
+
       if (wasEditing) {
         await updateEvent(editingEvent.id, payload);
         await loadEvents();
@@ -857,17 +916,26 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     } catch (err) {
       const apiMessage = err?.response?.data?.message;
       const apiDetails = err?.response?.data?.details;
+      let message;
       if (Array.isArray(apiDetails) && apiDetails.length) {
-        const detailText = apiDetails
+        message = apiDetails
           .map((item) => `${item.path?.replace("body.", "") || "field"}: ${item.message}`)
           .join(" | ");
-        setError(detailText);
       } else {
-        setError(apiMessage || err?.message || "Could not save event. Please check your inputs.");
+        message = apiMessage || err?.message || "Could not save event. Please check your inputs.";
+      }
+      if (isFormOpen) {
+        showFormToast(message, "error");
+      } else {
+        setError(message);
       }
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleOpenSeatingDesigner = () => {
+    setSeatingModalOpen(true);
   };
 
   const openDelete = (event) => {
@@ -1118,12 +1186,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         </section>
         ) : null}
 
-        {error ? (
+        {error && !isFormOpen ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
             {error}
           </div>
         ) : null}
-        {success ? (
+        {success && !isFormOpen ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
             {success}
           </div>
@@ -1529,12 +1597,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           </header>
           ) : null}
 
-          {error ? (
+          {error && !isFormOpen ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
               {error}
             </div>
           ) : null}
-          {success ? (
+          {success && !isFormOpen ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
               {success}
             </div>
@@ -2118,17 +2186,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   </button>
                 </div>
 
-                <form ref={formPanelRef} noValidate onSubmit={submitForm} className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
-              {error ? (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 sm:col-span-2">
-                  {error}
-                </div>
-              ) : null}
-              {success ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 sm:col-span-2">
-                  {success}
-                </div>
-              ) : null}
+                <form
+                  id="organizer-event-form"
+                  ref={formPanelRef}
+                  noValidate
+                  onSubmit={submitForm}
+                  className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2"
+                >
               <FormField label="Event Title" hint="Use a clear title attendees can instantly understand." example="Summer Startup Mixer" className="sm:col-span-2">
                 <input
                   required
@@ -2748,8 +2812,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         <div className="flex flex-wrap items-center gap-3">
                           <button
                             type="button"
-                            disabled={!editingEvent?.id}
-                            onClick={() => setSeatingModalOpen(true)}
+                            disabled={saving}
+                            onClick={handleOpenSeatingDesigner}
                             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                           >
                             <LayoutGrid className="h-4 w-4" />
@@ -2757,19 +2821,24 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           </button>
                           <button
                             type="button"
-                            disabled={!editingEvent?.id || !editingEvent?.seatsio_event_key}
+                            disabled={!editingEvent?.id || !editingEvent?.seatsio_event_key || saving}
                             onClick={() => setSeatingChannelsModalOpen(true)}
                             className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:border-slate-400 disabled:opacity-50"
                           >
                             <GitBranch className="h-4 w-4" />
                             Manage channels
                           </button>
-                          {!editingEvent?.id ? (
-                            <p className="text-xs text-amber-800">Save the event first, then design the chart.</p>
-                          ) : editingEvent?.seatsio_event_key ? (
-                            <p className="text-xs text-emerald-700">Seating chart linked.</p>
+                          {form.pending_seatsio_chart_key || editingEvent?.seatsio_chart_key ? (
+                            <p className="text-xs text-emerald-700">
+                              {editingEvent?.seatsio_event_key
+                                ? "Seating chart linked."
+                                : "Chart ready — click Submit Event to save the listing."}
+                            </p>
                           ) : (
-                            <p className="text-xs text-slate-500">Chart not saved yet.</p>
+                            <p className="text-xs text-slate-500">
+                              Open the designer, pick a chart type, draw seats, then Use this chart. Submit Event
+                              saves the listing.
+                            </p>
                           )}
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-700">
@@ -3128,7 +3197,20 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         onClose={() => setSeatingModalOpen(false)}
         eventId={editingEvent?.id}
         eventTitle={editingEvent?.title || form.title}
+        initialChartKey={form.pending_seatsio_chart_key || editingEvent?.seatsio_chart_key || ""}
+        onDraftChartReady={(chartKey) => {
+          const key = String(chartKey || "").trim();
+          if (!key) {
+            return;
+          }
+          setForm((prev) => ({ ...prev, pending_seatsio_chart_key: key }));
+        }}
         onSaved={(saved) => {
+          const key = String(saved?.chart_key || "").trim();
+          setForm((prev) => ({
+            ...prev,
+            pending_seatsio_chart_key: key || prev.pending_seatsio_chart_key
+          }));
           setEditingEvent((prev) =>
             prev
               ? {
@@ -3142,6 +3224,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           loadEvents();
         }}
       />
+      <SeatingSideToast toast={formToast} />
       <OrganizerSeatingChannelsModal
         open={seatingChannelsModalOpen}
         onClose={() => setSeatingChannelsModalOpen(false)}

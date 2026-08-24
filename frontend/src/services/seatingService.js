@@ -5,6 +5,11 @@ export async function fetchOrganizerSeatingDesigner(eventId) {
   return data;
 }
 
+export async function fetchOrganizerSeatingDesignerBootstrap() {
+  const { data } = await api.get(`/events/organizer/seating/designer-bootstrap`);
+  return data;
+}
+
 export async function saveOrganizerSeatingConfig(eventId, payload) {
   const { data } = await api.put(`/events/${eventId}/seating`, payload);
   return data;

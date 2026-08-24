@@ -1,6 +1,7 @@
 const express = require("express");
 const eventController = require("../controllers/eventController");
 const eventAnalyticsController = require("../controllers/eventAnalyticsController");
+const seatingController = require("../controllers/seatingController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 const organizerAccessMiddleware = require("../middleware/organizerAccessMiddleware");
@@ -83,6 +84,12 @@ router.get(
   organizerAccessMiddleware,
   validateRequest(eventIdParamsSchema),
   eventAnalyticsController.getOrganizerCheckInInsights
+);
+router.get(
+  "/organizer/seating/designer-bootstrap",
+  authMiddleware,
+  organizerAccessMiddleware,
+  seatingController.getOrganizerDesignerBootstrap
 );
 router.get(
   "/:eventId/analytics-shares",

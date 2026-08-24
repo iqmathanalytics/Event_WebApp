@@ -1420,6 +1420,19 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <div className="border-t border-slate-200/90 bg-gradient-to-b from-slate-100/60 via-white to-amber-50/30 px-3.5 pb-3.5 pt-4">
           {reservedSeating ? (
             <div className="space-y-3">
+              {ticketLevels.length ? (
+                <EventTicketCart
+                  eventId={eventId}
+                  levels={ticketLevels}
+                  cart={checkoutCart}
+                  totalDays={totalDays}
+                  selectionMode="chart"
+                />
+              ) : (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-4 text-center text-sm text-amber-900">
+                  No ticket types are available to book right now. Sale periods may have ended for all tiers.
+                </p>
+              )}
               {selectedSeats.length ? (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
@@ -1459,7 +1472,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
               <button
                 type="button"
                 onClick={openSeatSelectionModal}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400"
+                disabled={!ticketLevels.length}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {selectedSeats.length ? "Change seats on chart" : "Choose seats on chart"}
               </button>

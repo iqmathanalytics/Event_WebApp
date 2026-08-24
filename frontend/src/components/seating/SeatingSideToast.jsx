@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 const TONE_CLASS = {
   success: "border-emerald-200/90 bg-emerald-50 text-emerald-950",
   warn: "border-amber-200/90 bg-amber-50 text-amber-950",
+  error: "border-rose-200/90 bg-rose-50 text-rose-950",
   info: "border-slate-200 bg-white text-slate-800"
 };
 

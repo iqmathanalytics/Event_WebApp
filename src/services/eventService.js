@@ -27,6 +27,8 @@ const {
   normalizeTicketSalesMode,
   pickTicketSalesModeFromPayload
 } = require("../utils/eventTicketSalesMode");
+const { normalizeSeatingMode } = require("../utils/seatingMode");
+const seatsioService = require("./seatsioService");
 const {
   sanitizeTicketLevelsForSave,
   assertValidTicketLevelsForPlatform
@@ -307,6 +309,14 @@ async function submitEvent(payload, organizerId, { role } = {}) {
     createPayload.description = sanitizeEventDescription(createPayload.description);
   }
 
+  const chartKey = String(createPayload.seatsio_chart_key || "").trim();
+  if (normalizeSeatingMode(createPayload.seating_mode) === "reserved" && !chartKey) {
+    throw new ApiError(
+      400,
+      "Design and confirm a seating chart before saving a seated event."
+    );
+  }
+
   let eventId;
   try {
     eventId = await createEvent({
@@ -334,6 +344,20 @@ async function submitEvent(payload, organizerId, { role } = {}) {
       );
     }
     throw err;
+  }
+
+  if (normalizeSeatingMode(createPayload.seating_mode) === "reserved" && chartKey) {
+    try {
+      await seatsioService.saveOrganizerSeatingConfig(eventId, organizerId, {
+        seating_mode: "reserved",
+        chart_key: chartKey
+      });
+    } catch (err) {
+      // Event already created — surface seating link failure clearly.
+      throw err instanceof ApiError
+        ? err
+        : new ApiError(400, err?.message || "Event created, but seating chart could not be linked.");
+    }
   }
 
   await notifyAdminSafe({
@@ -516,10 +540,13 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
   const nextTicketMode = Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_sales_mode")
     ? normalizedPayload.ticket_sales_mode
     : existing.ticket_sales_mode;
+  const nextSeatingMode = Object.prototype.hasOwnProperty.call(normalizedPayload, "seating_mode")
+    ? normalizedPayload.seating_mode
+    : existing.seating_mode;
   const nextTotalSeats = Object.prototype.hasOwnProperty.call(normalizedPayload, "total_seats")
     ? parseTotalSeats(normalizedPayload.total_seats)
     : parseTotalSeats(existing.total_seats);
-  if (requiresTotalSeats(nextTicketMode) && !nextTotalSeats) {
+  if (requiresTotalSeats(nextTicketMode, nextSeatingMode) && !nextTotalSeats) {
     throw new ApiError(400, "Total seats is required for on-site ticket booking (at least 1).");
   }
   if (normalizedPayload.ticket_sales_mode === "external") {
@@ -552,6 +579,27 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
     if (!updated) {
       throw new ApiError(400, "No valid fields provided for update");
     }
+  }
+
+  const chartKey = String(
+    payload.seatsio_chart_key || normalizedPayload.seatsio_chart_key || existing.seatsio_chart_key || ""
+  ).trim();
+  const seatingMode = normalizeSeatingMode(
+    Object.prototype.hasOwnProperty.call(normalizedPayload, "seating_mode")
+      ? normalizedPayload.seating_mode
+      : existing.seating_mode
+  );
+  if (seatingMode === "reserved" && !chartKey) {
+    throw new ApiError(
+      400,
+      "Design and confirm a seating chart before saving a seated event."
+    );
+  }
+  if (seatingMode === "reserved" && chartKey) {
+    await seatsioService.saveOrganizerSeatingConfig(eventId, organizerId, {
+      seating_mode: "reserved",
+      chart_key: chartKey
+    });
   }
 
   await publishOrganizerEvent({ eventId, organizerId });

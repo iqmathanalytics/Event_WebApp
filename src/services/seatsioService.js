@@ -379,19 +379,34 @@ async function getChartSeatingMetaForEvent(event) {
   return { chartCategoryKeys, chartPricing };
 }
 
-async function getOrganizerDesignerConfig(eventId, organizerId) {
+async function getOrganizerDesignerBootstrap() {
   if (!isSeatsioConfigured()) {
     throw new ApiError(503, "Seats.io is not configured. Add SEATSIO_SECRET_KEY and SEATSIO_WORKSPACE_KEY.");
   }
-  let event = await assertOrganizerOwnsEvent(eventId, organizerId);
-  const chartKey = await ensureChartForEvent(event);
-  event = await findEventById(eventId);
   return {
     configured: true,
     region: publicRegion(),
     workspace_key: getWorkspaceKey(),
     secret_key: String(process.env.SEATSIO_SECRET_KEY || "").trim(),
-    chart_key: chartKey,
+    chart_key: null,
+    event_key: null,
+    seating_mode: "reserved"
+  };
+}
+
+async function getOrganizerDesignerConfig(eventId, organizerId) {
+  if (!isSeatsioConfigured()) {
+    throw new ApiError(503, "Seats.io is not configured. Add SEATSIO_SECRET_KEY and SEATSIO_WORKSPACE_KEY.");
+  }
+  const event = await assertOrganizerOwnsEvent(eventId, organizerId);
+  // Do not auto-create a Seats.io chart here — that blocked Publish on empty charts
+  // and saved charts before the organizer finished designing.
+  return {
+    configured: true,
+    region: publicRegion(),
+    workspace_key: getWorkspaceKey(),
+    secret_key: String(process.env.SEATSIO_SECRET_KEY || "").trim(),
+    chart_key: event.seatsio_chart_key || null,
     event_key: event.seatsio_event_key || null,
     seating_mode: normalizeSeatingMode(event.seating_mode)
   };
@@ -589,6 +604,7 @@ module.exports = {
   publicRegion,
   buildPricingFromTicketLevels,
   buildCartFromSelectedSeats: buildCartFromSelectedSeatsForBooking,
+  getOrganizerDesignerBootstrap,
   getOrganizerDesignerConfig,
   saveOrganizerSeatingConfig,
   getPublicSeatingChart,

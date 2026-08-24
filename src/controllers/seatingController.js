@@ -12,6 +12,15 @@ async function getOrganizerDesignerConfig(req, res, next) {
   }
 }
 
+async function getOrganizerDesignerBootstrap(req, res, next) {
+  try {
+    const data = await seatsioService.getOrganizerDesignerBootstrap();
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function saveOrganizerSeatingConfig(req, res, next) {
   try {
     const data = await seatsioService.saveOrganizerSeatingConfig(
@@ -82,6 +91,7 @@ async function syncSeatHold(req, res, next) {
 
 module.exports = {
   getOrganizerDesignerConfig,
+  getOrganizerDesignerBootstrap,
   saveOrganizerSeatingConfig,
   getPublicSeatingChart,
   releaseSeatHold,

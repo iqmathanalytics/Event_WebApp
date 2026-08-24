@@ -10,8 +10,11 @@ function parseTotalSeats(value) {
   return Math.min(MAX_SEATS_PER_EVENT, Math.floor(n));
 }
 
-function requiresTotalSeats(ticketSalesMode) {
-  return String(ticketSalesMode || "").trim() === "platform";
+function requiresTotalSeats(ticketSalesMode, seatingMode = "general") {
+  return (
+    String(ticketSalesMode || "").trim() === "platform" &&
+    String(seatingMode || "general").trim().toLowerCase() !== "reserved"
+  );
 }
 
 /**

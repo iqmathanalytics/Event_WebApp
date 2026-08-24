@@ -107,6 +107,10 @@ const submitEventBodySchema = z
     ticket_sales_mode: z.preprocess(coerceTicketSalesModeBodyInput, ticketSalesModeEnum),
     total_seats: z.coerce.number().int().min(1).max(50000).optional(),
     seating_mode: z.enum(["general", "reserved"]).optional(),
+    seatsio_chart_key: z.preprocess(
+      (v) => (v == null || v === "" ? undefined : String(v).trim()),
+      z.string().min(1).max(120).optional()
+    ),
     ticket_link: optionalTicketLinkUrl(1000),
     image_url: z.string().url().optional(),
     gallery_image_urls: galleryImageUrlsSchema,
@@ -174,6 +178,12 @@ const submitEventBodySchema = z
             message: "Total seats is required for on-site ticket booking (at least 1)"
           });
         }
+      } else if (!String(data.seatsio_chart_key || "").trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["seatsio_chart_key"],
+          message: "Design and confirm a seating chart before saving a seated event"
+        });
       }
     }
   });
@@ -261,6 +271,10 @@ const editOwnEventBodySchema = z
     ticket_sales_mode: z.preprocess(coerceTicketSalesModeBodyInput, ticketSalesModeEnum.optional()),
     total_seats: z.coerce.number().int().min(1).max(50000).optional(),
     seating_mode: z.enum(["general", "reserved"]).optional(),
+    seatsio_chart_key: z.preprocess(
+      (v) => (v == null || v === "" ? undefined : String(v).trim()),
+      z.string().min(1).max(120).optional()
+    ),
     ticket_link: optionalTicketLinkUrl(1000),
     image_url: z.string().url().optional(),
     gallery_image_urls: galleryImageUrlsSchema,
