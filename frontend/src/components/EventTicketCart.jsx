@@ -102,10 +102,10 @@ export default function EventTicketCart({
               : "Each tier has its own experience & price"}
           </p>
         </div>
-        {!chartMode || ticketTotal > 0 ? (
+        {!chartMode ? (
           <div className="rounded-full border border-slate-200/90 bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur-sm">
             <p className="text-xs font-semibold tabular-nums text-slate-700">
-              <span className="text-slate-900">{ticketTotal}</span> {chartMode ? "selected" : "in cart"}
+              <span className="text-slate-900">{ticketTotal}</span> in cart
               <span className="mx-1.5 text-slate-300">·</span>
               <span className="bg-gradient-to-r from-amber-700 to-amber-500 bg-clip-text font-bold text-transparent">
                 {formatCurrency(subtotal)}

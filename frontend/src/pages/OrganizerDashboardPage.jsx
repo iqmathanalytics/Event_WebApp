@@ -24,6 +24,7 @@ import RichTextEditor from "../components/RichTextEditor";
 import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
 import { isRichTextEmpty } from "../utils/richText";
 import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
+import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
 import BookingPaymentSummary from "../components/BookingPaymentSummary";
 import {
   BookingAmountPaidCell,
@@ -256,6 +257,29 @@ function FormField({ label, hint, example, className = "", children }) {
   );
 }
 
+/** Keep section trees mounted after first visit so tab switches stay instant. */
+function HostSectionSlot({ id, activeId, children, className = "" }) {
+  const active = id === activeId;
+  const [mounted, setMounted] = useState(active);
+  useEffect(() => {
+    if (active) {
+      setMounted(true);
+    }
+  }, [active]);
+  if (!mounted) {
+    return null;
+  }
+  return (
+    <div
+      className={`${active ? "block" : "hidden"} ${className}`.trim()}
+      aria-hidden={!active}
+      data-host-section={id}
+    >
+      {children}
+    </div>
+  );
+}
+
 const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   {
     embedded = false,
@@ -285,6 +309,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState(lockedSection || "overview");
   const displaySection = lockedSection || activeSection;
+  const [sectionSwitching, setSectionSwitching] = useState(false);
+  const prevDisplaySectionRef = useRef(displaySection);
   const [sharedEventId, setSharedEventId] = useState("");
   const [sharedOwnerLabel, setSharedOwnerLabel] = useState("");
   const [inviteNotice, setInviteNotice] = useState("");
@@ -494,6 +520,46 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       setActiveSection(lockedSection);
     }
   }, [lockedSection, activeSection]);
+
+  useEffect(() => {
+    if (prevDisplaySectionRef.current === displaySection) {
+      return undefined;
+    }
+    prevDisplaySectionRef.current = displaySection;
+    setSectionSwitching(true);
+    let cancelled = false;
+    const started = Date.now();
+    const MIN_MS = 480;
+    const MAX_MS = 2600;
+    let hideTimer = 0;
+    let rafOuter = 0;
+    let rafInner = 0;
+    rafOuter = window.requestAnimationFrame(() => {
+      rafInner = window.requestAnimationFrame(() => {
+        if (cancelled) {
+          return;
+        }
+        const wait = Math.max(320, MIN_MS - (Date.now() - started));
+        hideTimer = window.setTimeout(() => {
+          if (!cancelled) {
+            setSectionSwitching(false);
+          }
+        }, wait);
+      });
+    });
+    const safety = window.setTimeout(() => {
+      if (!cancelled) {
+        setSectionSwitching(false);
+      }
+    }, MAX_MS);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(rafOuter);
+      window.cancelAnimationFrame(rafInner);
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(safety);
+    };
+  }, [displaySection]);
 
   useEffect(() => {
     const eventId = String(searchParams.get("eventId") || "").trim();
@@ -1197,16 +1263,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           </div>
         ) : null}
 
-        <AnimatePresence mode="wait">
-          {displaySection === "overview" ? (
-            <motion.section
-              key="m-overview"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="space-y-4"
-            >
+        <div className="relative min-h-[12rem]">
+          <WorkspaceTabSwitchLoader show={sectionSwitching && !embedded} label="Loading" />
+          <HostSectionSlot id="overview" activeId={displaySection} className="space-y-4">
               <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
                 <OrganizerInsightsPanel
                   events={rows}
@@ -1214,18 +1273,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   organizerBookings={overviewBookings}
                 />
               </Suspense>
-            </motion.section>
-          ) : null}
+          </HostSectionSlot>
 
-          {displaySection === "shared" ? (
-            <motion.section
-              key="m-shared"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="space-y-4"
-            >
+          <HostSectionSlot id="shared" activeId={displaySection} className="space-y-4">
               <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
                 <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
                 <p className="mt-1 text-sm text-slate-600">
@@ -1259,18 +1309,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   />
                 </Suspense>
               ) : null}
-            </motion.section>
-          ) : null}
+          </HostSectionSlot>
 
-          {displaySection === "my-events" ? (
-            <motion.section
-              key="m-my-events"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft"
-            >
+          <HostSectionSlot id="my-events" activeId={displaySection} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
               <MyEventsActionBar
                 onCreate={openCreate}
                 className="mb-4"
@@ -1352,26 +1393,17 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   ))}
                 </div>
               ) : null}
-            </motion.section>
-          ) : null}
+            </HostSectionSlot>
 
-          {displaySection === "coupons" ? (
-            <OrganizerCouponsPanel key="coupons-mobile" />
-          ) : null}
+          <HostSectionSlot id="coupons" activeId={displaySection}>
+            <OrganizerCouponsPanel />
+          </HostSectionSlot>
 
-          {displaySection === "vendor-codes" ? (
-            <OrganizerVendorCodesPanel key="vendor-codes-mobile" />
-          ) : null}
+          <HostSectionSlot id="vendor-codes" activeId={displaySection}>
+            <OrganizerVendorCodesPanel />
+          </HostSectionSlot>
 
-          {displaySection === "bookings" ? (
-            <motion.section
-              key="m-bookings"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft"
-            >
+          <HostSectionSlot id="bookings" activeId={displaySection} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Event bookings</h2>
@@ -1532,21 +1564,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   ))
                 )}
               </div>
-            </motion.section>
-          ) : null}
+            </HostSectionSlot>
 
-          {displaySection === "check-in" ? (
-            <motion.section
-              key="m-check-in"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-            >
+          <HostSectionSlot id="check-in" activeId={displaySection}>
               <OrganizerCheckInPanel events={rows} />
-            </motion.section>
-          ) : null}
-        </AnimatePresence>
+          </HostSectionSlot>
+        </div>
       </motion.div>
 
       {/* Desktop layout (unchanged). */}
@@ -1608,16 +1631,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </div>
           ) : null}
 
-          <AnimatePresence mode="wait">
-          {displaySection === "overview" ? (
-            <motion.section
-              key="overview"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="space-y-4"
-            >
+          <div className="relative min-h-[12rem]">
+          <WorkspaceTabSwitchLoader show={sectionSwitching && !embedded} label="Loading" />
+          <HostSectionSlot id="overview" activeId={displaySection} className="space-y-4">
               <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
                 <OrganizerInsightsPanel
                   events={rows}
@@ -1625,18 +1641,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   organizerBookings={overviewBookings}
                 />
               </Suspense>
-            </motion.section>
-          ) : null}
+          </HostSectionSlot>
 
-          {displaySection === "shared" ? (
-            <motion.section
-              key="shared"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="space-y-4"
-            >
+          <HostSectionSlot id="shared" activeId={displaySection} className="space-y-4">
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
                 <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
                 <p className="mt-1 text-sm text-slate-600">
@@ -1670,18 +1677,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   />
                 </Suspense>
               ) : null}
-            </motion.section>
-          ) : null}
+          </HostSectionSlot>
 
-          {displaySection === "my-events" ? (
-            <motion.section
-              key="my-events"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft"
-            >
+          <HostSectionSlot id="my-events" activeId={displaySection} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
               {hideAnalyticsChrome ? null : (
                 <h2 className="text-lg font-semibold text-slate-900">My Events</h2>
               )}
@@ -1863,26 +1861,17 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </div>
                 </>
               ) : null}
-            </motion.section>
-          ) : null}
+            </HostSectionSlot>
 
-          {displaySection === "coupons" ? (
-            <OrganizerCouponsPanel key="coupons-desktop" />
-          ) : null}
+          <HostSectionSlot id="coupons" activeId={displaySection}>
+            <OrganizerCouponsPanel />
+          </HostSectionSlot>
 
-          {displaySection === "vendor-codes" ? (
-            <OrganizerVendorCodesPanel key="vendor-codes-desktop" />
-          ) : null}
+          <HostSectionSlot id="vendor-codes" activeId={displaySection}>
+            <OrganizerVendorCodesPanel />
+          </HostSectionSlot>
 
-          {displaySection === "bookings" ? (
-            <motion.section
-              key="bookings"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft"
-            >
+          <HostSectionSlot id="bookings" activeId={displaySection} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Event Bookings</h2>
@@ -2150,21 +2139,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </table>
                 </ScrollableTableFrame>
               </div>
-            </motion.section>
-          ) : null}
+            </HostSectionSlot>
 
-          {displaySection === "check-in" ? (
-            <motion.section
-              key="check-in"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-            >
+          <HostSectionSlot id="check-in" activeId={displaySection}>
               <OrganizerCheckInPanel events={rows} />
-            </motion.section>
-          ) : null}
-          </AnimatePresence>
+          </HostSectionSlot>
+          </div>
         </section>
       </motion.div>
         </>

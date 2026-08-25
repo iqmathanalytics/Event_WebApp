@@ -194,65 +194,122 @@ function buildBookingPayload({
 const COUPON_HOLD_MINUTES = 5;
 const COUPON_HOLD_MESSAGE = `Coupon applied. Complete your booking within ${COUPON_HOLD_MINUTES} minutes to keep this rate.`;
 
-function PriceTotals({
+/**
+ * Order pricing particulars — render only after the guest has selected seats or ticket quantities.
+ */
+function OrderPriceSummary({
   subtotal,
   discount,
   serviceFee = 0,
   platformFee = 0,
   total,
-  suffix = "",
-  pendingSelection = false
+  ticketCount = 0,
+  showDays = 0,
+  couponCode = "",
+  seatGroups = null,
+  holdCountdown = "",
+  onClearSeats = null,
+  className = ""
 }) {
-  if (pendingSelection) {
-    return (
-      <div>
-        <p className="text-xl font-semibold leading-tight tracking-tight text-slate-900">
-          Total pending seat selection
-        </p>
-        <p className="mt-1.5 text-sm text-slate-600">
-          Open the chart below and confirm your seats to view pricing and fees.
-        </p>
-      </div>
-    );
-  }
   const showServiceFee = Number(serviceFee) > 0;
   const showPlatformFee = Number(platformFee) > 0;
-  const showAnyFee = showServiceFee || showPlatformFee;
-  if (discount > 0 || showAnyFee) {
-    return (
-      <div>
-        <p className="text-2xl font-semibold leading-tight tracking-tight text-slate-900">
-          <span className="underline decoration-2 underline-offset-4">{formatCheckoutCurrency(total)}</span>
-          {suffix ? <span className="ml-1 text-base font-normal text-slate-900">{suffix}</span> : null}
-        </p>
-        <p className="mt-1.5 text-sm text-slate-600">
-          {discount > 0 ? (
-            <>
-              <span className="line-through">{formatCheckoutCurrency(subtotal)}</span>
-              <span className="mx-1.5 text-emerald-700">−{formatCheckoutCurrency(discount)}</span>
-            </>
-          ) : (
-            <span>{formatCheckoutCurrency(subtotal)} subtotal</span>
-          )}
-          {showServiceFee ? (
-            <span className="ml-1.5 text-slate-600">
-              + {formatCheckoutCurrency(serviceFee)} service fee
-            </span>
-          ) : null}
-          {showPlatformFee ? (
-            <span className="ml-1.5 text-slate-600">
-              + {formatCheckoutCurrency(platformFee)} platform fee
-            </span>
-          ) : null}
-        </p>
-      </div>
+  const showDiscount = Number(discount) > 0;
+  const hasSeatDetails = Array.isArray(seatGroups) && seatGroups.length > 0;
+  const particulars = [];
+  if (ticketCount > 0) {
+    particulars.push(
+      hasSeatDetails
+        ? `${ticketCount} seat${ticketCount === 1 ? "" : "s"}`
+        : `${ticketCount} ticket${ticketCount === 1 ? "" : "s"}`
     );
   }
+  if (showDays > 0) {
+    particulars.push(`${showDays} show day${showDays === 1 ? "" : "s"}`);
+  }
+
   return (
-    <p className="text-2xl font-semibold leading-tight tracking-tight text-slate-900">
-      <span className="underline decoration-2 underline-offset-4">{formatCheckoutCurrency(total)}</span>
-      {suffix ? <span className="ml-1 text-base font-normal text-slate-900">{suffix}</span> : null}
-    </p>
+    <div
+      className={`overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-amber-50/40 shadow-sm ring-1 ring-slate-900/[0.03] ${className}`}
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Order summary</p>
+          {particulars.length ? (
+            <p className="mt-0.5 text-xs font-medium text-slate-600">{particulars.join(" · ")}</p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <p className="text-xl font-bold tabular-nums tracking-tight text-slate-900">
+            {formatCheckoutCurrency(total)}
+          </p>
+          {typeof onClearSeats === "function" ? (
+            <button
+              type="button"
+              onClick={onClearSeats}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              Clear seats
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {hasSeatDetails ? (
+        <div className="space-y-2 border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+          <ul className="space-y-2">
+            {seatGroups.map((group) => (
+              <li key={group.levelId} className="text-xs leading-relaxed text-slate-700">
+                <span className="font-semibold text-slate-900">
+                  {group.levelName}
+                  <span className="font-medium text-slate-500"> × {group.seatLabels.length}</span>
+                </span>
+                <span className="mt-0.5 block text-slate-600">{group.seatLabels.join(", ")}</span>
+              </li>
+            ))}
+          </ul>
+          {holdCountdown ? (
+            <p className="text-[11px] font-semibold text-amber-800">
+              Reserved for {holdCountdown}
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              Seats stay reserved for about {SEATSIO_HOLD_MINUTES} minutes while you finish checkout.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      <div className="space-y-2 px-4 py-3 text-sm">
+        <div className="flex items-center justify-between gap-3 text-slate-600">
+          <span>Subtotal</span>
+          <span className="font-semibold tabular-nums text-slate-800">{formatCheckoutCurrency(subtotal)}</span>
+        </div>
+        {showDiscount ? (
+          <div className="flex items-center justify-between gap-3 text-emerald-700">
+            <span>
+              Discount{couponCode ? ` (${couponCode})` : ""}
+            </span>
+            <span className="font-semibold tabular-nums">−{formatCheckoutCurrency(discount)}</span>
+          </div>
+        ) : null}
+        {showServiceFee ? (
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>Service fee</span>
+            <span className="font-semibold tabular-nums text-slate-800">{formatCheckoutCurrency(serviceFee)}</span>
+          </div>
+        ) : null}
+        {showPlatformFee ? (
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>Platform fee</span>
+            <span className="font-semibold tabular-nums text-slate-800">{formatCheckoutCurrency(platformFee)}</span>
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
+          <span className="text-sm font-semibold text-slate-900">Total</span>
+          <span className="text-base font-bold tabular-nums text-slate-900">{formatCheckoutCurrency(total)}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -674,12 +731,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     return "Pick another show date";
   }, [scheduleType, event?.event_time, sortedSelected]);
 
-  const priceBreakdownLine =
-    !awaitingSeatSelection && totalDays > 0 && attendeeCount > 0
-      ? `${attendeeCount} ticket${attendeeCount === 1 ? "" : "s"} · ${totalDays} show day${totalDays === 1 ? "" : "s"}`
-      : "";
-
   const needsCardPayment = useMemo(() => requiresCardPayment(totalAmount), [totalAmount]);
+  const showOrderPriceSummary = !awaitingSeatSelection && attendeeCount > 0;
 
   const clearCouponHold = useCallback(
     async (opts = {}) => {
@@ -1282,27 +1335,23 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </Suspense>
       ) : null}
       <CheckoutCard pill="Review your booking" seatBar={seatBar}>
-        <div className="mb-5">
-        <PriceTotals
-          subtotal={subtotalAmount}
-          discount={discountAmount}
-          serviceFee={serviceFeeAmount}
-          platformFee={platformFeeAmount}
-          total={totalAmount}
-          suffix=" estimated total"
-          pendingSelection={awaitingSeatSelection}
-        />
-          {couponHold?.couponCode ? (
-            <p className="mt-1 text-xs font-semibold text-emerald-700">
-              Coupon {couponHold.couponCode}
-            </p>
-          ) : null}
+        <div className="mb-5 space-y-3">
+          <OrderPriceSummary
+            subtotal={subtotalAmount}
+            discount={discountAmount}
+            serviceFee={serviceFeeAmount}
+            platformFee={platformFeeAmount}
+            total={totalAmount}
+            ticketCount={attendeeCount}
+            showDays={totalDays}
+            couponCode={couponHold?.couponCode || ""}
+          />
           {vendorCodeInput.trim() ? (
-            <p className="mt-1 text-xs font-semibold text-slate-700">
+            <p className="text-xs font-semibold text-slate-700">
               Vendor {vendorCodeInput.trim().toUpperCase()} (tracking only)
             </p>
           ) : null}
-          <p className="mt-1.5 text-sm text-slate-600">
+          <p className="text-sm text-slate-600">
             {needsCardPayment
               ? `You will pay ${formatCheckoutCurrency(totalAmount)} securely with Stripe in a popup on this page.`
               : "No card payment is required for this booking total."}
@@ -1387,18 +1436,27 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   return (
     <>
     <CheckoutCard seatBar={seatBar}>
-      <div className="mb-5">
-        <PriceTotals
-          subtotal={subtotalAmount}
-          discount={discountAmount}
-          serviceFee={serviceFeeAmount}
-          platformFee={platformFeeAmount}
-          total={totalAmount}
-          suffix={totalDays > 0 ? ` for ${totalDays} show day${totalDays === 1 ? "" : "s"}` : ""}
-          pendingSelection={awaitingSeatSelection}
-        />
-        {priceBreakdownLine ? <p className="mt-1.5 text-sm text-slate-600">{priceBreakdownLine}</p> : null}
-      </div>
+      {showOrderPriceSummary ? (
+        <div className="mb-5">
+          <OrderPriceSummary
+            subtotal={subtotalAmount}
+            discount={discountAmount}
+            serviceFee={serviceFeeAmount}
+            platformFee={platformFeeAmount}
+            total={totalAmount}
+            ticketCount={attendeeCount}
+            showDays={totalDays}
+            couponCode={couponHold?.couponCode || ""}
+            seatGroups={reservedSeating ? reservedSeatGroups : null}
+            holdCountdown={reservedSeating ? seatHoldCountdown : ""}
+            onClearSeats={
+              reservedSeating && selectedSeats.length
+                ? () => void clearSeatHold()
+                : null
+            }
+          />
+        </div>
+      ) : null}
 
       <div className="mb-4 overflow-hidden rounded-xl border border-slate-300">
         <div className="grid grid-cols-2 divide-x divide-slate-300">
@@ -1433,42 +1491,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                   No ticket types are available to book right now. Sale periods may have ended for all tiers.
                 </p>
               )}
-              {selectedSeats.length ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-900">
-                        {selectedSeats.length} seat{selectedSeats.length === 1 ? "" : "s"} selected
-                      </p>
-                      <ul className="mt-2 space-y-1 text-xs text-slate-700">
-                        {reservedSeatGroups.map((group) => (
-                          <li key={group.levelId}>
-                            <span className="font-medium">{group.levelName}</span>
-                            <span className="text-slate-500"> ({group.seatLabels.length}) — </span>
-                            {group.seatLabels.join(", ")}
-                          </li>
-                        ))}
-                      </ul>
-                      {seatHoldCountdown ? (
-                        <p className="mt-2 text-xs font-semibold text-amber-800">
-                          Seats held for {seatHoldCountdown}
-                        </p>
-                      ) : (
-                        <p className="mt-2 text-xs text-slate-500">
-                          Seats are held for about {SEATSIO_HOLD_MINUTES} minutes while you complete checkout.
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void clearSeatHold()}
-                      className="shrink-0 text-xs font-semibold text-rose-700 hover:text-rose-900"
-                    >
-                      Release hold
-                    </button>
-                  </div>
-                </div>
-              ) : null}
               <button
                 type="button"
                 onClick={openSeatSelectionModal}

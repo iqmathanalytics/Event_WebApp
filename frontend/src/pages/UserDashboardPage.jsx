@@ -23,6 +23,7 @@ import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
 import { fetchMyEvents } from "../services/eventService";
 import UserDashboardBookingsAndFavorites from "../components/UserDashboardBookingsAndFavorites";
 import PlatformTicketAccessRequestModal from "../components/PlatformTicketAccessRequestModal";
+import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
 import { acceptAnalyticsInvite } from "../services/organizerAnalyticsService";
 import { profileMobileOrEmpty } from "../utils/phone";
 
@@ -94,6 +95,7 @@ function tabFromSearch(search) {
 }
 
 function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
+  const pillId = compact ? "host-tab-pill-mobile" : "host-tab-pill-desktop";
   return (
     <div className="flex items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
       {tabs.map((tab) => {
@@ -104,18 +106,25 @@ function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${
-              selected ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            className={`relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              selected ? "text-slate-900" : "text-slate-600 hover:text-slate-800"
             }`}
           >
-            {label}
+            {selected ? (
+              <motion.span
+                layoutId={pillId}
+                className="absolute inset-0 rounded-lg bg-white shadow-sm"
+                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+              />
+            ) : null}
+            <span className="relative z-[1]">{label}</span>
             {tab.key === "events" ? (
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+              <span className="relative z-[1] rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
                 {counts.events}
               </span>
             ) : null}
             {tab.key === "offers" ? (
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+              <span className="relative z-[1] rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
                 {counts.offers}
               </span>
             ) : null}
@@ -137,6 +146,71 @@ function HostWorkspacePanel({
   onAfterResubmitSuccess
 }) {
   const organizerSection = ORGANIZER_SECTION_BY_TAB[activeTab];
+  const showOffers = activeTab === "offers";
+  const [tabSwitching, setTabSwitching] = useState(false);
+  const prevTabRef = useRef(activeTab);
+  const switchTimersRef = useRef({ hide: 0, safety: 0, raf: 0 });
+
+  const handleTabChange = useCallback(
+    (tab) => {
+      if (tab === activeTab) {
+        return;
+      }
+      setTabSwitching(true);
+      onTabChange(tab);
+    },
+    [activeTab, onTabChange]
+  );
+
+  useEffect(() => {
+    if (prevTabRef.current === activeTab) {
+      return undefined;
+    }
+    prevTabRef.current = activeTab;
+    setTabSwitching(true);
+
+    const timers = switchTimersRef.current;
+    window.clearTimeout(timers.hide);
+    window.clearTimeout(timers.safety);
+    if (timers.raf) {
+      window.cancelAnimationFrame(timers.raf);
+    }
+
+    let cancelled = false;
+    const started = Date.now();
+    const MIN_MS = 480;
+    const MAX_MS = 2600;
+
+    timers.raf = window.requestAnimationFrame(() => {
+      timers.raf = window.requestAnimationFrame(() => {
+        if (cancelled) {
+          return;
+        }
+        const wait = Math.max(320, MIN_MS - (Date.now() - started));
+        timers.hide = window.setTimeout(() => {
+          if (!cancelled) {
+            setTabSwitching(false);
+          }
+        }, wait);
+      });
+    });
+
+    timers.safety = window.setTimeout(() => {
+      if (!cancelled) {
+        setTabSwitching(false);
+      }
+    }, MAX_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timers.hide);
+      window.clearTimeout(timers.safety);
+      if (timers.raf) {
+        window.cancelAnimationFrame(timers.raf);
+      }
+    };
+  }, [activeTab]);
+
   return (
     <section
       data-host-workspace={layout}
@@ -147,25 +221,38 @@ function HostWorkspacePanel({
       <HostWorkspaceTabBar
         tabs={tabs}
         active={activeTab}
-        onChange={onTabChange}
+        onChange={handleTabChange}
         counts={{ events: myEventsCount, offers: offersCount }}
         compact={layout === "mobile"}
       />
-      <div className={layout === "mobile" ? "mt-3" : "mt-4"}>
-        {activeTab === "offers" ? (
-          <UserSubmissionsPanel
-            variant="standalone"
-            showBackToHub={false}
-            onAfterResubmitSuccess={onAfterResubmitSuccess}
-          />
-        ) : (
+      <div className={`relative ${layout === "mobile" ? "mt-3 min-h-[12rem]" : "mt-4 min-h-[14rem]"}`}>
+        <WorkspaceTabSwitchLoader show={tabSwitching} label="Loading" />
+        {/* Keep both trees mounted so tab switches do not remount/refetch. */}
+        <div
+          className={`transition-opacity duration-300 ease-out ${
+            tabSwitching ? "opacity-40" : "opacity-100"
+          } ${showOffers ? "hidden" : "block"}`}
+          aria-hidden={showOffers}
+        >
           <OrganizerDashboardPage
             embedded
             forcedSection={organizerSection || "my-events"}
             embeddedSectionMode="full"
             onRequestPlatformTickets={onRequestPlatformTickets}
           />
-        )}
+        </div>
+        <div
+          className={`transition-opacity duration-300 ease-out ${
+            tabSwitching ? "opacity-40" : "opacity-100"
+          } ${showOffers ? "block" : "hidden"}`}
+          aria-hidden={!showOffers}
+        >
+          <UserSubmissionsPanel
+            variant="standalone"
+            showBackToHub={false}
+            onAfterResubmitSuccess={onAfterResubmitSuccess}
+          />
+        </div>
       </div>
     </section>
   );
@@ -1317,14 +1404,22 @@ function UserDashboardPage() {
       )}
       </div>
 
-      {showProfileEditor ? renderInPortal(
-        <div
+      {renderInPortal(
+        <AnimatePresence>
+          {showProfileEditor ? (
+        <motion.div
+          key="profile-editor-shell"
           className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 px-0 py-0 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6 lg:items-center lg:justify-center lg:bg-slate-900/50 lg:px-6 lg:py-8 lg:backdrop-blur-none"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
           <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            initial={{ opacity: 0, y: 24, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.985 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="flex max-h-[min(96dvh,100vh)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.35rem] border border-b-0 border-slate-200/90 bg-white shadow-[0_-12px_48px_rgba(15,23,42,0.2)] sm:max-h-[min(90vh,720px)] sm:rounded-3xl sm:border sm:shadow-xl lg:h-[min(74vh,620px)] lg:max-h-[min(74vh,620px)] lg:rounded-3xl lg:border-slate-200 lg:shadow-xl"
           >
             <div className="shrink-0 border-b border-slate-200 px-4 pb-3 pt-3 sm:px-5 sm:pb-4 sm:pt-4 lg:px-6 lg:pt-5">
@@ -1593,8 +1688,10 @@ function UserDashboardPage() {
               </div>
             </form>
           </motion.div>
-        </div>
-      ) : null}
+        </motion.div>
+          ) : null}
+        </AnimatePresence>
+      )}
 
       {showPasswordModal
         ? renderInPortal(
@@ -1758,13 +1855,22 @@ function UserDashboardPage() {
           )
         : null}
 
-      {creatorModal === "dealer"
-        ? renderInPortal(
-            <div className="fixed inset-0 z-[205] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6">
+      {renderInPortal(
+        <AnimatePresence>
+          {creatorModal === "dealer" ? (
+            <motion.div
+              key="dealer-modal-shell"
+              className="fixed inset-0 z-[205] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
               <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+                initial={{ opacity: 0, y: 18, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.985 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 className="flex h-[min(76vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
               >
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
@@ -1856,17 +1962,27 @@ function UserDashboardPage() {
                   </button>
                 </div>
               </motion.div>
-            </div>
-          )
-        : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      )}
 
-      {creatorModal === "influencer"
-        ? renderInPortal(
-            <div className="fixed inset-0 z-[205] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6">
+      {renderInPortal(
+        <AnimatePresence>
+          {creatorModal === "influencer" ? (
+            <motion.div
+              key="influencer-modal-shell"
+              className="fixed inset-0 z-[205] flex items-center justify-center bg-slate-900/55 px-3 py-4 sm:px-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            >
               <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+                initial={{ opacity: 0, y: 18, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.985 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 className="flex h-[min(76vh,640px)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
               >
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
@@ -1948,21 +2064,29 @@ function UserDashboardPage() {
                   </button>
                 </div>
               </motion.div>
-            </div>
-          )
-        : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      )}
 
-      {creatorHubOpen
-        ? renderInPortal(
-            <div
+      {renderInPortal(
+        <AnimatePresence>
+          {creatorHubOpen ? (
+            <motion.div
+              key="creator-hub-shell"
               className="fixed inset-0 z-[196] flex items-center justify-center bg-slate-950/55 px-4 py-8"
               onClick={() => setCreatorHubOpen(false)}
               role="presentation"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
               <motion.div
-                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                initial={{ opacity: 0, y: 16, scale: 0.985 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
+                exit={{ opacity: 0, y: 12, scale: 0.985 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
               >
@@ -2005,9 +2129,10 @@ function UserDashboardPage() {
                   Close
                 </button>
               </motion.div>
-            </div>
-          )
-        : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      )}
 
       {renderInPortal(
         <AnimatePresence>

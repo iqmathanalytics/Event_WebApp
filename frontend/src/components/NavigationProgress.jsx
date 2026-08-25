@@ -18,22 +18,32 @@ function pathIsHome(p) {
  * - Hidden when navigating *to* home (any page → /), so returning to the landing page stays instant.
  * - Dismisses after the destination route signals readiness (data + paint), plus a short minimum hold.
  * - z-index above dashboard modals so it is visible when leaving popups (e.g. hosting workspace).
+ * - Query/hash-only updates on the same pathname (e.g. dashboard host tabs) do NOT show the overlay.
  */
 function NavigationProgress() {
   const location = useLocation();
   const { contentReady } = useRouteContentReadyContext();
   const reduceMotion = useReducedMotion();
   const firstPaint = useRef(true);
+  const prevPathnameRef = useRef(location.pathname);
   const [overlay, setOverlay] = useState(null);
 
   /** useLayoutEffect: run before paint so the dimmer mounts before the new route is visible. */
   useLayoutEffect(() => {
     if (firstPaint.current) {
       firstPaint.current = false;
+      prevPathnameRef.current = location.pathname;
       return undefined;
     }
 
     const to = location.pathname;
+    const pathChanged = prevPathnameRef.current !== to;
+    prevPathnameRef.current = to;
+
+    // Same page, different ?host= / filters — keep tab switches instant (no reload overlay).
+    if (!pathChanged) {
+      return undefined;
+    }
 
     if (pathIsHome(to)) {
       setOverlay(null);
