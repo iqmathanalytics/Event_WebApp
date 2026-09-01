@@ -34,21 +34,39 @@ export function clientTimezoneOffsetMinutes() {
   return new Date().getTimezoneOffset();
 }
 
-export async function validateEventCoupon(payload) {
-  const response = await api.post("/bookings/validate-coupon", {
+function couponRequestExtras(payload = {}) {
+  return {
     ...payload,
     timezone_offset: clientTimezoneOffsetMinutes()
-  });
+  };
+}
+
+export async function validateEventCoupon(payload) {
+  const response = await api.post("/bookings/validate-coupon", couponRequestExtras(payload));
+  return response.data;
+}
+
+export async function validateGuestEventCoupon(payload) {
+  const response = await api.post("/bookings/guest/validate-coupon", couponRequestExtras(payload));
   return response.data;
 }
 
 export async function resumeEventCouponHold({ event_id, hold_token, ticket_items }) {
-  const response = await api.post("/bookings/resume-coupon-hold", {
+  const response = await api.post("/bookings/resume-coupon-hold", couponRequestExtras({
     event_id,
     hold_token,
-    ...(Array.isArray(ticket_items) ? { ticket_items } : {}),
-    timezone_offset: clientTimezoneOffsetMinutes()
-  });
+    ...(Array.isArray(ticket_items) ? { ticket_items } : {})
+  }));
+  return response.data;
+}
+
+export async function resumeGuestEventCouponHold({ event_id, hold_token, ticket_items, email }) {
+  const response = await api.post("/bookings/guest/resume-coupon-hold", couponRequestExtras({
+    event_id,
+    hold_token,
+    email,
+    ...(Array.isArray(ticket_items) ? { ticket_items } : {})
+  }));
   return response.data;
 }
 
@@ -56,6 +74,15 @@ export async function releaseEventCouponHold({ event_id, hold_token }) {
   const response = await api.post("/bookings/release-coupon-hold", {
     event_id,
     hold_token
+  });
+  return response.data;
+}
+
+export async function releaseGuestEventCouponHold({ event_id, hold_token, email }) {
+  const response = await api.post("/bookings/guest/release-coupon-hold", {
+    event_id,
+    hold_token,
+    email
   });
   return response.data;
 }

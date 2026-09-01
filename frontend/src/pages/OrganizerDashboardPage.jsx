@@ -10,7 +10,7 @@ import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/boo
 import { categories } from "../utils/filterOptions";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { eventDetailPath } from "../utils/listingPaths";
-import { formatBookingSeatsLabel } from "../utils/bookingSeats";
+import { getEventAvailableDates, getEventSortDate } from "../utils/eventSchedule";
 import { normalizeEventTicketSalesMode, resolveEventTicketSalesMode } from "../utils/eventTicketSalesMode";
 import { downloadBlob } from "../utils/fileDownload";
 import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
@@ -25,18 +25,14 @@ import { LISTING_BANNER_IMAGE_HINT } from "../constants/listingImageGuide";
 import { isRichTextEmpty } from "../utils/richText";
 import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
 import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
-import BookingPaymentSummary from "../components/BookingPaymentSummary";
-import {
-  BookingAmountPaidCell,
-  BookingPaymentStatusCell,
-  BookingStripeRefCell
-} from "../components/BookingPaymentTableCells";
 import ScrollableTableFrame from "../components/ScrollableTableFrame";
+import OrganizerBookingsTable, { OrganizerBookingsMobileCards } from "../components/OrganizerBookingsTable";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
 import OrganizerVendorCodesPanel from "../components/OrganizerVendorCodesPanel";
 import OrganizerCheckInPanel from "../components/OrganizerCheckInPanel";
 import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
 import SharedAnalyticsList from "../components/SharedAnalyticsList";
+import SharedEventBookingsPanel from "../components/SharedEventBookingsPanel";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
 import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
 import SeatingSideToast from "../components/seating/SeatingSideToast";
@@ -153,6 +149,82 @@ function isOrganizerEventListed(item) {
     item?.show_on_events_page !== false &&
     item?.show_on_events_page !== 0 &&
     String(item?.show_on_events_page) !== "false"
+  );
+}
+
+function todayCalendarDateString() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
+/** Last show date for an event (range/multiple/single). */
+function getEventLastShowDate(event) {
+  const dates = getEventAvailableDates(event);
+  if (dates.length) {
+    return dates[dates.length - 1];
+  }
+  return getEventSortDate(event) || String(event?.event_date || "").slice(0, 10) || "";
+}
+
+function isPastOrganizerEvent(item, todayStr = todayCalendarDateString()) {
+  const end = getEventLastShowDate(item);
+  if (!end) {
+    return false;
+  }
+  return end < todayStr;
+}
+
+/**
+ * Active = approved + listed + not past
+ * Inactive = not past + (not approved or not listed)
+ * Past = last show date before today
+ */
+function getMyEventLifecycleBucket(item, todayStr = todayCalendarDateString()) {
+  if (isPastOrganizerEvent(item, todayStr)) {
+    return "past";
+  }
+  const approved = String(item?.status || "").toLowerCase() === "approved";
+  if (approved && isOrganizerEventListed(item)) {
+    return "active";
+  }
+  return "inactive";
+}
+
+const MY_EVENTS_LIFECYCLE_TABS = [
+  { key: "active", label: "Active Events" },
+  { key: "inactive", label: "Inactive Events" },
+  { key: "past", label: "Past Events" }
+];
+
+function MyEventsLifecycleTabs({ active, onChange, counts, compact = false }) {
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
+      {MY_EVENTS_LIFECYCLE_TABS.map((tab) => {
+        const selected = active === tab.key;
+        const count = counts?.[tab.key] ?? 0;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${
+              selected
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:bg-white/70 hover:text-slate-800"
+            }`}
+          >
+            <span>{compact && tab.key === "inactive" ? "Inactive" : compact && tab.key === "active" ? "Active" : compact && tab.key === "past" ? "Past" : tab.label}</span>
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                selected ? "bg-slate-100 text-slate-700" : "bg-slate-200/70 text-slate-600"
+              }`}
+            >
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -342,6 +414,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [loadingBookingRows, setLoadingBookingRows] = useState(false);
   const [bookingFilters, setBookingFilters] = useState({ event_id: "", date: "" });
   const [bookingEventQuery, setBookingEventQuery] = useState("");
+  const [myEventsLifecycleTab, setMyEventsLifecycleTab] = useState("active");
   const bookingFilterRef = useRef(null);
   const [activeBookingPanel, setActiveBookingPanel] = useState(null);
   const formPanelRef = useRef(null);
@@ -1081,6 +1154,28 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     downloadBlob(result.blob, `organizer-bookings.${format === "excel" ? "xlsx" : "csv"}`);
   };
 
+  const myEventsLifecycleCounts = useMemo(() => {
+    const todayStr = todayCalendarDateString();
+    const counts = { active: 0, inactive: 0, past: 0 };
+    rows.forEach((item) => {
+      const bucket = getMyEventLifecycleBucket(item, todayStr);
+      counts[bucket] += 1;
+    });
+    return counts;
+  }, [rows]);
+
+  const filteredMyEvents = useMemo(() => {
+    const todayStr = todayCalendarDateString();
+    return rows.filter((item) => getMyEventLifecycleBucket(item, todayStr) === myEventsLifecycleTab);
+  }, [rows, myEventsLifecycleTab]);
+
+  const myEventsEmptyCopy =
+    myEventsLifecycleTab === "active"
+      ? "No active events right now. Approved events marked Active appear here."
+      : myEventsLifecycleTab === "inactive"
+        ? "No inactive events. Pending, rejected, or hidden listings appear here."
+        : "No past events yet. Events after their last show date appear here.";
+
   const bookingEventOptions = useMemo(() => {
     return [...rows].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "en", { sensitivity: "base" }));
   }, [rows]);
@@ -1297,17 +1392,20 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </div>
               </div>
               {sharedEventId ? (
-                <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
-                  <OrganizerInsightsPanel
-                    fixedEventId={sharedEventId}
-                    refreshKey={analyticsRefreshKey}
-                    sharedAccessBanner={
-                      sharedOwnerLabel
-                        ? `Shared by ${sharedOwnerLabel} · view only`
-                        : "Shared access · view only"
-                    }
-                  />
-                </Suspense>
+                <>
+                  <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                    <OrganizerInsightsPanel
+                      fixedEventId={sharedEventId}
+                      refreshKey={analyticsRefreshKey}
+                      sharedAccessBanner={
+                        sharedOwnerLabel
+                          ? `Shared by ${sharedOwnerLabel} · view only`
+                          : "Shared access · view only"
+                      }
+                    />
+                  </Suspense>
+                  <SharedEventBookingsPanel eventId={sharedEventId} />
+                </>
               ) : null}
           </HostSectionSlot>
 
@@ -1336,8 +1434,22 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               ) : null}
 
               {!loading && rows.length > 0 ? (
+                <>
+                  <div className="mt-3">
+                    <MyEventsLifecycleTabs
+                      active={myEventsLifecycleTab}
+                      onChange={setMyEventsLifecycleTab}
+                      counts={myEventsLifecycleCounts}
+                      compact
+                    />
+                  </div>
+                  {filteredMyEvents.length === 0 ? (
+                    <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-center">
+                      <p className="text-sm font-medium text-slate-600">{myEventsEmptyCopy}</p>
+                    </div>
+                  ) : (
                 <div className="mt-3 space-y-2">
-                  {rows.map((item) => (
+                  {filteredMyEvents.map((item) => (
                     <article key={`m-org-event-card-${item.id}`} className="rounded-2xl border border-slate-200 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-sm font-semibold text-slate-900">{item.title}</p>
@@ -1392,6 +1504,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     </article>
                   ))}
                 </div>
+                  )}
+                </>
               ) : null}
             </HostSectionSlot>
 
@@ -1521,48 +1635,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 />
               </div>
 
-              <div className="mt-3 space-y-2">
-                {loadingBookingRows ? (
-                  <p className="rounded-2xl border border-slate-200 px-3 py-3 text-sm text-slate-500">Loading bookings...</p>
-                ) : bookingRows.length === 0 ? (
-                  <p className="rounded-2xl border border-slate-200 px-3 py-3 text-sm text-slate-500">
-                    No bookings match the selected filters.
-                  </p>
-                ) : (
-                  bookingRows.map((item) => (
-                    <article key={`m-org-book-card-${item.id}`} className="rounded-2xl border border-slate-200 p-4">
-                      <p className="text-sm font-semibold text-slate-900">{item.event_title}</p>
-                      <p className="mt-1 text-xs text-slate-600">{item.name} • {item.email}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
-                        <p><span className="font-semibold">Guests:</span> {item.attendee_count}</p>
-                        <p>
-                          <span className="font-semibold">Booked:</span>{" "}
-                          {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
-                        </p>
-                        <p className="col-span-2">
-                          <span className="font-semibold">Dates:</span>{" "}
-                          {Array.isArray(item.selected_dates) && item.selected_dates.length
-                            ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
-                            : "-"}
-                        </p>
-                        {formatBookingSeatsLabel(item) ? (
-                          <p className="col-span-2">
-                            <span className="font-semibold">Seats:</span> {formatBookingSeatsLabel(item)}
-                          </p>
-                        ) : null}
-                        {item.vendor_code ? (
-                          <p className="col-span-2">
-                            <span className="font-semibold">Vendor:</span> {item.vendor_code}
-                          </p>
-                        ) : null}
-                        <p className="col-span-2"><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
-                        <div className="col-span-2 mt-1">
-                          <BookingPaymentSummary booking={item} />
-                        </div>
-                      </div>
-                    </article>
-                  ))
-                )}
+              <div className="mt-3">
+                <OrganizerBookingsMobileCards
+                  rows={bookingRows}
+                  loading={loadingBookingRows}
+                  rowKeyPrefix="m-org-book"
+                />
               </div>
             </HostSectionSlot>
 
@@ -1665,17 +1743,20 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 </div>
               </div>
               {sharedEventId ? (
-                <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
-                  <OrganizerInsightsPanel
-                    fixedEventId={sharedEventId}
-                    refreshKey={analyticsRefreshKey}
-                    sharedAccessBanner={
-                      sharedOwnerLabel
-                        ? `Shared by ${sharedOwnerLabel} · view only`
-                        : "Shared access · view only"
-                    }
-                  />
-                </Suspense>
+                <>
+                  <Suspense fallback={<p className="text-sm text-slate-500">Loading analytics…</p>}>
+                    <OrganizerInsightsPanel
+                      fixedEventId={sharedEventId}
+                      refreshKey={analyticsRefreshKey}
+                      sharedAccessBanner={
+                        sharedOwnerLabel
+                          ? `Shared by ${sharedOwnerLabel} · view only`
+                          : "Shared access · view only"
+                      }
+                    />
+                  </Suspense>
+                  <SharedEventBookingsPanel eventId={sharedEventId} />
+                </>
               ) : null}
           </HostSectionSlot>
 
@@ -1703,8 +1784,21 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               ) : null}
               {!loading && rows.length > 0 ? (
                 <>
+                  <div className={hideAnalyticsChrome ? "mt-1" : "mt-3"}>
+                    <MyEventsLifecycleTabs
+                      active={myEventsLifecycleTab}
+                      onChange={setMyEventsLifecycleTab}
+                      counts={myEventsLifecycleCounts}
+                    />
+                  </div>
+                  {filteredMyEvents.length === 0 ? (
+                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+                      <p className="text-sm font-medium text-slate-600">{myEventsEmptyCopy}</p>
+                    </div>
+                  ) : (
+                <>
                   <div className="mt-3 space-y-2 md:hidden">
-                    {rows.map((item) => (
+                    {filteredMyEvents.map((item) => (
                       <article key={`m-org-event-${item.id}`} className="rounded-xl border border-slate-200 p-3">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-slate-900">{item.title}</p>
@@ -1783,7 +1877,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((item) => (
+                      {filteredMyEvents.map((item) => (
                         <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
                           <td className="px-3 py-2.5 font-medium text-slate-900">
                             <span className="line-clamp-2" title={item.title || ""}>
@@ -1859,6 +1953,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   </table>
                   </ScrollableTableFrame>
                 </div>
+                </>
+                  )}
                 </>
               ) : null}
             </HostSectionSlot>
@@ -1973,171 +2069,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   }
                 />
               </div>
-              <div className="mt-3 space-y-2 md:hidden">
-                {loadingBookingRows ? (
-                  <p className="rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-500">Loading bookings...</p>
-                ) : bookingRows.length === 0 ? (
-                  <p className="rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-500">
-                    No bookings match the selected filters.
-                  </p>
-                ) : (
-                  bookingRows.map((item) => (
-                    <article key={`m-org-book-${item.id}`} className="rounded-xl border border-slate-200 p-3">
-                      <p className="text-sm font-semibold text-slate-900">{item.event_title}</p>
-                      <p className="text-xs text-slate-600">{item.name} • {item.email}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-600">
-                        <p><span className="font-semibold">Phone:</span> {item.phone}</p>
-                        <p><span className="font-semibold">Guests:</span> {item.attendee_count}</p>
-                        <p className="col-span-2">
-                          <span className="font-semibold">Dates:</span>{" "}
-                          {Array.isArray(item.selected_dates) && item.selected_dates.length
-                            ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
-                            : "-"}
-                        </p>
-                        {formatBookingSeatsLabel(item) ? (
-                          <p className="col-span-2">
-                            <span className="font-semibold">Seats:</span> {formatBookingSeatsLabel(item)}
-                          </p>
-                        ) : null}
-                        {item.vendor_code ? (
-                          <p className="col-span-2">
-                            <span className="font-semibold">Vendor:</span> {item.vendor_code}
-                          </p>
-                        ) : null}
-                        <p><span className="font-semibold">Total:</span> {formatCurrency(item.total_amount || 0)}</p>
-                        <p>
-                          <span className="font-semibold">Booked:</span>{" "}
-                          {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
-                        </p>
-                        <div className="col-span-2 mt-1">
-                          <BookingPaymentSummary booking={item} />
-                        </div>
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-              <div className="mt-3 hidden md:block">
-                <ScrollableTableFrame minWidthClass="min-w-[1380px]">
-                <table className="w-full table-fixed text-left text-sm">
-                  <colgroup>
-                    <col className="w-[88px]" />
-                    <col className="w-[200px]" />
-                    <col className="w-[130px]" />
-                    <col className="w-[170px]" />
-                    <col className="w-[110px]" />
-                    <col className="w-[64px]" />
-                    <col className="w-[110px]" />
-                    <col className="w-[110px]" />
-                    <col className="w-[90px]" />
-                    <col className="w-[96px]" />
-                    <col className="w-[90px]" />
-                    <col className="w-[100px]" />
-                    <col className="w-[108px]" />
-                    <col className="w-[100px]" />
-                  </colgroup>
-                  <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Type</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Event Name</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Attendee</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Email</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Phone</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Guests</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Seats</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Event Dates</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Total</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Payment</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Charged</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Vendor</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Stripe</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Booked</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loadingBookingRows ? (
-                      <tr>
-                        <td className="px-3 py-2.5 text-slate-500" colSpan={14}>
-                          Loading bookings...
-                        </td>
-                      </tr>
-                    ) : null}
-                    {!loadingBookingRows && bookingRows.length === 0 ? (
-                      <tr>
-                        <td className="px-3 py-2.5 text-slate-500" colSpan={14}>
-                          No bookings match the selected filters.
-                        </td>
-                      </tr>
-                    ) : null}
-                    {!loadingBookingRows
-                      ? bookingRows.map((item) => {
-                          const seatsLabel = formatBookingSeatsLabel(item);
-                          return (
-                          <tr key={item.id} className="border-b border-slate-100">
-                            <td className="px-3 py-2.5">
-                              {item.is_guest_booking === 1 ||
-                              item.is_guest_booking === true ||
-                              String(item.is_guest_booking || "") === "1" ||
-                              item.user_id == null ? (
-                                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
-                                  Guest
-                                </span>
-                              ) : (
-                                <span className="text-xs text-slate-500">Registered</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 font-medium text-slate-900">
-                              <span className="line-clamp-2" title={item.event_title || ""}>
-                                {item.event_title}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 text-slate-600">
-                              <span className="block truncate" title={item.name || ""}>
-                                {item.name}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 text-slate-600">
-                              <span className="block truncate" title={item.email || ""}>
-                                {item.email}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">{item.phone}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">{item.attendee_count}</td>
-                            <td className="px-3 py-2.5 text-slate-600">
-                              <span className="line-clamp-2" title={seatsLabel || ""}>
-                                {seatsLabel || "—"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
-                              {Array.isArray(item.selected_dates) && item.selected_dates.length
-                                ? item.selected_dates.map((value) => formatDateUS(value)).join(", ")
-                                : "-"}
-                            </td>
-                            <td className="px-3 py-2.5 text-right whitespace-nowrap text-slate-600">
-                              {formatCurrency(item.total_amount || 0)}
-                            </td>
-                            <BookingPaymentStatusCell booking={item} />
-                            <BookingAmountPaidCell booking={item} className="px-3 py-2.5 text-right text-slate-600" />
-                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
-                              {item.vendor_code ? (
-                                <span className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-900">
-                                  {item.vendor_code}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
-                            </td>
-                            <BookingStripeRefCell booking={item} className="px-3 py-2.5 text-slate-600" />
-                            <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
-                              {item.created_at ? formatDateUS(String(item.created_at).slice(0, 10)) : "-"}
-                            </td>
-                          </tr>
-                          );
-                        })
-                      : null}
-                  </tbody>
-                </table>
-                </ScrollableTableFrame>
+              <div className="mt-3">
+                <OrganizerBookingsTable
+                  rows={bookingRows}
+                  loading={loadingBookingRows}
+                  rowKeyPrefix="org-book"
+                />
               </div>
             </HostSectionSlot>
 

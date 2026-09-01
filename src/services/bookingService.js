@@ -25,6 +25,7 @@ const { applyCheckoutFees } = require("../utils/transactionFee");
 const { ensureGuestUserAccount } = require("./guestAccountService");
 const { publicBookingQrImageUrl } = require("../utils/bookingQr");
 const { sendTransactionalEmail } = require("../utils/emailIntegrations");
+const { assertCanViewEventAnalytics } = require("./eventAnalyticsService");
 const {
   buildBookingConfirmationEmail,
   buildOrganizerBookingNotificationEmail,
@@ -252,9 +253,6 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
         "Exclusive deal events require an account. Please sign in or register to book."
       );
     }
-    if (payload.coupon_hold_token) {
-      throw new ApiError(400, "Coupon codes are not available for guest checkout. Sign in to use a coupon.");
-    }
   }
 
   const availableDates = getEventAvailableDates(eventWithLevels);
@@ -316,11 +314,12 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
   let totalAmount = subtotalAmount;
   let couponId = null;
   let couponCode = null;
-  const holdToken = !isGuest ? payload.coupon_hold_token || null : null;
+  const holdToken = payload.coupon_hold_token || null;
 
   if (holdToken) {
     const applied = await couponService.consumeHoldForBooking({
-      userId,
+      userId: isGuest ? null : userId,
+      guestEmail: isGuest ? payload.email : null,
       holdToken,
       eventId: payload.event_id,
       attendeeCount: guests,
@@ -631,9 +630,9 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
     }
     const checkInCode = created.check_in_code;
 
-    if (holdToken && userId) {
+    if (holdToken && (effectiveUserId || userId)) {
       await couponService.finalizeCouponRedemption(
-        { couponId: pricing.couponId || null, userId, bookingId, holdToken },
+        { couponId: pricing.couponId || null, userId: effectiveUserId || userId, bookingId, holdToken },
         conn
       );
     }
@@ -719,10 +718,21 @@ async function createGuestEventBooking({ payload }) {
 }
 
 async function fetchOrganizerBookings({ organizerId, query }) {
+  const eventId = query.event_id ? Number(query.event_id) : null;
+  const date = query.date || null;
+  let scopeOrganizerId = organizerId;
+
+  // When an event is specified, allow owners and accepted share recipients.
+  // Shared viewers query that event via the owner's organizer_id (still scoped to event_id).
+  if (eventId) {
+    const { event } = await assertCanViewEventAnalytics(eventId, organizerId);
+    scopeOrganizerId = Number(event.organizer_id);
+  }
+
   const rows = await listBookingsByOrganizer({
-    organizerId,
-    eventId: query.event_id ? Number(query.event_id) : null,
-    date: query.date || null
+    organizerId: scopeOrganizerId,
+    eventId,
+    date
   });
   return rows.map(mapBookingRow);
 }

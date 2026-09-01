@@ -51,9 +51,29 @@ const applyCodeField = z
   .max(40)
   .regex(/^[A-Za-z0-9]+$/, "Code must be letters and numbers only");
 
-const applyCouponSchema = z.object({
-  body: z
-    .object({
+function refineCouponApplyBody(data, ctx) {
+  const itemTotal = (data.ticket_items || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  if (data.ticket_items?.length) {
+    if (itemTotal < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ticket_items"],
+        message: "Select at least one ticket"
+      });
+    }
+    return;
+  }
+  if (!data.attendee_count || data.attendee_count < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["attendee_count"],
+      message: "At least one ticket is required"
+    });
+  }
+}
+
+const applyCouponBodySchema = z
+  .object({
     event_id: z.coerce.number().int().positive(),
     coupon_code: applyCodeField,
     attendee_count: z.coerce.number().int().min(1).max(50).optional(),
@@ -64,26 +84,10 @@ const applyCouponSchema = z.object({
     /** Reuse an existing hold instead of creating a duplicate */
     hold_token: z.string().uuid().optional()
   })
-    .superRefine((data, ctx) => {
-      const itemTotal = (data.ticket_items || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-      if (data.ticket_items?.length) {
-        if (itemTotal < 1) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["ticket_items"],
-            message: "Select at least one ticket"
-          });
-        }
-        return;
-      }
-      if (!data.attendee_count || data.attendee_count < 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["attendee_count"],
-          message: "At least one ticket is required"
-        });
-      }
-    }),
+  .superRefine(refineCouponApplyBody);
+
+const applyCouponSchema = z.object({
+  body: applyCouponBodySchema,
   query: z.object({}).passthrough(),
   params: z.object({}).passthrough()
 });
@@ -103,6 +107,47 @@ const releaseCouponHoldSchema = z.object({
   body: z.object({
     event_id: z.coerce.number().int().positive().optional(),
     hold_token: z.string().uuid()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
+const guestCouponEmailField = z.string().trim().email("A valid email is required");
+
+const guestApplyCouponSchema = z.object({
+  body: z
+    .object({
+      event_id: z.coerce.number().int().positive(),
+      coupon_code: applyCodeField,
+      email: guestCouponEmailField,
+      attendee_count: z.coerce.number().int().min(1).max(50).optional(),
+      ticket_items: z.array(ticketItemSchema).max(20).optional(),
+      selected_dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(366).optional(),
+      timezone_offset: z.coerce.number().int().min(-840).max(840).optional().default(0),
+      hold_token: z.string().uuid().optional()
+    })
+    .superRefine(refineCouponApplyBody),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
+const guestResumeCouponHoldSchema = z.object({
+  body: z.object({
+    event_id: z.coerce.number().int().positive(),
+    hold_token: z.string().uuid(),
+    email: guestCouponEmailField,
+    ticket_items: z.array(ticketItemSchema).max(20).optional(),
+    timezone_offset: z.coerce.number().int().min(-840).max(840).optional().default(0)
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
+const guestReleaseCouponHoldSchema = z.object({
+  body: z.object({
+    event_id: z.coerce.number().int().positive().optional(),
+    hold_token: z.string().uuid(),
+    email: guestCouponEmailField
   }),
   query: z.object({}).passthrough(),
   params: z.object({}).passthrough()
@@ -132,8 +177,11 @@ const couponIdParamSchema = z.object({
 
 module.exports = {
   applyCouponSchema,
+  guestApplyCouponSchema,
   resumeCouponHoldSchema,
+  guestResumeCouponHoldSchema,
   releaseCouponHoldSchema,
+  guestReleaseCouponHoldSchema,
   createCouponSchema,
   updateCouponSchema,
   couponIdParamSchema

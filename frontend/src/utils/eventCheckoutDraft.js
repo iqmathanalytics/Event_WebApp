@@ -1,7 +1,19 @@
 const STORAGE_PREFIX = "bmt_event_checkout_v1";
 
+function normalizeCheckoutUserKey(userId) {
+  if (userId === "guest") {
+    return "guest";
+  }
+  const raw = String(userId ?? "");
+  if (raw.startsWith("guest:")) {
+    return raw;
+  }
+  const numeric = Number(userId);
+  return Number.isFinite(numeric) ? numeric : raw;
+}
+
 function storageKey(eventId, userId) {
-  const userKey = userId === "guest" ? "guest" : Number(userId);
+  const userKey = normalizeCheckoutUserKey(userId);
   return `${STORAGE_PREFIX}_${Number(eventId)}_${userKey}`;
 }
 
@@ -50,8 +62,8 @@ export function loadEventCheckoutDraft(eventId, userId) {
       return null;
     }
     const draft = JSON.parse(raw);
-    const draftUserKey = draft.userId === "guest" ? "guest" : Number(draft.userId);
-    const expectedUserKey = userId === "guest" ? "guest" : Number(userId);
+    const draftUserKey = normalizeCheckoutUserKey(draft.userId);
+    const expectedUserKey = normalizeCheckoutUserKey(userId);
     if (Number(draft.eventId) !== Number(eventId) || draftUserKey !== expectedUserKey) {
       return null;
     }

@@ -37,6 +37,8 @@
     "stripe:payment-domains:register": "node scripts/stripe-payment-method-domains.js --register",
     "stripe:fulfill-intent": "node scripts/fulfill-paid-stripe-intent.js",
     "email:test-booking": "node scripts/send-test-booking-email.js",
+    "email:weekly-summary": "node scripts/send-weekly-organizer-summary.js",
+    "email:weekly-summary:dry": "node scripts/send-weekly-organizer-summary.js --dry-run",
     "deploy:render": "node scripts/render-deploy.js",
     "sync:render-env": "node scripts/sync-render-env-from-local.js",
     "lint": "echo \"No linter configured yet\""

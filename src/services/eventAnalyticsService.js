@@ -202,6 +202,58 @@ async function getBookingInsights(eventId, event = null) {
   return { ...base, tiers: [], configured_levels: [], total_tier_tickets: 0, total_tier_revenue: 0 };
 }
 
+/**
+ * Booking + tier insights for a half-open created_at window [fromMysql, toMysql).
+ * @param {string} fromMysql UTC/MySQL datetime `YYYY-MM-DD HH:mm:ss`
+ * @param {string} toMysql exclusive end
+ */
+async function getBookingInsightsForWindow(eventId, event, fromMysql, toMysql) {
+  const [rows] = await pool.query(
+    `SELECT
+       COUNT(*) AS total_bookings,
+       COALESCE(SUM(attendee_count), 0) AS total_attendees,
+       COALESCE(SUM(CASE WHEN payment_status IN ('paid', 'free') THEN total_amount ELSE 0 END), 0) AS gross_revenue,
+       COALESCE(SUM(CASE WHEN payment_status IN ('paid', 'free') THEN discount_amount ELSE 0 END), 0) AS total_discounts,
+       SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) AS paid_bookings,
+       SUM(CASE WHEN payment_status = 'free' THEN 1 ELSE 0 END) AS free_bookings,
+       SUM(CASE WHEN payment_status = 'pending' THEN 1 ELSE 0 END) AS pending_bookings,
+       SUM(CASE WHEN payment_status = 'failed' THEN 1 ELSE 0 END) AS failed_bookings
+     FROM event_bookings
+     WHERE event_id = ?
+       AND created_at >= ?
+       AND created_at < ?`,
+    [eventId, fromMysql, toMysql]
+  );
+
+  const row = rows[0] || {};
+  const base = {
+    total_bookings: Number(row.total_bookings) || 0,
+    total_attendees: Number(row.total_attendees) || 0,
+    gross_revenue: Number(row.gross_revenue) || 0,
+    total_discounts: Number(row.total_discounts) || 0,
+    paid_bookings: Number(row.paid_bookings) || 0,
+    free_bookings: Number(row.free_bookings) || 0,
+    pending_bookings: Number(row.pending_bookings) || 0,
+    failed_bookings: Number(row.failed_bookings) || 0
+  };
+
+  if (event) {
+    const [tierRows] = await pool.query(
+      `SELECT ticket_items_json, attendee_count, total_days, total_amount, subtotal_amount,
+              payment_status, created_at
+       FROM event_bookings
+       WHERE event_id = ?
+         AND payment_status IN ('paid', 'free')
+         AND created_at >= ?
+         AND created_at < ?`,
+      [eventId, fromMysql, toMysql]
+    );
+    return { ...base, ...buildTierInsightsFromBookings(event, tierRows) };
+  }
+
+  return { ...base, tiers: [], configured_levels: [], total_tier_tickets: 0, total_tier_revenue: 0 };
+}
+
 async function getOrganizerInsightsSummary(organizerId) {
   const rows = await listEventsByOrganizer(organizerId);
   const eventIds = rows.map((e) => String(e.id));
@@ -552,5 +604,6 @@ module.exports = {
   getOrganizerCheckInInsights,
   getAdminEventInsights,
   assertOrganizerOwnsEvent,
-  assertCanViewEventAnalytics
+  assertCanViewEventAnalytics,
+  getBookingInsightsForWindow
 };

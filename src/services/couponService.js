@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const ApiError = require("../utils/ApiError");
 const { pool } = require("../config/db");
-const { findEventById } = require("../models/eventModel");
+const { findEventById, enableCouponCodesForOrganizerEvents, enableCouponCodesForAllPlatformEvents } = require("../models/eventModel");
 const { getEventAvailableDates, normalizeDateList } = require("../utils/eventSchedule");
 const couponModel = require("../models/couponModel");
 const { isWithinCouponWindow } = require("../utils/couponDatetime");
@@ -65,6 +65,62 @@ function isCouponsEnabled(event) {
   return !(event.coupon_codes_enabled === false || Number(event.coupon_codes_enabled) === 0);
 }
 
+async function assertCouponsAllowedForEvent(event, conn) {
+  if (isCouponsEnabled(event)) {
+    return;
+  }
+  const activeCount = await couponModel.countActiveCouponsForEvent(
+    event.id,
+    event.organizer_id,
+    conn
+  );
+  if (activeCount > 0) {
+    return;
+  }
+  throw new ApiError(400, "Coupon codes are not enabled for this event.");
+}
+
+async function syncCouponCheckoutFlagsForPayload(payload) {
+  if (payload.is_active === false) {
+    return;
+  }
+  if (payload.scope === "specific_events" && payload.event_ids?.length) {
+    await enableCouponCodesForOrganizerEvents(payload.event_ids, payload.organizer_id);
+    return;
+  }
+  if (payload.scope === "all_events") {
+    await enableCouponCodesForAllPlatformEvents(payload.organizer_id);
+  }
+}
+
+function normalizeGuestEmail(email) {
+  return couponModel.normalizeGuestEmail(email);
+}
+
+function resolveHoldIdentity({ userId, guestEmail }) {
+  if (userId != null && Number(userId) > 0) {
+    return { userId: Number(userId), guestEmail: null };
+  }
+  const email = normalizeGuestEmail(guestEmail);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiError(400, "A valid email is required to apply a coupon.");
+  }
+  return { userId: null, guestEmail: email };
+}
+
+function holdMatchesIdentity(hold, identity) {
+  if (!hold || !identity) {
+    return false;
+  }
+  if (identity.userId) {
+    return Number(hold.user_id) === identity.userId;
+  }
+  return (
+    (hold.user_id == null || Number(hold.user_id) === 0) &&
+    normalizeGuestEmail(hold.guest_email) === identity.guestEmail
+  );
+}
+
 function isVendorHold(hold) {
   return hold && (hold.hold_kind === "vendor" || (!hold.coupon_id && hold.applied_code));
 }
@@ -77,6 +133,7 @@ async function assertCouponUsable({
   coupon,
   event,
   userId,
+  guestEmail,
   attendeeCount,
   subtotal,
   excludeHoldId,
@@ -123,12 +180,26 @@ async function assertCouponUsable({
   }
 
   if (coupon.max_redemptions_per_user != null) {
-    const userRedemptions = await couponModel.countRedemptionsForCouponUser(coupon.id, userId);
-    const userHolds = await couponModel.countActiveHoldsForCouponUser(
-      coupon.id,
-      userId,
-      excludeHoldId
-    );
+    let userRedemptions = 0;
+    let userHolds = 0;
+    if (userId) {
+      userRedemptions = await couponModel.countRedemptionsForCouponUser(coupon.id, userId);
+      userHolds = await couponModel.countActiveHoldsForCouponUser(
+        coupon.id,
+        userId,
+        excludeHoldId
+      );
+    } else {
+      const email = normalizeGuestEmail(guestEmail);
+      if (email) {
+        userRedemptions = await couponModel.countRedemptionsForCouponGuestEmail(coupon.id, email);
+        userHolds = await couponModel.countActiveHoldsForCouponGuest(
+          coupon.id,
+          email,
+          excludeHoldId
+        );
+      }
+    }
     if (userRedemptions + userHolds >= Number(coupon.max_redemptions_per_user)) {
       throw new ApiError(400, "You have already used this coupon the maximum number of times.");
     }
@@ -218,13 +289,14 @@ function buildHoldResponse({ holdToken, expiresAtRaw, coupon, subtotal, discount
   };
 }
 
-async function releaseCouponHold({ userId, holdToken, eventId }) {
+async function releaseCouponHold({ userId, guestEmail, holdToken, eventId }) {
+  const identity = resolveHoldIdentity({ userId, guestEmail });
   await couponModel.purgeExpiredHolds();
   const hold = await couponModel.findHoldByToken(holdToken);
   if (!hold) {
     return { released: true };
   }
-  if (Number(hold.user_id) !== Number(userId)) {
+  if (!holdMatchesIdentity(hold, identity)) {
     throw new ApiError(403, "This coupon hold belongs to another account.");
   }
   if (eventId != null && Number(hold.event_id) !== Number(eventId)) {
@@ -234,7 +306,15 @@ async function releaseCouponHold({ userId, holdToken, eventId }) {
   return { released: true };
 }
 
-async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null, timezoneOffsetMinutes = 0 }) {
+async function resumeCouponHold({
+  userId,
+  guestEmail,
+  eventId,
+  holdToken,
+  ticketItems = null,
+  timezoneOffsetMinutes = 0
+}) {
+  const identity = resolveHoldIdentity({ userId, guestEmail });
   await couponModel.purgeExpiredHolds();
   const hold = await couponModel.findActiveHoldByToken(holdToken);
   if (!hold) {
@@ -245,7 +325,7 @@ async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null
     }
     throw new ApiError(400, "Code hold expired or invalid. Please apply the code again.");
   }
-  if (Number(hold.user_id) !== Number(userId)) {
+  if (!holdMatchesIdentity(hold, identity)) {
     throw new ApiError(403, "This code hold belongs to another account.");
   }
   if (Number(hold.event_id) !== Number(eventId)) {
@@ -268,9 +348,7 @@ async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null
     );
   }
 
-  if (!isCouponsEnabled(event)) {
-    throw new ApiError(400, "Coupon codes are not enabled for this event.");
-  }
+  await assertCouponsAllowedForEvent(event);
 
   const coupon = await couponModel.findCouponByIdForOrganizer(hold.coupon_id, event.organizer_id);
   if (!coupon) {
@@ -280,7 +358,8 @@ async function resumeCouponHold({ userId, eventId, holdToken, ticketItems = null
   await assertCouponUsable({
     coupon,
     event,
-    userId,
+    userId: identity.userId,
+    guestEmail: identity.guestEmail,
     attendeeCount: guests,
     subtotal,
     excludeHoldId: hold.id,
@@ -316,7 +395,8 @@ async function applyVendorHold() {
 }
 
 async function applyCouponHold({
-  userId,
+  userId = null,
+  guestEmail = null,
   eventId,
   couponCode,
   attendeeCount,
@@ -325,10 +405,12 @@ async function applyCouponHold({
   timezoneOffsetMinutes = 0,
   existingHoldToken = null
 }) {
+  const identity = resolveHoldIdentity({ userId, guestEmail });
   if (existingHoldToken) {
     try {
       return await resumeCouponHold({
-        userId,
+        userId: identity.userId,
+        guestEmail: identity.guestEmail,
         eventId,
         holdToken: existingHoldToken,
         ticketItems,
@@ -349,15 +431,14 @@ async function applyCouponHold({
     { excludeHoldToken: existingHoldToken || null, ticketItems }
   );
 
-  // Prefer organizer coupon when coupons are enabled and code matches a coupon.
-  const coupon = isCouponsEnabled(event)
-    ? await couponModel.findCouponByOrganizerAndCode(event.organizer_id, normalizedCode)
-    : null;
+  await assertCouponsAllowedForEvent(event);
+
+  const coupon = await couponModel.findCouponByOrganizerAndCode(event.organizer_id, normalizedCode);
 
   if (coupon) {
     await couponModel.purgeExpiredHolds();
 
-    const existing = await couponModel.findActiveHoldForUserCouponEvent(userId, coupon.id, event.id);
+    const existing = await couponModel.findActiveHoldForCouponEvent(identity, coupon.id, event.id);
     if (existing) {
       const existingDates = normalizeDateList(JSON.parse(existing.selected_dates_json || "[]"));
       const datesMatch = existingDates.join(",") === dates.join(",");
@@ -366,7 +447,8 @@ async function applyCouponHold({
         await assertCouponUsable({
           coupon,
           event,
-          userId,
+          userId: identity.userId,
+          guestEmail: identity.guestEmail,
           attendeeCount: guests,
           subtotal,
           excludeHoldId: existing.id,
@@ -395,7 +477,8 @@ async function applyCouponHold({
     await assertCouponUsable({
       coupon,
       event,
-      userId,
+      userId: identity.userId,
+      guestEmail: identity.guestEmail,
       attendeeCount: guests,
       subtotal,
       timezoneOffsetMinutes
@@ -405,10 +488,11 @@ async function applyCouponHold({
     const total = Number((subtotal - discount).toFixed(2));
     const holdToken = crypto.randomUUID();
 
-    await couponModel.deleteAllHoldsForUserEvent(userId, event.id);
+    await couponModel.deleteAllHoldsForIdentityEvent(identity, event.id);
     await couponModel.createHold({
       coupon_id: coupon.id,
-      user_id: userId,
+      user_id: identity.userId,
+      guest_email: identity.guestEmail,
       event_id: event.id,
       hold_token: holdToken,
       attendee_count: guests,
@@ -432,14 +516,20 @@ async function applyCouponHold({
     });
   }
 
-  // Vendor codes are attribution-only now (no discount holds).
-  if (!isCouponsEnabled(event)) {
-    throw new ApiError(400, "Coupon codes are not enabled for this event.");
-  }
+  await assertCouponsAllowedForEvent(event);
   throw new ApiError(404, "Code not found.");
 }
 
-async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount, selectedDates, ticketItems = null }) {
+async function consumeHoldForBooking({
+  userId = null,
+  guestEmail = null,
+  holdToken,
+  eventId,
+  attendeeCount,
+  selectedDates,
+  ticketItems = null
+}) {
+  const identity = resolveHoldIdentity({ userId, guestEmail });
   await couponModel.purgeExpiredHolds();
   const hold = await couponModel.findActiveHoldByToken(holdToken);
   if (!hold) {
@@ -450,7 +540,7 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
     }
     throw new ApiError(400, "Code hold expired or invalid. Please apply the code again.");
   }
-  if (Number(hold.user_id) !== Number(userId)) {
+  if (!holdMatchesIdentity(hold, identity)) {
     throw new ApiError(403, "This code hold belongs to another account.");
   }
   if (Number(hold.event_id) !== Number(eventId)) {
@@ -481,9 +571,7 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
       "Vendor codes no longer apply discounts. Remove the old code and enter your vendor code in the tracking field."
     );
   }
-  if (!isCouponsEnabled(event)) {
-    throw new ApiError(400, "Coupon codes are not enabled for this event.");
-  }
+  await assertCouponsAllowedForEvent(event);
   coupon = await couponModel.findCouponByIdForOrganizer(hold.coupon_id, event.organizer_id);
   if (!coupon) {
     throw new ApiError(400, "Coupon is no longer available.");
@@ -491,7 +579,8 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
   await assertCouponUsable({
     coupon,
     event,
-    userId,
+    userId: identity.userId,
+    guestEmail: identity.guestEmail,
     attendeeCount: guests,
     subtotal,
     excludeHoldId: hold.id
@@ -521,9 +610,11 @@ async function consumeHoldForBooking({ userId, holdToken, eventId, attendeeCount
 
 async function finalizeCouponRedemption({ couponId, userId, bookingId, holdToken }, conn) {
   await couponModel.deleteHoldByToken(holdToken, conn);
-  if (couponId) {
+  if (couponId && userId) {
     await couponModel.incrementCouponRedemption(couponId, conn);
     await couponModel.insertRedemption({ couponId, userId, bookingId }, conn);
+  } else if (couponId) {
+    await couponModel.incrementCouponRedemption(couponId, conn);
   }
 }
 
@@ -541,6 +632,7 @@ async function createOrganizerCoupon(organizerId, body) {
   const payload = mapCouponPayload(organizerId, body, code);
   validateCouponPayload(payload);
   const id = await couponModel.createCoupon(payload);
+  await syncCouponCheckoutFlagsForPayload(payload);
   return getOrganizerCouponDetail(organizerId, id);
 }
 
@@ -561,6 +653,7 @@ async function updateOrganizerCoupon(organizerId, couponId, body) {
   const payload = mapCouponPayload(organizerId, body, code);
   validateCouponPayload(payload);
   await couponModel.updateCoupon(couponId, payload);
+  await syncCouponCheckoutFlagsForPayload(payload);
   return getOrganizerCouponDetail(organizerId, couponId);
 }
 
@@ -641,6 +734,10 @@ async function activateOrganizerCoupon(organizerId, couponId) {
     throw new ApiError(404, "Coupon not found");
   }
   await couponModel.setCouponActive(couponId, true);
+  const payload = mapCouponPayload(organizerId, { ...current, is_active: true }, current.code);
+  payload.event_ids =
+    current.scope === "specific_events" ? await couponModel.listCouponEventIds(couponId) : [];
+  await syncCouponCheckoutFlagsForPayload(payload);
   return { ...current, is_active: 1 };
 }
 

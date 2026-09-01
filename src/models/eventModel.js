@@ -477,6 +477,34 @@ async function findEventDetailBySlugOrIdForViewer(param, viewerUser) {
   return { event: row, viewerPreview: !isEventPubliclyVisible(row) };
 }
 
+async function enableCouponCodesForOrganizerEvents(eventIds, organizerId) {
+  const ids = [...new Set((Array.isArray(eventIds) ? eventIds : []).map(Number).filter((id) => id > 0))];
+  if (!ids.length) {
+    return 0;
+  }
+  const placeholders = ids.map(() => "?").join(", ");
+  const [result] = await pool.query(
+    `UPDATE events
+     SET coupon_codes_enabled = 1, updated_at = NOW()
+     WHERE organizer_id = ?
+       AND ticket_sales_mode = 'platform'
+       AND id IN (${placeholders})`,
+    [organizerId, ...ids]
+  );
+  return result.affectedRows || 0;
+}
+
+async function enableCouponCodesForAllPlatformEvents(organizerId) {
+  const [result] = await pool.query(
+    `UPDATE events
+     SET coupon_codes_enabled = 1, updated_at = NOW()
+     WHERE organizer_id = ?
+       AND ticket_sales_mode = 'platform'`,
+    [organizerId]
+  );
+  return result.affectedRows || 0;
+}
+
 async function updateEventListed({ eventId, isListed }) {
   const flag = isListed ? 1 : 0;
   // Keep show_on_events_page in sync so organizer + admin inactive hide the same way.
@@ -932,6 +960,8 @@ module.exports = {
   findPublicEventBySlugOrId,
   findEventDetailBySlugOrIdForViewer,
   updateEventListed,
+  enableCouponCodesForOrganizerEvents,
+  enableCouponCodesForAllPlatformEvents,
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,

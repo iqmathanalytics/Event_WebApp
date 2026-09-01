@@ -23,8 +23,11 @@ import {
 } from "../utils/stripePaymentReturn";
 import {
   releaseEventCouponHold,
+  releaseGuestEventCouponHold,
   resumeEventCouponHold,
-  validateEventCoupon
+  resumeGuestEventCouponHold,
+  validateEventCoupon,
+  validateGuestEventCoupon
 } from "../services/couponService";
 import useAuth from "../hooks/useAuth";
 import { formatCurrency, formatDateUS, formatTime12Hour } from "../utils/format";
@@ -334,7 +337,15 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const userId = user?.id ?? user?.userId;
-  const checkoutUserId = guestMode ? "guest" : userId;
+  const [email, setEmail] = useState("");
+  const guestCheckoutKey = useMemo(() => {
+    if (!guestMode) {
+      return userId;
+    }
+    const normalized = String(email || "").trim().toLowerCase();
+    return normalized ? `guest:${normalized}` : "guest";
+  }, [guestMode, userId, email]);
+  const checkoutUserId = guestMode ? guestCheckoutKey : userId;
   const eventId = event?.id;
   const reservedSeating = isReservedSeating(event);
   const availableDates = useMemo(() => getEventAvailableDates(event), [event]);
@@ -359,7 +370,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }, [reservedSeating, selectedSeats.length, ticketCart]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState("form");
   const [submitting, setSubmitting] = useState(false);
@@ -378,6 +388,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const restoredFromDraftRef = useRef(false);
   const skipHoldClearRef = useRef(0);
   const resumeAttemptedRef = useRef(false);
+  const guestCouponEmailRef = useRef("");
   const paymentReturnHandledRef = useRef(false);
   const [completingPaymentReturn, setCompletingPaymentReturn] = useState(false);
   const [popupReturnRelay, setPopupReturnRelay] = useState(null);
@@ -570,7 +581,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       !couponHold?.holdToken ||
       !eventId ||
       !checkoutUserId ||
-      guestMode ||
+      (guestMode && guestCheckoutKey === "guest") ||
       resumeAttemptedRef.current
     ) {
       return;
@@ -581,11 +592,17 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
     void (async () => {
       try {
-        const res = await resumeEventCouponHold({
+        const resumePayload = {
           event_id: Number(eventId),
           hold_token: token,
           ticket_items: buildTicketItemsPayload(ticketLevels, checkoutCart)
-        });
+        };
+        const res = guestMode
+          ? await resumeGuestEventCouponHold({
+              ...resumePayload,
+              email: email.trim()
+            })
+          : await resumeEventCouponHold(resumePayload);
         const data = res?.data || res;
         const hold = buildHoldState(data, snapshot);
         if (!hold) {
@@ -611,7 +628,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         );
       }
     })();
-  }, [checkoutReady, couponHold?.holdToken, eventId, checkoutUserId, guestMode, buildHoldState, ticketLevels, checkoutCart]);
+  }, [checkoutReady, couponHold?.holdToken, eventId, checkoutUserId, guestMode, guestCheckoutKey, email, buildHoldState, ticketLevels, checkoutCart]);
 
   const clearSeatHold = useCallback(
     async ({ expired = false } = {}) => {
@@ -700,6 +717,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     event
   });
   const couponsEnabled = toBoolFlag(event?.coupon_codes_enabled, true);
+  const checkoutCouponsAvailable = toBoolFlag(event?.checkout_coupons_available, false);
+  const showCouponCheckout = (couponsEnabled || checkoutCouponsAvailable) && attendeeCount > 0;
   const vendorCodeEnabled = toBoolFlag(event?.vendor_code_enabled, false);
   const isCouponHoldApplied = Boolean(couponHold?.holdToken);
 
@@ -740,18 +759,30 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setCouponHold(null);
       setCouponMessage("");
       setHoldCountdown("");
-      if (!opts.skipApi && token && userId && eventId) {
+      if (!opts.skipApi && token && eventId) {
         try {
-          await releaseEventCouponHold({
-            event_id: Number(eventId),
-            hold_token: token
-          });
+          if (guestMode) {
+            const guestEmail = String(email || "").trim();
+            if (!guestEmail) {
+              return;
+            }
+            await releaseGuestEventCouponHold({
+              event_id: Number(eventId),
+              hold_token: token,
+              email: guestEmail
+            });
+          } else if (userId) {
+            await releaseEventCouponHold({
+              event_id: Number(eventId),
+              hold_token: token
+            });
+          }
         } catch {
           /* hold may already be released or expired */
         }
       }
     },
-    [couponHold?.holdToken, eventId, userId]
+    [couponHold?.holdToken, eventId, userId, guestMode, email]
   );
 
   const persistDraft = useCallback(
@@ -779,7 +810,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           : null;
       saveEventCheckoutDraft({
         eventId: Number(eventId),
-        userId: checkoutUserId === "guest" ? "guest" : Number(checkoutUserId),
+        userId: checkoutUserId,
         selectedDates: dates,
         attendeeCount: guests,
         ticketItems: buildTicketItemsPayload(ticketLevels, cart),
@@ -885,14 +916,35 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     return () => clearInterval(id);
   }, [couponHold?.expiresAt, couponHold?.holdToken, clearCouponHold]);
 
+  useEffect(() => {
+    if (!guestMode || !couponHold?.holdToken) {
+      return;
+    }
+    const normalized = String(email || "").trim().toLowerCase();
+    if (
+      guestCouponEmailRef.current &&
+      normalized &&
+      normalized !== guestCouponEmailRef.current
+    ) {
+      guestCouponEmailRef.current = "";
+      void clearCouponHold();
+    }
+  }, [email, guestMode, couponHold?.holdToken, clearCouponHold]);
+
   const applyPromoCode = async (rawCode) => {
-    if (!couponsEnabled) {
+    if (!couponsEnabled && !checkoutCouponsAvailable) {
       setError("Coupon codes are not available for this event.");
       return;
     }
     setError("");
     setCouponMessage("");
-    if (!userId) {
+    const emailTrim = email.trim();
+    if (guestMode) {
+      if (!emailTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+        setError("Enter your email above before applying a coupon.");
+        return;
+      }
+    } else if (!userId) {
       setError("Sign in to apply a coupon code.");
       return;
     }
@@ -912,14 +964,17 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
     try {
       setCouponApplying(true);
-      const res = await validateEventCoupon({
+      const couponPayload = {
         event_id: Number(eventId),
         coupon_code: code,
         attendee_count: attendeeCount,
         ticket_items: buildTicketItemsPayload(ticketLevels, checkoutCart),
         selected_dates: normalizeDateList(selectedDates),
         hold_token: couponHold?.holdToken || undefined
-      });
+      };
+      const res = guestMode
+        ? await validateGuestEventCoupon({ ...couponPayload, email: emailTrim })
+        : await validateEventCoupon(couponPayload);
       const data = res?.data || res;
       const snapshot = {
         datesKey: datesKey(selectedDates),
@@ -934,11 +989,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       skipHoldClearRef.current = 2;
       setCouponHold(hold);
       setCouponCodeInput(hold.couponCode || code);
+      if (guestMode) {
+        guestCouponEmailRef.current = emailTrim.toLowerCase();
+      }
       const message = hold.message || COUPON_HOLD_MESSAGE;
       setCouponMessage(message);
       saveEventCheckoutDraft({
         eventId: Number(eventId),
-        userId: checkoutUserId === "guest" ? "guest" : Number(checkoutUserId),
+        userId: checkoutUserId,
         selectedDates: normalizeDateList(selectedDates),
         attendeeCount,
         ticketItems: buildTicketItemsPayload(ticketLevels, checkoutCart),
@@ -1051,7 +1109,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setError(msg);
       return;
     }
-    if (!guestMode && couponCodeInput.trim() && !couponHold?.holdToken) {
+    if (couponCodeInput.trim() && !couponHold?.holdToken) {
       setError("Apply your coupon code before continuing, or remove it.");
       return;
     }
@@ -1611,9 +1669,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </div>
       ) : null}
 
-      {!guestMode && couponsEnabled && subtotalAmount > 0 ? (
+      {!showCouponCheckout ? null : (
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Coupon code</p>
+          {guestMode ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Enter your email above first, then apply your promo code here.
+            </p>
+          ) : null}
           <div className="mt-2 flex gap-2">
             <input value={couponCodeInput} onChange={(e) => { setCouponCodeInput(e.target.value.toUpperCase()); if (couponHold) void clearCouponHold(); }} maxLength={20} placeholder="SAVE20" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase" />
             <button type="button" disabled={couponApplying || !couponCodeInput.trim()} onClick={() => void applyCoupon()} className="shrink-0 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{couponApplying ? "..." : "Apply"}</button>
@@ -1642,7 +1705,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             </p>
           )}
         </div>
-      ) : null}
+      )}
 
       <button
         type="button"
@@ -1653,11 +1716,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       </button>
 
       {error ? <p className="mt-3 text-center text-sm font-medium text-rose-700">{error}</p> : null}
-      {!needsCardPayment ? (
-        <p className="mt-3 text-center text-xs text-slate-600">
-          {`No card payment required when your total is under ${formatCheckoutCurrency(STRIPE_MIN_USD)}.`}
-        </p>
-      ) : null}
     </CheckoutCard>
     <GuestSeatSelectionModal
       open={seatModalOpen}

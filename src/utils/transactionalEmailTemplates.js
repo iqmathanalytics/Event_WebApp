@@ -60,6 +60,7 @@ function buildLayout({
   rows = [],
   highlights = [],
   ticketBlocks = [],
+  extraHtml = "",
   ctaLabel,
   ctaUrl,
   footerNote,
@@ -182,6 +183,7 @@ function buildLayout({
                   ${highlightsHtml ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:18px;"><tr>${highlightsHtml}</tr></table>` : ""}
                   ${ticketBlocksHtml ? `<div style="margin-bottom:16px;">${ticketBlocksHtml}</div>` : ""}
                   ${rowsHtml ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:4px;">${rowsHtml}</table>` : ""}
+                  ${extraHtml || ""}
                   ${qrHtml}
                   ${ctaHtml}
                   <p style="margin:24px 0 0;font-size:12px;line-height:1.55;color:#64748b;">${escapeHtml(footerNote || `You're receiving this because you use ${BRAND_NAME}.`)}</p>
@@ -830,6 +832,160 @@ function buildGoogleSignInReminderEmail({ firstName, email }) {
   return { subject, text, html };
 }
 
+/**
+ * Weekly digest for organizers and accepted analytics share recipients.
+ * @param {{
+ *   recipientName: string,
+ *   weekLabel: string,
+ *   timezoneLabel?: string,
+ *   totals: { events: number, bookings: number, attendees: number, revenue: number },
+ *   events: Array<{
+ *     title: string,
+ *     accessLabel: string,
+ *     isPlatform: boolean,
+ *     bookings: number,
+ *     attendees: number,
+ *     revenue: number,
+ *     paidBookings?: number,
+ *     freeBookings?: number,
+ *     tiers?: Array<{ name: string, tickets: number, revenue: number }>
+ *   }>
+ * }} params
+ */
+function buildWeeklyOrganizerSummaryEmail({
+  recipientName,
+  weekLabel,
+  timezoneLabel = "ET",
+  totals,
+  events = []
+}) {
+  const safeName = String(recipientName || "there").trim() || "there";
+  const subject = `${BRAND_NAME} weekly summary · ${weekLabel}`;
+  const eventCount = Number(totals?.events) || events.length || 0;
+  const bookingCount = Number(totals?.bookings) || 0;
+  const attendeeCount = Number(totals?.attendees) || 0;
+  const revenueTotal = Number(totals?.revenue) || 0;
+
+  const textLines = [
+    `Hi ${safeName},`,
+    "",
+    `Your ${BRAND_NAME} weekly summary for ${weekLabel} (${timezoneLabel}).`,
+    "",
+    `Events covered: ${eventCount}`,
+    `Bookings: ${bookingCount}`,
+    `Guests: ${attendeeCount}`,
+    `Revenue: ${formatUsd(revenueTotal)}`,
+    ""
+  ];
+
+  (events || []).forEach((ev) => {
+    textLines.push(`• ${ev.title} (${ev.accessLabel})`);
+    if (!ev.isPlatform) {
+      textLines.push("  External ticketing — no on-site booking totals.");
+    } else {
+      textLines.push(
+        `  Bookings ${ev.bookings || 0} · Guests ${ev.attendees || 0} · Revenue ${formatUsd(ev.revenue || 0)}`
+      );
+      (ev.tiers || []).forEach((tier) => {
+        textLines.push(
+          `  - ${tier.name}: ${tier.tickets || 0} tickets · ${formatUsd(tier.revenue || 0)}`
+        );
+      });
+    }
+    textLines.push("");
+  });
+
+  textLines.push(`Open your dashboard: ${dashboardUrl("/dashboard/organizer")}`);
+  textLines.push("");
+  textLines.push(`${BRAND_NAME} Team`);
+
+  const eventsHtml = (events || [])
+    .map((ev) => {
+      const tiers = Array.isArray(ev.tiers) ? ev.tiers : [];
+      const tiersHtml = !ev.isPlatform
+        ? `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">External / off-site tickets — booking totals are not tracked on ${escapeHtml(BRAND_NAME)}.</p>`
+        : tiers.length
+          ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;">
+              ${tiers
+                .map(
+                  (tier) => `<tr>
+                    <td style="padding:6px 0;font-size:12px;color:#334155;border-top:1px solid #f1f5f9;">
+                      <strong style="color:#0f172a;">${escapeHtml(tier.name)}</strong>
+                      <span style="color:#64748b;"> · ${Number(tier.tickets) || 0} tickets</span>
+                    </td>
+                    <td style="padding:6px 0;font-size:12px;font-weight:700;color:#0f172a;text-align:right;border-top:1px solid #f1f5f9;white-space:nowrap;">
+                      ${escapeHtml(formatUsd(tier.revenue || 0))}
+                    </td>
+                  </tr>`
+                )
+                .join("")}
+            </table>`
+          : `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">No ticket-tier breakdown for this week.</p>`;
+
+      const metricsHtml = ev.isPlatform
+        ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;">
+            <tr>
+              <td style="width:33%;padding:0 4px 0 0;vertical-align:top;">
+                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:10px;">
+                  <div style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Bookings</div>
+                  <div style="margin-top:4px;font-size:18px;font-weight:800;color:#0f172a;">${Number(ev.bookings) || 0}</div>
+                </div>
+              </td>
+              <td style="width:33%;padding:0 4px;vertical-align:top;">
+                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:10px;">
+                  <div style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Guests</div>
+                  <div style="margin-top:4px;font-size:18px;font-weight:800;color:#0f172a;">${Number(ev.attendees) || 0}</div>
+                </div>
+              </td>
+              <td style="width:33%;padding:0 0 0 4px;vertical-align:top;">
+                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:10px;">
+                  <div style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Revenue</div>
+                  <div style="margin-top:4px;font-size:16px;font-weight:800;color:#0f172a;">${escapeHtml(formatUsd(ev.revenue || 0))}</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:8px 0 0;font-size:11px;color:#64748b;">
+            Paid ${Number(ev.paidBookings) || 0} · Complimentary ${Number(ev.freeBookings) || 0}
+          </p>
+          ${tiersHtml}`
+        : tiersHtml;
+
+      return `<div style="margin:0 0 14px;border:1px solid #e2e8f0;border-radius:16px;background:#ffffff;padding:14px 14px 12px;">
+        <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">${escapeHtml(ev.accessLabel || "Event")}</div>
+        <div style="margin-top:4px;font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">${escapeHtml(ev.title || "Event")}</div>
+        ${metricsHtml}
+      </div>`;
+    })
+    .join("");
+
+  const html = buildLayout({
+    preheader: `Weekly summary for ${weekLabel}: ${bookingCount} bookings · ${formatUsd(revenueTotal)}.`,
+    eyebrow: "Weekly summary",
+    title: "Your week on Book My Tickets",
+    subtitle: `Hi ${safeName}, here is a single digest of every event you host or have shared analytics access to — for ${weekLabel} (${timezoneLabel}).`,
+    headerTone: "emerald",
+    highlights: [
+      `${eventCount} event${eventCount === 1 ? "" : "s"} covered`,
+      `${bookingCount} booking${bookingCount === 1 ? "" : "s"}`,
+      `${formatUsd(revenueTotal)} revenue`
+    ],
+    rows: [
+      { label: "Week", value: `${weekLabel} (${timezoneLabel})` },
+      { label: "Guests", value: String(attendeeCount) },
+      { label: "Paid bookings", value: String((events || []).reduce((n, e) => n + (Number(e.paidBookings) || 0), 0)) }
+    ],
+    extraHtml: eventsHtml
+      ? `<div style="margin-top:8px;"><div style="margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Per event</div>${eventsHtml}</div>`
+      : `<p style="margin:12px 0 0;font-size:14px;color:#64748b;">No events to summarize this week.</p>`,
+    ctaLabel: "Open organizer dashboard",
+    ctaUrl: dashboardUrl("/dashboard/organizer"),
+    footerNote: `You're receiving this weekly digest because you host events or accepted shared analytics on ${BRAND_NAME}. Questions? ${BRAND_SUPPORT_EMAIL}`
+  });
+
+  return { subject, text: textLines.join("\n"), html };
+}
+
 module.exports = {
   buildWelcomeEmail,
   buildPasswordResetEmail,
@@ -841,6 +997,7 @@ module.exports = {
   buildPlatformTicketRequestAdminEmail,
   buildPlatformTicketRequestUserEmail,
   buildAnalyticsShareInviteEmail,
+  buildWeeklyOrganizerSummaryEmail,
   ticketBlocksFromCart,
   formatUsd,
   formatDateUs

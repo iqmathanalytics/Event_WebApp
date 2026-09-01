@@ -21,6 +21,7 @@ const {
   requiresTotalSeats
 } = require("../utils/eventSeats");
 const { attachTicketLevelAvailability } = require("../utils/eventTicketLevelAvailability");
+const couponModel = require("../models/couponModel");
 const { getMonthRange } = require("../utils/dateRange");
 const { getPrimaryEventDate, normalizeDateList, parseDateOnly } = require("../utils/eventSchedule");
 const {
@@ -484,7 +485,19 @@ async function fetchEventById(slugOrId, viewerUser) {
   });
   const withSeats = await attachEventSeatAvailability(enriched);
   const withLevelSeats = await attachTicketLevelAvailability(withSeats);
-  const sanitized = sanitizePublicEventForViewer(withLevelSeats, viewerUser);
+  let checkoutCouponsAvailable = false;
+  if (
+    withLevelSeats?.id &&
+    withLevelSeats?.organizer_id &&
+    normalizeTicketSalesMode(withLevelSeats.ticket_sales_mode) === "platform"
+  ) {
+    checkoutCouponsAvailable =
+      (await couponModel.countActiveCouponsForEvent(withLevelSeats.id, withLevelSeats.organizer_id)) > 0;
+  }
+  const sanitized = sanitizePublicEventForViewer(
+    { ...withLevelSeats, checkout_coupons_available: checkoutCouponsAvailable },
+    viewerUser
+  );
   if (resolved.viewerPreview) {
     sanitized.viewer_preview = true;
   }

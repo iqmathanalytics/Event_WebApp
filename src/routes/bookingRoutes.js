@@ -13,8 +13,11 @@ const {
 } = require("../validators/bookingValidator");
 const {
   applyCouponSchema,
+  guestApplyCouponSchema,
   resumeCouponHoldSchema,
+  guestResumeCouponHoldSchema,
   releaseCouponHoldSchema,
+  guestReleaseCouponHoldSchema,
   createCouponSchema,
   updateCouponSchema,
   couponIdParamSchema
@@ -36,6 +39,22 @@ router.post(
   "/guest/confirm-payment",
   validateRequest(confirmPaymentSchema),
   paymentController.confirmGuestPayment
+);
+
+router.post(
+  "/guest/validate-coupon",
+  validateRequest(guestApplyCouponSchema),
+  couponController.applyGuestCoupon
+);
+router.post(
+  "/guest/resume-coupon-hold",
+  validateRequest(guestResumeCouponHoldSchema),
+  couponController.resumeGuestCoupon
+);
+router.post(
+  "/guest/release-coupon-hold",
+  validateRequest(guestReleaseCouponHoldSchema),
+  couponController.releaseGuestCoupon
 );
 
 router.post("/", authMiddleware, validateRequest(createBookingSchema), bookingController.createBooking);

@@ -55,6 +55,61 @@ const releaseCoupon = asyncHandler(async (req, res) => {
   });
 });
 
+const applyGuestCoupon = asyncHandler(async (req, res) => {
+  const {
+    event_id,
+    coupon_code,
+    attendee_count,
+    ticket_items,
+    selected_dates,
+    timezone_offset,
+    hold_token,
+    email
+  } = req.validated.body;
+  const data = await couponService.applyCouponHold({
+    guestEmail: email,
+    eventId: event_id,
+    couponCode: coupon_code,
+    attendeeCount: attendee_count,
+    ticketItems: ticket_items,
+    selectedDates: selected_dates,
+    timezoneOffsetMinutes: timezone_offset,
+    existingHoldToken: hold_token || null
+  });
+  res.status(200).json({
+    success: true,
+    data
+  });
+});
+
+const resumeGuestCoupon = asyncHandler(async (req, res) => {
+  const { event_id, hold_token, ticket_items, timezone_offset, email } = req.validated.body;
+  const data = await couponService.resumeCouponHold({
+    guestEmail: email,
+    eventId: event_id,
+    holdToken: hold_token,
+    ticketItems: ticket_items,
+    timezoneOffsetMinutes: timezone_offset
+  });
+  res.status(200).json({
+    success: true,
+    data
+  });
+});
+
+const releaseGuestCoupon = asyncHandler(async (req, res) => {
+  const { event_id, hold_token, email } = req.validated.body;
+  await couponService.releaseCouponHold({
+    guestEmail: email,
+    holdToken: hold_token,
+    eventId: event_id ?? null
+  });
+  res.status(200).json({
+    success: true,
+    message: "Coupon hold released"
+  });
+});
+
 const listCoupons = asyncHandler(async (req, res) => {
   const rows = await couponService.listOrganizerCoupons(req.user.id);
   res.status(200).json({ success: true, data: rows });
@@ -115,8 +170,11 @@ const getCoupon = asyncHandler(async (req, res) => {
 
 module.exports = {
   applyCoupon,
+  applyGuestCoupon,
   resumeCoupon,
+  resumeGuestCoupon,
   releaseCoupon,
+  releaseGuestCoupon,
   listCoupons,
   createCoupon,
   updateCoupon,

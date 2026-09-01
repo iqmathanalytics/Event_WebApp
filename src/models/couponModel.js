@@ -2,6 +2,10 @@ const { pool } = require("../config/db");
 
 const HOLD_MINUTES = 5;
 
+function normalizeGuestEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
 function normalizeCouponCode(code) {
   return String(code || "")
     .trim()
@@ -43,6 +47,42 @@ async function countRedemptionsForCouponUser(couponId, userId, conn) {
   const [rows] = await runner.query(
     `SELECT COUNT(*) AS c FROM event_coupon_redemptions WHERE coupon_id = ? AND user_id = ?`,
     [couponId, userId]
+  );
+  return Number(rows[0]?.c || 0);
+}
+
+async function countActiveHoldsForCouponGuest(couponId, guestEmail, excludeHoldId, conn) {
+  const email = normalizeGuestEmail(guestEmail);
+  if (!email) {
+    return 0;
+  }
+  const runner = conn || pool;
+  const values = [couponId, email];
+  let exclude = "";
+  if (excludeHoldId) {
+    exclude = " AND id <> ?";
+    values.push(excludeHoldId);
+  }
+  const [rows] = await runner.query(
+    `SELECT COUNT(*) AS c FROM event_coupon_holds
+     WHERE coupon_id = ? AND guest_email = ? AND user_id IS NULL AND expires_at >= NOW()${exclude}`,
+    values
+  );
+  return Number(rows[0]?.c || 0);
+}
+
+async function countRedemptionsForCouponGuestEmail(couponId, guestEmail, conn) {
+  const email = normalizeGuestEmail(guestEmail);
+  if (!email) {
+    return 0;
+  }
+  const runner = conn || pool;
+  const [rows] = await runner.query(
+    `SELECT COUNT(*) AS c
+     FROM event_coupon_redemptions r
+     INNER JOIN event_bookings b ON b.id = r.booking_id
+     WHERE r.coupon_id = ? AND LOWER(TRIM(b.email)) = ?`,
+    [couponId, email]
   );
   return Number(rows[0]?.c || 0);
 }
@@ -195,12 +235,13 @@ async function createHold(payload, conn) {
   const runner = conn || pool;
   await runner.query(
     `INSERT INTO event_coupon_holds
-      (coupon_id, user_id, event_id, hold_token, attendee_count, selected_dates_json,
+      (coupon_id, user_id, guest_email, event_id, hold_token, attendee_count, selected_dates_json,
        subtotal_amount, discount_amount, total_amount, hold_kind, applied_code, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
     [
       payload.coupon_id ?? null,
-      payload.user_id,
+      payload.user_id ?? null,
+      payload.guest_email ? normalizeGuestEmail(payload.guest_email) : null,
       payload.event_id,
       payload.hold_token,
       payload.attendee_count,
@@ -238,6 +279,45 @@ async function deleteAllHoldsForUserEvent(userId, eventId, conn) {
     userId,
     eventId
   ]);
+}
+
+async function deleteAllHoldsForGuestEvent(guestEmail, eventId, conn) {
+  const email = normalizeGuestEmail(guestEmail);
+  if (!email) {
+    return;
+  }
+  const runner = conn || pool;
+  await runner.query(
+    `DELETE FROM event_coupon_holds WHERE guest_email = ? AND user_id IS NULL AND event_id = ?`,
+    [email, eventId]
+  );
+}
+
+async function deleteAllHoldsForIdentityEvent(identity, eventId, conn) {
+  if (identity?.userId) {
+    await deleteAllHoldsForUserEvent(identity.userId, eventId, conn);
+    return;
+  }
+  await deleteAllHoldsForGuestEvent(identity?.guestEmail, eventId, conn);
+}
+
+async function findActiveHoldForCouponEvent(identity, couponId, eventId, conn) {
+  const runner = conn || pool;
+  if (identity?.userId) {
+    return findActiveHoldForUserCouponEvent(identity.userId, couponId, eventId, conn);
+  }
+  const email = normalizeGuestEmail(identity?.guestEmail);
+  if (!email) {
+    return null;
+  }
+  const [rows] = await runner.query(
+    `SELECT * FROM event_coupon_holds
+     WHERE guest_email = ? AND user_id IS NULL AND coupon_id = ? AND event_id = ? AND expires_at >= NOW()
+     ORDER BY id DESC
+     LIMIT 1`,
+    [email, couponId, eventId]
+  );
+  return rows[0] || null;
 }
 
 async function findActiveVendorHoldForUserEvent(userId, eventId, conn) {
@@ -340,6 +420,26 @@ async function getCouponRedemptionCount(couponId, conn) {
   return Number(rows[0]?.redemption_count || 0);
 }
 
+/** Active organizer coupons that apply to a platform event (for public checkout visibility). */
+async function countActiveCouponsForEvent(eventId, organizerId, conn) {
+  const runner = conn || pool;
+  const [rows] = await runner.query(
+    `SELECT COUNT(*) AS c
+     FROM event_coupons c
+     WHERE c.organizer_id = ?
+       AND c.is_active = 1
+       AND (
+         c.scope = 'all_events'
+         OR EXISTS (
+           SELECT 1 FROM event_coupon_events ce
+           WHERE ce.coupon_id = c.id AND ce.event_id = ?
+         )
+       )`,
+    [organizerId, eventId]
+  );
+  return Number(rows[0]?.c || 0);
+}
+
 module.exports = {
   HOLD_MINUTES,
   normalizeCouponCode,
@@ -369,5 +469,12 @@ module.exports = {
   deleteHoldByToken,
   incrementCouponRedemption,
   insertRedemption,
-  getCouponRedemptionCount
+  getCouponRedemptionCount,
+  countActiveCouponsForEvent,
+  normalizeGuestEmail,
+  countActiveHoldsForCouponGuest,
+  countRedemptionsForCouponGuestEmail,
+  deleteAllHoldsForGuestEvent,
+  deleteAllHoldsForIdentityEvent,
+  findActiveHoldForCouponEvent
 };

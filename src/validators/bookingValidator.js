@@ -127,6 +127,7 @@ const guestCreateBookingSchema = z.object({
         const code = String(v ?? "").trim().toUpperCase();
         return code || undefined;
       }, z.string().min(3).max(40).regex(/^[A-Za-z0-9]+$/, "Vendor code must be letters and numbers only").optional()),
+      coupon_hold_token: z.string().uuid().optional(),
       seatsio_hold_token: z.string().trim().min(1).max(128).optional(),
       selected_seats: z.array(selectedSeatSchema).max(20).optional()
     })
