@@ -12,7 +12,7 @@ const LABELS = {
 /**
  * Top-right share control for listing detail cards. Opens a modal to copy the public link.
  */
-export default function ShareListingButton({ url, title, listingType = "event" }) {
+export default function ShareListingButton({ url, title, listingType = "event", className = "" }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -205,7 +205,10 @@ export default function ShareListingButton({ url, title, listingType = "event" }
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="absolute right-4 top-4 z-[1] inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-900/[0.03] backdrop-blur-sm transition hover:border-slate-300 hover:bg-white hover:text-slate-900 hover:shadow-md sm:right-5 sm:top-5 sm:gap-2 sm:px-3.5 lg:right-6 lg:top-6"
+        className={
+          className ||
+          "absolute right-4 top-4 z-[1] inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-900/[0.03] backdrop-blur-sm transition hover:border-slate-300 hover:bg-white hover:text-slate-900 hover:shadow-md sm:right-5 sm:top-5 sm:gap-2 sm:px-3.5 lg:right-6 lg:top-6"
+        }
         aria-haspopup="dialog"
         aria-expanded={open}
       >

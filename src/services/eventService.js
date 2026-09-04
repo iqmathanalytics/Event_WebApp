@@ -94,13 +94,21 @@ function sanitizePublicEventForViewer(event, viewerUser) {
   if (!event) {
     return event;
   }
-  const authed = Boolean(viewerUser && viewerUser.id);
-  if (isYayDealEventRow(event) && !authed) {
-    const next = { ...event };
-    delete next.deal_event_discount_code;
-    return next;
+  const next = { ...event };
+  const sponsorOn =
+    next.sponsor_inquiry_enabled === true ||
+    next.sponsor_inquiry_enabled === 1 ||
+    String(next.sponsor_inquiry_enabled || "") === "1";
+  if (!sponsorOn) {
+    delete next.sponsor_contact_email;
+    delete next.sponsor_contact_phone;
+    next.sponsor_inquiry_enabled = false;
   }
-  return event;
+  const authed = Boolean(viewerUser && viewerUser.id);
+  if (isYayDealEventRow(next) && !authed) {
+    delete next.deal_event_discount_code;
+  }
+  return next;
 }
 
 function toNumber(value) {

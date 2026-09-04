@@ -455,11 +455,11 @@ function buildOrganizerBookingNotificationEmail({
   const safeOrganizer = String(organizerName || "there").trim() || "there";
   const datesLabel = (selectedDates || []).map(formatDateUs).join(", ") || "—";
   const seatsLabel = String(selectedSeatsLabel || "").trim();
-  const subject = `New booking — ${eventTitle || "your event"} · ${BRAND_NAME}`;
+  const guestLabel = String(guestName || "Guest").trim() || "Guest";
+  const subject = `New booking (${guestLabel}) — ${eventTitle || "your event"}`;
   const totalLine = formatUsd(totalAmount);
   const discount = Number(discountAmount) || 0;
   const payLabel = paymentStatusLabel(paymentStatus);
-  const guestLabel = String(guestName || "Guest").trim() || "Guest";
 
   const text = [
     `Hi ${safeOrganizer},`,

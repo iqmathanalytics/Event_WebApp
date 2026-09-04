@@ -1,6 +1,9 @@
 const { pool } = require("../config/db");
 
 const HOLD_MINUTES = 5;
+const GUEST_SCHEMA_CACHE_MS = 60_000;
+let guestCouponSchemaReady = null;
+let guestCouponSchemaCheckedAt = 0;
 
 function normalizeGuestEmail(email) {
   return String(email || "").trim().toLowerCase();
@@ -15,6 +18,24 @@ function normalizeCouponCode(code) {
 async function purgeExpiredHolds(conn) {
   const runner = conn || pool;
   await runner.query(`DELETE FROM event_coupon_holds WHERE expires_at < NOW()`);
+}
+
+async function isGuestCouponSchemaReady(conn) {
+  const now = Date.now();
+  if (guestCouponSchemaReady != null && now - guestCouponSchemaCheckedAt < GUEST_SCHEMA_CACHE_MS) {
+    return guestCouponSchemaReady;
+  }
+  const runner = conn || pool;
+  const [rows] = await runner.query(
+    `SELECT COUNT(*) AS n
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'event_coupon_holds'
+       AND column_name = 'guest_email'`
+  );
+  guestCouponSchemaReady = Number(rows[0]?.n || 0) > 0;
+  guestCouponSchemaCheckedAt = now;
+  return guestCouponSchemaReady;
 }
 
 async function countActiveHoldsForCoupon(couponId, conn) {
@@ -471,6 +492,7 @@ module.exports = {
   insertRedemption,
   getCouponRedemptionCount,
   countActiveCouponsForEvent,
+  isGuestCouponSchemaReady,
   normalizeGuestEmail,
   countActiveHoldsForCouponGuest,
   countRedemptionsForCouponGuestEmail,

@@ -2,6 +2,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { absoluteListingUrl, eventDetailPath } from "../utils/listingPaths";
 import ShareListingButton from "../components/ShareListingButton";
 import ListingFavoriteButton from "../components/ListingFavoriteButton";
+import BecomeSponsorButton from "../components/BecomeSponsorButton";
 import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -204,20 +205,35 @@ function EventDetailsPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] lg:items-start lg:gap-8">
         <div className="relative rounded-2xl border border-slate-200/90 bg-white p-4 shadow-soft ring-1 ring-slate-900/[0.04] sm:p-5 lg:rounded-3xl lg:border-slate-200 lg:p-6 lg:shadow-sm lg:ring-0">
-          <ListingFavoriteButton
-            listingType="event"
-            listingId={event.id}
-            className="right-[5.5rem] sm:right-[6.25rem] lg:right-[7rem]"
-          />
-          <ShareListingButton
-            url={absoluteListingUrl(eventDetailPath(event))}
-            title={event.title}
-            listingType="event"
-          />
-          <p className="mb-1 pr-24 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 sm:pr-28 lg:mb-2 lg:pr-32 lg:text-sm lg:font-normal lg:tracking-normal">
+          <div className="absolute right-4 top-4 z-[1] flex items-center gap-2 sm:right-5 sm:top-5 lg:right-6 lg:top-6">
+            <ListingFavoriteButton listingType="event" listingId={event.id} embedded />
+            {event.sponsor_inquiry_enabled &&
+            (event.sponsor_contact_email || event.sponsor_contact_phone) ? (
+              <BecomeSponsorButton
+                email={event.sponsor_contact_email}
+                phone={event.sponsor_contact_phone}
+                eventTitle={event.title}
+              />
+            ) : null}
+            <ShareListingButton
+              url={absoluteListingUrl(eventDetailPath(event))}
+              title={event.title}
+              listingType="event"
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-900/[0.03] backdrop-blur-sm transition hover:border-slate-300 hover:bg-white hover:text-slate-900 hover:shadow-md sm:gap-2 sm:px-3.5"
+            />
+          </div>
+          <p
+            className={`mb-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:mb-2 lg:text-sm lg:font-normal lg:tracking-normal ${
+              event.sponsor_inquiry_enabled ? "pr-40 sm:pr-56 lg:pr-64" : "pr-24 sm:pr-28 lg:pr-32"
+            }`}
+          >
             {event.city_name || "City"}
           </p>
-          <h1 className="pr-4 text-[1.35rem] font-bold leading-[1.2] tracking-tight text-slate-900 sm:pr-6 sm:text-2xl lg:pr-8 lg:text-3xl">
+          <h1
+            className={`text-[1.35rem] font-bold leading-[1.2] tracking-tight text-slate-900 sm:text-2xl lg:text-3xl ${
+              event.sponsor_inquiry_enabled ? "pr-6 sm:pr-8 lg:pr-10" : "pr-4 sm:pr-6 lg:pr-8"
+            }`}
+          >
             {event.title}
           </h1>
 

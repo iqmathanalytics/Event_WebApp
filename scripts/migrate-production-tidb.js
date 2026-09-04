@@ -62,7 +62,8 @@ async function checkSchema(cfg) {
       "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_bookings'",
       "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_bookings' AND column_name = 'vendor_code'",
       "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_bookings' AND column_name = 'seatsio_hold_token'",
-      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_password_set_tokens'"
+      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_password_set_tokens'",
+      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_coupon_holds' AND column_name = 'guest_email'"
     ];
     const labels = [
       "events table",
@@ -71,7 +72,8 @@ async function checkSchema(cfg) {
       "event_bookings table",
       "event_bookings.vendor_code",
       "event_bookings.seatsio_hold_token",
-      "user_password_set_tokens table"
+      "user_password_set_tokens table",
+      "event_coupon_holds.guest_email"
     ];
     for (let i = 0; i < checks.length; i += 1) {
       const [r] = await conn.query(checks[i]);
@@ -114,6 +116,9 @@ async function main() {
 
   console.log("\nRunning SQL migrations…");
   runScript("run-sql-migrations.js");
+
+  console.log("\nEnsuring guest coupon schema…");
+  runScript("ensure-guest-coupon-schema.js");
 
   if (process.argv.includes("--backfill-slugs")) {
     console.log("\nBackfilling public slugs…");

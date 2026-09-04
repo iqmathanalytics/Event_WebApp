@@ -89,6 +89,9 @@ const initialForm = {
   vendor_code: "",
   vendor_discount_type: "percent",
   vendor_discount_value: "",
+  sponsor_inquiry_enabled: false,
+  sponsor_contact_email: "",
+  sponsor_contact_phone: "",
   ticket_levels: [],
   seating_mode: SEATING_MODES.GENERAL,
   pending_seatsio_chart_key: ""
@@ -565,6 +568,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         event.vendor_discount_value != null && event.vendor_discount_value !== ""
           ? String(event.vendor_discount_value)
           : "",
+      sponsor_inquiry_enabled:
+        event.sponsor_inquiry_enabled === 1 ||
+        event.sponsor_inquiry_enabled === true ||
+        String(event.sponsor_inquiry_enabled || "") === "1",
+      sponsor_contact_email: event.sponsor_contact_email || "",
+      sponsor_contact_phone: event.sponsor_contact_phone || "",
       ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event)),
       seating_mode: normalizeSeatingMode(event.seating_mode),
       pending_seatsio_chart_key: String(event.seatsio_chart_key || "").trim()
@@ -917,6 +926,14 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       if (form.is_yay_deal_event && !String(form.deal_event_discount_code || "").trim()) {
         throw new Error("Please enter a discount code for exclusive deal events.");
       }
+      if (form.sponsor_inquiry_enabled) {
+        if (!String(form.sponsor_contact_email || "").trim()) {
+          throw new Error("Please enter a sponsor contact email.");
+        }
+        if (!String(form.sponsor_contact_phone || "").trim()) {
+          throw new Error("Please enter a sponsor contact phone number.");
+        }
+      }
 
       const venueMapsUrl = normalizeOptionalUrl(form.google_maps_link, "Google Maps");
       const rawTicket = String(form.ticket_link || "").trim();
@@ -1010,7 +1027,14 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           ? Number(form.platform_fee_value === "" ? 0 : form.platform_fee_value)
           : 0,
         coupon_codes_enabled: Boolean(form.coupon_codes_enabled),
-        vendor_code_enabled: Boolean(form.vendor_code_enabled)
+        vendor_code_enabled: Boolean(form.vendor_code_enabled),
+        sponsor_inquiry_enabled: Boolean(form.sponsor_inquiry_enabled),
+        sponsor_contact_email: form.sponsor_inquiry_enabled
+          ? String(form.sponsor_contact_email || "").trim()
+          : null,
+        sponsor_contact_phone: form.sponsor_inquiry_enabled
+          ? String(form.sponsor_contact_phone || "").trim()
+          : null
       };
 
       const pendingChartKey = String(
@@ -2666,6 +2690,69 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       </div>
                     </>
                   ) : null}
+
+                  <div>
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form.sponsor_inquiry_enabled)}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            sponsor_inquiry_enabled: e.target.checked
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-slate-900">
+                          Become a Sponsor inquiries
+                        </span>
+                        <span className="block text-xs text-slate-500">
+                          When on, a “Become a Sponsor” button appears on your event page with the contact details
+                          below.
+                        </span>
+                      </span>
+                    </label>
+                    {form.sponsor_inquiry_enabled ? (
+                      <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-2">
+                        <FormField
+                          label="Sponsor contact email"
+                          hint="Shown to visitors who tap Become a Sponsor."
+                          example="sponsors@yourbrand.com"
+                        >
+                          <input
+                            type="email"
+                            value={form.sponsor_contact_email}
+                            onChange={(e) =>
+                              setForm((prev) => ({ ...prev, sponsor_contact_email: e.target.value }))
+                            }
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            placeholder="sponsors@yourbrand.com"
+                            autoComplete="email"
+                            required={Boolean(form.sponsor_inquiry_enabled)}
+                          />
+                        </FormField>
+                        <FormField
+                          label="Sponsor contact phone"
+                          hint="Include country code when possible."
+                          example="+1 214 555 0100"
+                        >
+                          <input
+                            type="tel"
+                            value={form.sponsor_contact_phone}
+                            onChange={(e) =>
+                              setForm((prev) => ({ ...prev, sponsor_contact_phone: e.target.value }))
+                            }
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                            placeholder="+1 214 555 0100"
+                            autoComplete="tel"
+                            required={Boolean(form.sponsor_inquiry_enabled)}
+                          />
+                        </FormField>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               {(form.ticket_sales_mode || "external") === "platform" ? (

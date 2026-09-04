@@ -80,6 +80,13 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
   const serviceEnabled = toBoolFlag(payload.service_fee_enabled, false);
   const platformEnabled = toBoolFlag(payload.platform_fee_enabled, false);
   const vendorEnabled = toBoolFlag(payload.vendor_code_enabled, false);
+  const sponsorEnabled = toBoolFlag(payload.sponsor_inquiry_enabled, false);
+  const sponsorEmail = sponsorEnabled
+    ? String(payload.sponsor_contact_email || "").trim().toLowerCase() || null
+    : null;
+  const sponsorPhone = sponsorEnabled
+    ? String(payload.sponsor_contact_phone || "").trim() || null
+    : null;
   return {
     service_fee_enabled: serviceEnabled ? 1 : 0,
     service_fee_type: normalizeFeeType(payload.service_fee_type),
@@ -93,6 +100,9 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
     vendor_discount_type: "percent",
     vendor_discount_value: 0,
     coupon_codes_enabled: toBoolFlag(payload.coupon_codes_enabled, true) ? 1 : 0,
+    sponsor_inquiry_enabled: sponsorEnabled ? 1 : 0,
+    sponsor_contact_email: sponsorEmail,
+    sponsor_contact_phone: sponsorPhone,
     show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0,
     // Mirrors show_on_events_page so new events stay consistent with admin Active.
     is_listed: toBoolFlag(
@@ -143,6 +153,9 @@ function normalizeEventRow(row) {
         : "percent",
     vendor_discount_value: Number(row.vendor_discount_value) || 0,
     coupon_codes_enabled: toBoolFlag(row.coupon_codes_enabled, true),
+    sponsor_inquiry_enabled: toBoolFlag(row.sponsor_inquiry_enabled, false),
+    sponsor_contact_email: row.sponsor_contact_email ? String(row.sponsor_contact_email).trim() : null,
+    sponsor_contact_phone: row.sponsor_contact_phone ? String(row.sponsor_contact_phone).trim() : null,
     show_on_events_page: toBoolFlag(row.show_on_events_page, true),
     event_highlights: parseHighlights(row.event_highlights),
     gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
@@ -258,9 +271,10 @@ async function createEvent(payload) {
        service_fee_enabled, service_fee_type, service_fee_value,
        platform_fee_enabled, platform_fee_type, platform_fee_value,
        vendor_code_enabled, vendor_code, vendor_discount_type, vendor_discount_value,
-       coupon_codes_enabled, show_on_events_page, is_listed,
+       coupon_codes_enabled, sponsor_inquiry_enabled, sponsor_contact_email, sponsor_contact_phone,
+       show_on_events_page, is_listed,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -305,6 +319,9 @@ async function createEvent(payload) {
       checkoutConfig.vendor_discount_type,
       checkoutConfig.vendor_discount_value,
       checkoutConfig.coupon_codes_enabled,
+      checkoutConfig.sponsor_inquiry_enabled,
+      checkoutConfig.sponsor_contact_email,
+      checkoutConfig.sponsor_contact_phone,
       checkoutConfig.show_on_events_page,
       checkoutConfig.is_listed,
       initialStatus
@@ -571,6 +588,9 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "vendor_discount_type",
     "vendor_discount_value",
     "coupon_codes_enabled",
+    "sponsor_inquiry_enabled",
+    "sponsor_contact_email",
+    "sponsor_contact_phone",
     "show_on_events_page",
     "is_listed",
     "ticket_levels",
@@ -632,12 +652,25 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         key === "platform_fee_enabled" ||
         key === "vendor_code_enabled" ||
         key === "coupon_codes_enabled" ||
+        key === "sponsor_inquiry_enabled" ||
         key === "show_on_events_page" ||
         key === "is_listed"
       ) {
         const defaultOn =
           key === "coupon_codes_enabled" || key === "show_on_events_page" || key === "is_listed";
         return [key, toBoolFlag(value, defaultOn) ? 1 : 0];
+      }
+      if (key === "sponsor_contact_email") {
+        if (value == null || value === "") {
+          return [key, null];
+        }
+        return [key, String(value).trim().toLowerCase()];
+      }
+      if (key === "sponsor_contact_phone") {
+        if (value == null || value === "") {
+          return [key, null];
+        }
+        return [key, String(value).trim()];
       }
       if (key === "service_fee_type" || key === "platform_fee_type") {
         return [key, normalizeFeeType(value)];
@@ -673,6 +706,18 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     }
     if (!Object.prototype.hasOwnProperty.call(updates, "vendor_discount_type")) {
       entries.push(["vendor_discount_type", "percent"]);
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "sponsor_inquiry_enabled")) {
+    const sponsorOn = toBoolFlag(updates.sponsor_inquiry_enabled, false);
+    if (!sponsorOn) {
+      if (!Object.prototype.hasOwnProperty.call(updates, "sponsor_contact_email")) {
+        entries.push(["sponsor_contact_email", null]);
+      }
+      if (!Object.prototype.hasOwnProperty.call(updates, "sponsor_contact_phone")) {
+        entries.push(["sponsor_contact_phone", null]);
+      }
     }
   }
 

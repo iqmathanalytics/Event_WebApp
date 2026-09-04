@@ -108,6 +108,39 @@ function resolveHoldIdentity({ userId, guestEmail }) {
   return { userId: null, guestEmail: email };
 }
 
+async function assertGuestCouponSchemaIfNeeded(identity) {
+  if (!identity?.guestEmail) {
+    return;
+  }
+  const ready = await couponModel.isGuestCouponSchemaReady();
+  if (!ready) {
+    throw new ApiError(
+      503,
+      "Guest coupon checkout is temporarily unavailable while the site database is being updated."
+    );
+  }
+}
+
+function rethrowGuestCouponSchemaError(err, identity) {
+  if (!identity?.guestEmail || err instanceof ApiError) {
+    throw err;
+  }
+  const code = err?.code;
+  const msg = String(err?.message || err?.sqlMessage || "");
+  if (
+    code === "ER_BAD_FIELD_ERROR" ||
+    code === "ER_NO_DEFAULT_FOR_FIELD" ||
+    msg.includes("guest_email") ||
+    (msg.includes("user_id") && msg.includes("cannot be null"))
+  ) {
+    throw new ApiError(
+      503,
+      "Guest coupon checkout requires a database update. Run npm run db:migrate:production on the production TiDB cluster."
+    );
+  }
+  throw err;
+}
+
 function holdMatchesIdentity(hold, identity) {
   if (!hold || !identity) {
     return false;
@@ -315,6 +348,27 @@ async function resumeCouponHold({
   timezoneOffsetMinutes = 0
 }) {
   const identity = resolveHoldIdentity({ userId, guestEmail });
+  await assertGuestCouponSchemaIfNeeded(identity);
+  try {
+    return await resumeCouponHoldInner({
+      identity,
+      eventId,
+      holdToken,
+      ticketItems,
+      timezoneOffsetMinutes
+    });
+  } catch (err) {
+    rethrowGuestCouponSchemaError(err, identity);
+  }
+}
+
+async function resumeCouponHoldInner({
+  identity,
+  eventId,
+  holdToken,
+  ticketItems = null,
+  timezoneOffsetMinutes = 0
+}) {
   await couponModel.purgeExpiredHolds();
   const hold = await couponModel.findActiveHoldByToken(holdToken);
   if (!hold) {
@@ -406,11 +460,37 @@ async function applyCouponHold({
   existingHoldToken = null
 }) {
   const identity = resolveHoldIdentity({ userId, guestEmail });
+  await assertGuestCouponSchemaIfNeeded(identity);
+  try {
+    return await applyCouponHoldInner({
+      identity,
+      eventId,
+      couponCode,
+      attendeeCount,
+      ticketItems,
+      selectedDates,
+      timezoneOffsetMinutes,
+      existingHoldToken
+    });
+  } catch (err) {
+    rethrowGuestCouponSchemaError(err, identity);
+  }
+}
+
+async function applyCouponHoldInner({
+  identity,
+  eventId,
+  couponCode,
+  attendeeCount,
+  ticketItems = null,
+  selectedDates,
+  timezoneOffsetMinutes = 0,
+  existingHoldToken = null
+}) {
   if (existingHoldToken) {
     try {
-      return await resumeCouponHold({
-        userId: identity.userId,
-        guestEmail: identity.guestEmail,
+      return await resumeCouponHoldInner({
+        identity,
         eventId,
         holdToken: existingHoldToken,
         ticketItems,

@@ -58,6 +58,15 @@ const checkoutConfigFields = {
   vendor_discount_type: z.enum(["percent", "fixed_amount"]).optional(),
   vendor_discount_value: z.coerce.number().min(0).max(100000).optional(),
   coupon_codes_enabled: boolish,
+  sponsor_inquiry_enabled: boolish,
+  sponsor_contact_email: z.preprocess(
+    (v) => (v === null || v === "" ? undefined : v),
+    z.string().trim().email().max(190).optional()
+  ),
+  sponsor_contact_phone: z.preprocess(
+    (v) => (v === null || v === "" ? undefined : String(v).trim()),
+    z.string().min(7).max(40).optional()
+  ),
   show_on_events_page: boolish,
   is_listed: boolish
 };
@@ -77,6 +86,24 @@ function refineCheckoutConfigFields(data, ctx) {
   }
   // Vendor codes are attribution-only: organizers just enable the checkout field.
   // Buyers enter any vendor code; no organizer-owned code or discount is configured.
+  if (data.sponsor_inquiry_enabled === true) {
+    const email = String(data.sponsor_contact_email || "").trim();
+    const phone = String(data.sponsor_contact_phone || "").trim();
+    if (!email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sponsor_contact_email"],
+        message: "Sponsor contact email is required when sponsor inquiries are enabled"
+      });
+    }
+    if (!phone) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sponsor_contact_phone"],
+        message: "Sponsor contact phone is required when sponsor inquiries are enabled"
+      });
+    }
+  }
 }
 
 /** JSON often sends `null`; coerce so older Zod / strict string schemas still accept it. */
