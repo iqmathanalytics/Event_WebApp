@@ -6,13 +6,12 @@ import DatePicker from "react-datepicker";
 import { FiCalendar, FiInfo, FiMapPin } from "react-icons/fi";
 import { GitBranch, LayoutGrid } from "lucide-react";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
-import { exportOrganizerBookings, fetchOrganizerBookings } from "../services/bookingService";
+import { fetchOrganizerBookings } from "../services/bookingService";
 import { categories } from "../utils/filterOptions";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { eventDetailPath } from "../utils/listingPaths";
 import { getEventAvailableDates, getEventSortDate } from "../utils/eventSchedule";
 import { normalizeEventTicketSalesMode, resolveEventTicketSalesMode } from "../utils/eventTicketSalesMode";
-import { downloadBlob } from "../utils/fileDownload";
 import AirbnbDatePickerPanel from "../components/AirbnbDatePickerPanel";
 import FilterPopupField from "../components/FilterPopupField";
 import OrganizerSidebar from "../components/OrganizerSidebar";
@@ -26,13 +25,11 @@ import { isRichTextEmpty } from "../utils/richText";
 import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
 import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
 import ScrollableTableFrame from "../components/ScrollableTableFrame";
-import OrganizerBookingsTable, { OrganizerBookingsMobileCards } from "../components/OrganizerBookingsTable";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
 import OrganizerVendorCodesPanel from "../components/OrganizerVendorCodesPanel";
 import OrganizerCheckInPanel from "../components/OrganizerCheckInPanel";
 import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
 import SharedAnalyticsList from "../components/SharedAnalyticsList";
-import SharedEventBookingsPanel from "../components/SharedEventBookingsPanel";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
 import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
 import SeatingSideToast from "../components/seating/SeatingSideToast";
@@ -382,7 +379,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     forcedSection || (embedded && embeddedSectionMode === "my-events-only" ? "my-events" : null);
   const hideAnalyticsChrome = Boolean(lockedSection);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeSection, setActiveSection] = useState(lockedSection || "overview");
+  const [activeSection, setActiveSection] = useState(
+    lockedSection === "bookings" ? "overview" : lockedSection || "overview"
+  );
   const displaySection = lockedSection || activeSection;
   const [sectionSwitching, setSectionSwitching] = useState(false);
   const prevDisplaySectionRef = useRef(displaySection);
@@ -412,14 +411,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const formToastTimerRef = useRef(null);
   const [form, setForm] = useState(initialForm);
   const [overviewBookings, setOverviewBookings] = useState([]);
-  const [bookingRows, setBookingRows] = useState([]);
   const [loadingOverviewBookings, setLoadingOverviewBookings] = useState(false);
-  const [loadingBookingRows, setLoadingBookingRows] = useState(false);
-  const [bookingFilters, setBookingFilters] = useState({ event_id: "", date: "" });
-  const [bookingEventQuery, setBookingEventQuery] = useState("");
   const [myEventsLifecycleTab, setMyEventsLifecycleTab] = useState("active");
-  const bookingFilterRef = useRef(null);
-  const [activeBookingPanel, setActiveBookingPanel] = useState(null);
   const formPanelRef = useRef(null);
   const [activeFormPanel, setActiveFormPanel] = useState(null);
   const [postSubmitFeedback, setPostSubmitFeedback] = useState(null);
@@ -428,14 +421,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const sawEmbeddedLoadCycleRef = useRef(false);
 
   useRouteContentReady(
-    suppressRouteContentReadySignal ? true : loading || loadingOverviewBookings || loadingBookingRows
+    suppressRouteContentReadySignal ? true : loading || loadingOverviewBookings
   );
 
   useEffect(() => {
     const onDocClick = (event) => {
-      if (!bookingFilterRef.current?.contains(event.target)) {
-        setActiveBookingPanel(null);
-      }
       if (!formPanelRef.current?.contains(event.target)) {
         setActiveFormPanel(null);
       }
@@ -599,9 +589,15 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
   useEffect(() => {
     if (lockedSection && activeSection !== lockedSection) {
-      setActiveSection(lockedSection);
+      setActiveSection(lockedSection === "bookings" ? "overview" : lockedSection);
     }
   }, [lockedSection, activeSection]);
+
+  useEffect(() => {
+    if (activeSection === "bookings") {
+      setActiveSection("overview");
+    }
+  }, [activeSection]);
 
   useEffect(() => {
     if (prevDisplaySectionRef.current === displaySection) {
@@ -788,26 +784,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     }
   };
 
-  const loadFilteredBookings = async () => {
-    try {
-      setLoadingBookingRows(true);
-      const response = await fetchOrganizerBookings({
-        event_id: bookingFilters.event_id || undefined,
-        date: bookingFilters.date || undefined
-      });
-      setBookingRows(response?.data || []);
-    } catch (_err) {
-      setBookingRows([]);
-    } finally {
-      setLoadingBookingRows(false);
-    }
-  };
-
   useEffect(() => {
     didKickOffLoadsRef.current = true;
     loadEvents();
     loadOverviewBookings();
-    loadFilteredBookings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -815,11 +795,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     if (!didKickOffLoadsRef.current) {
       return undefined;
     }
-    if (loading || loadingOverviewBookings || loadingBookingRows) {
+    if (loading || loadingOverviewBookings) {
       sawEmbeddedLoadCycleRef.current = true;
     }
     return undefined;
-  }, [loading, loadingOverviewBookings, loadingBookingRows]);
+  }, [loading, loadingOverviewBookings]);
 
   useEffect(() => {
     if (!embedded || suppressRouteContentReadySignal || typeof onEmbeddedWorkspaceInitialReady !== "function") {
@@ -831,7 +811,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     if (!sawEmbeddedLoadCycleRef.current) {
       return undefined;
     }
-    if (!loading && !loadingOverviewBookings && !loadingBookingRows) {
+    if (!loading && !loadingOverviewBookings) {
       embeddedWorkspaceReadySentRef.current = true;
       onEmbeddedWorkspaceInitialReady();
     }
@@ -841,17 +821,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     suppressRouteContentReadySignal,
     loading,
     loadingOverviewBookings,
-    loadingBookingRows,
     onEmbeddedWorkspaceInitialReady
   ]);
 
-  useEffect(() => {
-    loadFilteredBookings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingFilters]);
-
   const refreshData = async () => {
-    await Promise.all([loadEvents(), loadOverviewBookings(), loadFilteredBookings()]);
+    await Promise.all([loadEvents(), loadOverviewBookings()]);
   };
 
   const submitForm = async (e) => {
@@ -1168,16 +1142,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     }
   };
 
-  const downloadBookings = async (format) => {
-    const result = await exportOrganizerBookings({
-      ...bookingFilters,
-      event_id: bookingFilters.event_id || undefined,
-      date: bookingFilters.date || undefined,
-      format
-    });
-    downloadBlob(result.blob, `organizer-bookings.${format === "excel" ? "xlsx" : "csv"}`);
-  };
-
   const myEventsLifecycleCounts = useMemo(() => {
     const todayStr = todayCalendarDateString();
     const counts = { active: 0, inactive: 0, past: 0 };
@@ -1199,18 +1163,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
       : myEventsLifecycleTab === "inactive"
         ? "No inactive events. Pending, rejected, or hidden listings appear here."
         : "No past events yet. Events after their last show date appear here.";
-
-  const bookingEventOptions = useMemo(() => {
-    return [...rows].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "en", { sensitivity: "base" }));
-  }, [rows]);
-
-  const filteredBookingEventOptions = useMemo(() => {
-    const query = bookingEventQuery.trim().toLowerCase();
-    if (!query) {
-      return bookingEventOptions;
-    }
-    return bookingEventOptions.filter((item) => String(item.title || "").toLowerCase().includes(query));
-  }, [bookingEventOptions, bookingEventQuery]);
 
   const showBackToUserDashboard =
     !embedded && user?.role === "user" && (user?.organizer_enabled === 1 || user?.role === "organizer");
@@ -1334,18 +1286,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             </button>
             <button
               type="button"
-              onClick={() => setActiveSection("bookings")}
-              className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
-                activeSection === "bookings"
-                  ? "bg-white/20 ring-2 ring-white/30 shadow-[0_12px_34px_-18px_rgba(255,255,255,0.35)]"
-                  : "bg-white/10 hover:bg-white/15"
-              }`}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Bookings</p>
-              <p className="mt-1 text-sm font-semibold">{overviewBookings.length}</p>
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveSection("check-in")}
               className={`rounded-2xl px-3 py-3 text-left ring-1 ring-white/10 transition ${
                 activeSection === "check-in"
@@ -1428,7 +1368,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       }
                     />
                   </Suspense>
-                  <SharedEventBookingsPanel eventId={sharedEventId} />
                 </>
               ) : null}
           </HostSectionSlot>
@@ -1541,133 +1480,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             <OrganizerVendorCodesPanel />
           </HostSectionSlot>
 
-          <HostSectionSlot id="bookings" activeId={displaySection} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">Event bookings</h2>
-                  <p className="mt-1 text-sm text-slate-600">Filter and export your reservations.</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => downloadBookings("csv")}
-                    className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-                  >
-                    CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadBookings("excel")}
-                    className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-                  >
-                    Excel
-                  </button>
-                </div>
-              </div>
-
-              <div
-                ref={bookingFilterRef}
-                className="mt-3 grid grid-cols-2 gap-2 rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-soft"
-              >
-                <FilterPopupField
-                  label="Event"
-                  value={
-                    bookingEventOptions.find((item) => String(item.id) === String(bookingFilters.event_id))?.title || "All Events"
-                  }
-                  isActive={activeBookingPanel === "event"}
-                  onToggle={(e) => {
-                    e.stopPropagation();
-                    setBookingEventQuery("");
-                    setActiveBookingPanel((prev) => (prev === "event" ? null : "event"));
-                  }}
-                  panelClassName="w-full min-w-[240px]"
-                  panelContent={
-                    <div>
-                      <label className="mb-2 block">
-                        <span className="sr-only">Search events</span>
-                        <input
-                          type="text"
-                          value={bookingEventQuery}
-                          onChange={(e) => setBookingEventQuery(e.target.value)}
-                          placeholder="Search events"
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
-                        />
-                      </label>
-                      <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setBookingFilters((prev) => ({ ...prev, event_id: "" }));
-                            setActiveBookingPanel(null);
-                          }}
-                          className={`group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm transition hover:bg-slate-50 ${
-                            !bookingFilters.event_id ? "bg-slate-50 text-slate-900" : "text-slate-700"
-                          }`}
-                        >
-                          <FiMapPin className="shrink-0 text-slate-400" />{" "}
-                          <span className="min-w-0 flex-1 truncate">All Events</span>
-                          {!bookingFilters.event_id ? (
-                            <span className="shrink-0 text-[11px] font-semibold text-emerald-700">Selected</span>
-                          ) : null}
-                        </button>
-                        {filteredBookingEventOptions.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setBookingFilters((prev) => ({ ...prev, event_id: String(item.id) }));
-                              setActiveBookingPanel(null);
-                            }}
-                            className={`group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm transition hover:bg-slate-50 ${
-                              String(bookingFilters.event_id) === String(item.id)
-                                ? "bg-slate-50 text-slate-900"
-                                : "text-slate-700"
-                            }`}
-                          >
-                            <FiMapPin className="shrink-0 text-slate-400" />{" "}
-                            <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                            {String(bookingFilters.event_id) === String(item.id) ? (
-                              <span className="shrink-0 text-[11px] font-semibold text-emerald-700">Selected</span>
-                            ) : null}
-                          </button>
-                        ))}
-                        {filteredBookingEventOptions.length === 0 ? (
-                          <p className="px-2.5 py-3 text-sm text-slate-500">No events found.</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  }
-                />
-
-                <FilterPopupField
-                  label="Date"
-                  value={bookingFilters.date ? formatDateUS(bookingFilters.date) : "Any Date"}
-                  isActive={activeBookingPanel === "date"}
-                  onToggle={(e) => {
-                    e.stopPropagation();
-                    setActiveBookingPanel((prev) => (prev === "date" ? null : "date"));
-                  }}
-                  panelClassName="w-fit max-w-[calc(100vw-2rem)]"
-                  panelContent={
-                    <AirbnbDatePickerPanel
-                      value={bookingFilters.date}
-                      onChange={(next) => setBookingFilters((prev) => ({ ...prev, date: next }))}
-                      closeOnSelect
-                      onClose={() => setActiveBookingPanel(null)}
-                    />
-                  }
-                />
-              </div>
-
-              <div className="mt-3">
-                <OrganizerBookingsMobileCards
-                  rows={bookingRows}
-                  loading={loadingBookingRows}
-                  rowKeyPrefix="m-org-book"
-                />
-              </div>
-            </HostSectionSlot>
-
           <HostSectionSlot id="check-in" activeId={displaySection}>
               <OrganizerCheckInPanel events={rows} />
           </HostSectionSlot>
@@ -1779,7 +1591,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       }
                     />
                   </Suspense>
-                  <SharedEventBookingsPanel eventId={sharedEventId} />
                 </>
               ) : null}
           </HostSectionSlot>
@@ -1990,117 +1801,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           <HostSectionSlot id="vendor-codes" activeId={displaySection}>
             <OrganizerVendorCodesPanel />
           </HostSectionSlot>
-
-          <HostSectionSlot id="bookings" activeId={displaySection} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Event Bookings</h2>
-                  <p className="text-sm text-slate-500">View reservations received for your events.</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => downloadBookings("csv")}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-                  >
-                    Download CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadBookings("excel")}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-                  >
-                    Download Excel
-                  </button>
-                </div>
-              </div>
-              <div
-                ref={bookingFilterRef}
-                className="mt-3 grid grid-cols-1 gap-2 rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-soft sm:grid-cols-2"
-              >
-                <FilterPopupField
-                  label="Event"
-                  value={
-                    bookingEventOptions.find((item) => String(item.id) === String(bookingFilters.event_id))?.title || "All Events"
-                  }
-                  isActive={activeBookingPanel === "event"}
-                  onToggle={(e) => {
-                    e.stopPropagation();
-                  setBookingEventQuery("");
-                    setActiveBookingPanel((prev) => (prev === "event" ? null : "event"));
-                  }}
-                  panelClassName="w-full min-w-[240px]"
-                  panelContent={
-                    <div>
-                      <label className="mb-2 block">
-                        <span className="sr-only">Search events</span>
-                        <input
-                          type="text"
-                          value={bookingEventQuery}
-                          onChange={(e) => setBookingEventQuery(e.target.value)}
-                          placeholder="Search events"
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
-                        />
-                      </label>
-                      <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBookingFilters((prev) => ({ ...prev, event_id: "" }));
-                          setActiveBookingPanel(null);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
-                      >
-                        <FiMapPin className="text-slate-400" /> All Events
-                      </button>
-                      {filteredBookingEventOptions.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            setBookingFilters((prev) => ({ ...prev, event_id: String(item.id) }));
-                            setActiveBookingPanel(null);
-                          }}
-                          className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
-                        >
-                          <FiMapPin className="text-slate-400" /> {item.title}
-                        </button>
-                      ))}
-                      {filteredBookingEventOptions.length === 0 ? (
-                        <p className="px-2.5 py-3 text-sm text-slate-500">No events found.</p>
-                      ) : null}
-                      </div>
-                    </div>
-                  }
-                />
-
-                <FilterPopupField
-                  label="Date"
-                  value={bookingFilters.date ? formatDateUS(bookingFilters.date) : "Any Date"}
-                  isActive={activeBookingPanel === "date"}
-                  onToggle={(e) => {
-                    e.stopPropagation();
-                    setActiveBookingPanel((prev) => (prev === "date" ? null : "date"));
-                  }}
-                  panelClassName="w-fit max-w-[calc(100vw-2rem)]"
-                  panelContent={
-                    <AirbnbDatePickerPanel
-                      value={bookingFilters.date}
-                      onChange={(next) => setBookingFilters((prev) => ({ ...prev, date: next }))}
-                      closeOnSelect
-                      onClose={() => setActiveBookingPanel(null)}
-                    />
-                  }
-                />
-              </div>
-              <div className="mt-3">
-                <OrganizerBookingsTable
-                  rows={bookingRows}
-                  loading={loadingBookingRows}
-                  rowKeyPrefix="org-book"
-                />
-              </div>
-            </HostSectionSlot>
 
           <HostSectionSlot id="check-in" activeId={displaySection}>
               <OrganizerCheckInPanel events={rows} />

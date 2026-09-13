@@ -95,7 +95,7 @@ export default function OrganizerVendorCodesPanel() {
         <p className="mt-1 max-w-2xl text-sm text-slate-600">
           Turn on vendor tracking per event. Buyers can enter any vendor code at checkout so you know
           which partner referred them. No discount is applied. Codes used on bookings appear below and
-          on the Event Bookings tab.
+          in Event performance analytics under Bookings & revenue.
         </p>
       </div>
 
@@ -161,7 +161,7 @@ export default function OrganizerVendorCodesPanel() {
           <div className="border-b border-slate-100 px-4 py-3">
             <h3 className="text-sm font-bold text-slate-900">Codes used on bookings</h3>
             <p className="mt-0.5 text-xs text-slate-500">
-              Attribution from checkout. CSV/Excel export on Event Bookings includes this column too.
+              Attribution from checkout. CSV/Excel export in Event performance → Bookings & revenue includes this column too.
             </p>
           </div>
           {vendorUsage.length === 0 ? (

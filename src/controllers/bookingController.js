@@ -59,7 +59,7 @@ const resendOrganizerBookingEmail = asyncHandler(async (req, res) => {
   });
   res.status(200).json({
     success: true,
-    message: "Booking confirmation emails resent",
+    message: "Ticket confirmation email resent",
     data
   });
 });

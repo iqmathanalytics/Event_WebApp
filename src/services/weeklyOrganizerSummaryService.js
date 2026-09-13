@@ -1,9 +1,9 @@
 const { pool } = require("../config/db");
 const { listEventsByOrganizer, findEventById } = require("../models/eventModel");
 const { listSharedEventsForUser } = require("../models/eventAnalyticsShareModel");
-const { getBookingInsightsForWindow } = require("./eventAnalyticsService");
+const { getBookingInsightsForWindow, getBookingInsights } = require("./eventAnalyticsService");
 const { sendTransactionalEmail, isBrevoConfigured } = require("../utils/emailIntegrations");
-const { buildWeeklyOrganizerSummaryEmail, formatDateUs } = require("../utils/transactionalEmailTemplates");
+const { buildDailyOrganizerEventSummaryEmail, formatDateUs } = require("../utils/transactionalEmailTemplates");
 const { getAppTimeZone } = require("../utils/couponDatetime");
 const {
   getGaReportingTimezone,
@@ -11,6 +11,21 @@ const {
   getTimezoneShortLabel
 } = require("../utils/gaReportingTimezone");
 const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
+
+function isActiveListedEvent(event) {
+  if (!event) {
+    return false;
+  }
+  const listed =
+    event.is_listed !== false &&
+    event.is_listed !== 0 &&
+    String(event.is_listed) !== "false";
+  const shown =
+    event.show_on_events_page !== false &&
+    event.show_on_events_page !== 0 &&
+    String(event.show_on_events_page) !== "false";
+  return listed && shown;
+}
 
 function formatPartsInTz(date, timeZone) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -65,46 +80,36 @@ function addCalendarDays(dateStr, days) {
   return `${yy}-${mm}-${dd}`;
 }
 
-function weekdayInTz(dateStr, timeZone) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const probe = zonedWallTimeToUtcDate(y, m, d, 12, 0, 0, timeZone);
-  return new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(probe);
-}
-
 /**
- * Previous completed Mon–Sun week in app timezone (half-open [mon, nextMon)).
- * When called on Monday, this is last week; mid-week still targets the most recent completed week.
+ * Previous completed calendar day in app timezone (half-open [yesterday, today)).
  */
-function getPreviousWeekWindow(now = new Date(), timeZone = getAppTimeZone() || getGaReportingTimezone()) {
+function getPreviousDayWindow(now = new Date(), timeZone = getAppTimeZone() || getGaReportingTimezone()) {
   const todayStr = getCalendarDateString(0, timeZone);
-  // Walk back to most recent Monday (including today if Monday).
-  let cursor = todayStr;
-  for (let i = 0; i < 7; i += 1) {
-    if (weekdayInTz(cursor, timeZone) === "Mon") {
-      break;
-    }
-    cursor = addCalendarDays(cursor, -1);
-  }
-  // Completed week ends at this Monday 00:00 → start is 7 days earlier.
-  const weekEndDate = cursor;
-  const weekStartDate = addCalendarDays(weekEndDate, -7);
-  const [ys, ms, ds] = weekStartDate.split("-").map(Number);
-  const [ye, me, de] = weekEndDate.split("-").map(Number);
+  const dayStartDate = addCalendarDays(todayStr, -1);
+  const dayEndDate = todayStr;
+  const [ys, ms, ds] = dayStartDate.split("-").map(Number);
+  const [ye, me, de] = dayEndDate.split("-").map(Number);
   const fromUtc = zonedWallTimeToUtcDate(ys, ms, ds, 0, 0, 0, timeZone);
   const toUtc = zonedWallTimeToUtcDate(ye, me, de, 0, 0, 0, timeZone);
-  const weekLabel = `${formatDateUs(weekStartDate)} – ${formatDateUs(addCalendarDays(weekEndDate, -1))}`;
+  const dayLabel = formatDateUs(dayStartDate);
   return {
     timeZone,
-    weekStartDate,
-    weekEndDate,
-    weekLabel,
+    dayStartDate,
+    dayEndDate,
+    dayLabel,
+    weekLabel: dayLabel,
+    weekStartDate: dayStartDate,
+    weekEndDate: dayEndDate,
     fromMysql: toMysqlUtcDatetime(fromUtc),
     toMysql: toMysqlUtcDatetime(toUtc),
     timezoneLabel: getTimezoneShortLabel(timeZone)
   };
 }
 
-async function listWeeklySummaryRecipients() {
+/** @deprecated Use getPreviousDayWindow — kept for older scripts. */
+const getPreviousWeekWindow = getPreviousDayWindow;
+
+async function listDailySummaryRecipients() {
   const [rows] = await pool.query(
     `SELECT DISTINCT u.id, u.name, u.email
      FROM users u
@@ -128,6 +133,8 @@ async function listWeeklySummaryRecipients() {
   );
   return rows;
 }
+
+const listWeeklySummaryRecipients = listDailySummaryRecipients;
 
 async function buildEventSummariesForUser(userId, window) {
   const owned = await listEventsByOrganizer(userId);
@@ -165,29 +172,30 @@ async function buildEventSummariesForUser(userId, window) {
     if (!event) {
       event = await findEventById(item.eventId);
     }
+    if (!isActiveListedEvent(event)) {
+      continue;
+    }
     if (!isPlatform) {
-      events.push({
-        title: item.title,
-        accessLabel: item.accessLabel,
-        isPlatform: false,
-        bookings: 0,
-        attendees: 0,
-        revenue: 0,
-        paidBookings: 0,
-        freeBookings: 0,
-        tiers: []
-      });
       continue;
     }
 
-    const insights = await getBookingInsightsForWindow(
-      item.eventId,
-      event,
-      window.fromMysql,
-      window.toMysql
-    );
-    const tiers = Array.isArray(insights.tiers)
-      ? insights.tiers
+    const [dayInsights, lifetimeInsights] = await Promise.all([
+      getBookingInsightsForWindow(item.eventId, event, window.fromMysql, window.toMysql),
+      getBookingInsights(item.eventId, event)
+    ]);
+
+    const dayTiers = Array.isArray(dayInsights.tiers)
+      ? dayInsights.tiers
+          .filter((t) => (Number(t.tickets_sold) || 0) > 0 || (Number(t.gross_revenue) || 0) > 0)
+          .map((t) => ({
+            name: t.level_name || "Tier",
+            tickets: Number(t.tickets_sold) || 0,
+            revenue: Number(t.gross_revenue) || 0
+          }))
+      : [];
+
+    const lifetimeTiers = Array.isArray(lifetimeInsights.tiers)
+      ? lifetimeInsights.tiers
           .filter((t) => (Number(t.tickets_sold) || 0) > 0 || (Number(t.gross_revenue) || 0) > 0)
           .map((t) => ({
             name: t.level_name || "Tier",
@@ -197,15 +205,20 @@ async function buildEventSummariesForUser(userId, window) {
       : [];
 
     events.push({
+      eventId: item.eventId,
       title: item.title,
       accessLabel: item.accessLabel,
       isPlatform: true,
-      bookings: Number(insights.total_bookings) || 0,
-      attendees: Number(insights.total_attendees) || 0,
-      revenue: Number(insights.gross_revenue) || 0,
-      paidBookings: Number(insights.paid_bookings) || 0,
-      freeBookings: Number(insights.free_bookings) || 0,
-      tiers
+      bookings: Number(dayInsights.total_bookings) || 0,
+      attendees: Number(dayInsights.total_attendees) || 0,
+      revenue: Number(dayInsights.gross_revenue) || 0,
+      paidBookings: Number(dayInsights.paid_bookings) || 0,
+      freeBookings: Number(dayInsights.free_bookings) || 0,
+      tiers: dayTiers,
+      totalSales: Number(lifetimeInsights.gross_revenue) || 0,
+      totalTickets: Number(lifetimeInsights.total_attendees) || 0,
+      totalBookings: Number(lifetimeInsights.total_bookings) || 0,
+      lifetimeTiers
     });
   }
 
@@ -213,63 +226,65 @@ async function buildEventSummariesForUser(userId, window) {
   return events;
 }
 
-async function sendWeeklySummaryForUser(user, window) {
+async function sendDailySummaryForUser(user, window) {
   const events = await buildEventSummariesForUser(user.id, window);
-  if (!events.length) {
-    return { skipped: true, reason: "no_events" };
+  const platformEvents = events.filter((ev) => ev.isPlatform);
+  if (!platformEvents.length) {
+    return { skipped: true, reason: "no_platform_events", emailsSent: 0 };
   }
 
-  const totals = events.reduce(
-    (acc, ev) => {
-      if (ev.isPlatform) {
-        acc.bookings += Number(ev.bookings) || 0;
-        acc.attendees += Number(ev.attendees) || 0;
-        acc.revenue += Number(ev.revenue) || 0;
-      }
-      return acc;
-    },
-    { events: events.length, bookings: 0, attendees: 0, revenue: 0 }
-  );
+  const recipientName = String(user.name || "").split(/\s+/)[0] || user.name || "there";
+  let emailsSent = 0;
+  let bookings = 0;
 
-  const { subject, text, html } = buildWeeklyOrganizerSummaryEmail({
-    recipientName: String(user.name || "").split(/\s+/)[0] || user.name || "there",
-    weekLabel: window.weekLabel,
-    timezoneLabel: window.timezoneLabel,
-    totals,
-    events
-  });
+  for (const event of platformEvents) {
+    const { subject, text, html } = buildDailyOrganizerEventSummaryEmail({
+      recipientName,
+      dayLabel: window.dayLabel || window.weekLabel,
+      timezoneLabel: window.timezoneLabel,
+      event
+    });
 
-  await sendTransactionalEmail({
-    to: user.email,
-    subject,
-    text,
-    html
-  });
+    await sendTransactionalEmail({
+      to: user.email,
+      subject,
+      text,
+      html
+    });
+    emailsSent += 1;
+    bookings += Number(event.bookings) || 0;
+  }
 
-  return { skipped: false, eventCount: events.length, bookings: totals.bookings };
+  return { skipped: false, eventCount: platformEvents.length, emailsSent, bookings };
 }
 
+/** @deprecated Prefer sendDailySummaryForUser */
+const sendWeeklySummaryForUser = sendDailySummaryForUser;
+
 /**
- * Send one weekly digest per eligible user (owners + accepted share recipients).
+ * Send one daily digest email per platform event for each eligible user
+ * (owners + accepted share recipients).
  */
-async function runWeeklyOrganizerSummary({ force = false } = {}) {
+async function runDailyOrganizerSummary({ force = false } = {}) {
   if (!isBrevoConfigured() && !force) {
     return { ok: false, reason: "brevo_not_configured", sent: 0 };
   }
 
-  const window = getPreviousWeekWindow();
-  const recipients = await listWeeklySummaryRecipients();
+  const window = getPreviousDayWindow();
+  const recipients = await listDailySummaryRecipients();
   let sent = 0;
+  let emailsSent = 0;
   let skipped = 0;
   const errors = [];
 
   for (const user of recipients) {
     try {
-      const result = await sendWeeklySummaryForUser(user, window);
+      const result = await sendDailySummaryForUser(user, window);
       if (result.skipped) {
         skipped += 1;
       } else {
         sent += 1;
+        emailsSent += Number(result.emailsSent) || 0;
       }
     } catch (err) {
       errors.push({ userId: user.id, message: err?.message || String(err) });
@@ -278,34 +293,60 @@ async function runWeeklyOrganizerSummary({ force = false } = {}) {
 
   return {
     ok: true,
-    weekLabel: window.weekLabel,
+    dayLabel: window.dayLabel,
+    weekLabel: window.dayLabel,
     fromMysql: window.fromMysql,
     toMysql: window.toMysql,
     recipients: recipients.length,
     sent,
+    emailsSent,
     skipped,
     errors
   };
 }
 
-function startWeeklyOrganizerSummaryJob() {
-  if (global.__weeklyOrganizerSummaryJobStarted) {
+const runWeeklyOrganizerSummary = runDailyOrganizerSummary;
+
+function summaryEnabled() {
+  const daily = process.env.DAILY_SUMMARY_ENABLED;
+  if (daily != null && String(daily).trim() !== "") {
+    return String(daily).toLowerCase() !== "false";
+  }
+  return String(process.env.WEEKLY_SUMMARY_ENABLED || "true").toLowerCase() !== "false";
+}
+
+function summaryHour() {
+  const daily = process.env.DAILY_SUMMARY_HOUR;
+  if (daily != null && String(daily).trim() !== "") {
+    return Number(daily);
+  }
+  return Number(process.env.WEEKLY_SUMMARY_HOUR || 9);
+}
+
+function summaryCheckMs() {
+  const daily = process.env.DAILY_SUMMARY_CHECK_MS;
+  if (daily != null && String(daily).trim() !== "") {
+    return Number(daily);
+  }
+  return Number(process.env.WEEKLY_SUMMARY_CHECK_MS || 15 * 60 * 1000);
+}
+
+function startDailyOrganizerSummaryJob() {
+  if (global.__dailyOrganizerSummaryJobStarted || global.__weeklyOrganizerSummaryJobStarted) {
     return;
   }
+  global.__dailyOrganizerSummaryJobStarted = true;
   global.__weeklyOrganizerSummaryJobStarted = true;
 
-  const enabled = String(process.env.WEEKLY_SUMMARY_ENABLED || "true").toLowerCase() !== "false";
-  if (!enabled) {
+  if (!summaryEnabled()) {
     // eslint-disable-next-line no-console
-    console.log("[weekly-summary] Disabled via WEEKLY_SUMMARY_ENABLED=false");
+    console.log("[daily-summary] Disabled via DAILY_SUMMARY_ENABLED / WEEKLY_SUMMARY_ENABLED=false");
     return;
   }
 
   const timeZone = getAppTimeZone() || getGaReportingTimezone();
-  // Default Monday 09:00 in APP_TIMEZONE
-  const targetWeekday = String(process.env.WEEKLY_SUMMARY_WEEKDAY || "Mon");
-  const targetHour = Number(process.env.WEEKLY_SUMMARY_HOUR || 9);
-  const checkEveryMs = Number(process.env.WEEKLY_SUMMARY_CHECK_MS || 15 * 60 * 1000);
+  const targetHour = summaryHour();
+  const checkEveryMs = summaryCheckMs();
 
   const runIfDue = async () => {
     try {
@@ -314,32 +355,31 @@ function startWeeklyOrganizerSummaryJob() {
       }
       const now = new Date();
       const parts = formatPartsInTz(now, timeZone);
-      const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(now);
       const hour = Number(parts.hour);
       const dateKey = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 
-      if (weekday !== targetWeekday || hour !== targetHour) {
+      if (hour !== targetHour) {
         return;
       }
-      if (global.__weeklyOrganizerSummaryLastRunDate === dateKey) {
+      if (global.__dailyOrganizerSummaryLastRunDate === dateKey) {
         return;
       }
+      global.__dailyOrganizerSummaryLastRunDate = dateKey;
       global.__weeklyOrganizerSummaryLastRunDate = dateKey;
 
       // eslint-disable-next-line no-console
-      console.log(`[weekly-summary] Running digest for week ending ${dateKey} (${timeZone})`);
-      const result = await runWeeklyOrganizerSummary();
+      console.log(`[daily-summary] Running per-event digests for ${dateKey} (${timeZone})`);
+      const result = await runDailyOrganizerSummary();
       // eslint-disable-next-line no-console
       console.log(
-        `[weekly-summary] Done sent=${result.sent} skipped=${result.skipped} errors=${result.errors?.length || 0}`
+        `[daily-summary] Done users=${result.sent} emails=${result.emailsSent} skipped=${result.skipped} errors=${result.errors?.length || 0}`
       );
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error("[weekly-summary] Job failed:", err?.message || err);
+      console.error("[daily-summary] Job failed:", err?.message || err);
     }
   };
 
-  // Delay first check slightly so boot is not blocked.
   setTimeout(() => {
     runIfDue().catch(() => {});
   }, 20_000);
@@ -350,15 +390,22 @@ function startWeeklyOrganizerSummaryJob() {
 
   // eslint-disable-next-line no-console
   console.log(
-    `[weekly-summary] Scheduled (${targetWeekday} ${targetHour}:00 ${timeZone}, check every ${Math.round(checkEveryMs / 60000)}m)`
+    `[daily-summary] Scheduled (daily ${targetHour}:00 ${timeZone}, check every ${Math.round(checkEveryMs / 60000)}m, one email per event)`
   );
 }
 
+const startWeeklyOrganizerSummaryJob = startDailyOrganizerSummaryJob;
+
 module.exports = {
+  getPreviousDayWindow,
   getPreviousWeekWindow,
+  listDailySummaryRecipients,
   listWeeklySummaryRecipients,
   buildEventSummariesForUser,
+  sendDailySummaryForUser,
   sendWeeklySummaryForUser,
+  runDailyOrganizerSummary,
   runWeeklyOrganizerSummary,
+  startDailyOrganizerSummaryJob,
   startWeeklyOrganizerSummaryJob
 };

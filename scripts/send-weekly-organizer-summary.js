@@ -1,5 +1,5 @@
 /**
- * Manually run / preview the weekly organizer + shared-user summary digest.
+ * Manually run / preview the daily per-event organizer + shared-user summary.
  *
  * Usage:
  *   node scripts/send-weekly-organizer-summary.js
@@ -9,13 +9,13 @@
 require("dotenv").config();
 
 const {
-  getPreviousWeekWindow,
-  listWeeklySummaryRecipients,
+  getPreviousDayWindow,
+  listDailySummaryRecipients,
   buildEventSummariesForUser,
-  runWeeklyOrganizerSummary,
-  sendWeeklySummaryForUser
+  runDailyOrganizerSummary,
+  sendDailySummaryForUser
 } = require("../src/services/weeklyOrganizerSummaryService");
-const { buildWeeklyOrganizerSummaryEmail } = require("../src/utils/transactionalEmailTemplates");
+const { buildDailyOrganizerEventSummaryEmail } = require("../src/utils/transactionalEmailTemplates");
 const { isBrevoConfigured } = require("../src/utils/emailIntegrations");
 
 async function main() {
@@ -24,14 +24,14 @@ async function main() {
   const emailArg = args.find((a) => a.startsWith("--email="));
   const onlyEmail = emailArg ? emailArg.slice("--email=".length).trim().toLowerCase() : "";
 
-  const window = getPreviousWeekWindow();
+  const window = getPreviousDayWindow();
   // eslint-disable-next-line no-console
-  console.log("Week window:", window.weekLabel, window.fromMysql, "→", window.toMysql, window.timezoneLabel);
+  console.log("Day window:", window.dayLabel, window.fromMysql, "→", window.toMysql, window.timezoneLabel);
   // eslint-disable-next-line no-console
   console.log("Brevo configured:", isBrevoConfigured());
 
   if (dryRun || onlyEmail) {
-    let recipients = await listWeeklySummaryRecipients();
+    let recipients = await listDailySummaryRecipients();
     if (onlyEmail) {
       recipients = recipients.filter((u) => String(u.email || "").toLowerCase() === onlyEmail);
     }
@@ -42,39 +42,34 @@ async function main() {
     }
     for (const user of recipients.slice(0, dryRun ? 5 : recipients.length)) {
       const events = await buildEventSummariesForUser(user.id, window);
+      const platformEvents = events.filter((ev) => ev.isPlatform);
       // eslint-disable-next-line no-console
-      console.log(`\nUser #${user.id} ${user.email} — ${events.length} events`);
-      events.forEach((ev) => {
+      console.log(`\nUser #${user.id} ${user.email} — ${platformEvents.length} platform event emails`);
+      platformEvents.forEach((ev) => {
         // eslint-disable-next-line no-console
         console.log(
-          `  - ${ev.title} [${ev.accessLabel}] bookings=${ev.bookings} guests=${ev.attendees} revenue=${ev.revenue}`
+          `  - ${ev.title} [${ev.accessLabel}] totalSales=${ev.totalSales} totalTickets=${ev.totalTickets} yesterday bookings=${ev.bookings} revenue=${ev.revenue}`
         );
       });
       if (!dryRun) {
-        await sendWeeklySummaryForUser(user, window);
+        const result = await sendDailySummaryForUser(user, window);
         // eslint-disable-next-line no-console
-        console.log("  Sent.");
-      } else if (events.length) {
-        const mail = buildWeeklyOrganizerSummaryEmail({
+        console.log("  Sent emails:", result.emailsSent || 0);
+      } else if (platformEvents.length) {
+        const mail = buildDailyOrganizerEventSummaryEmail({
           recipientName: user.name,
-          weekLabel: window.weekLabel,
+          dayLabel: window.dayLabel,
           timezoneLabel: window.timezoneLabel,
-          totals: {
-            events: events.length,
-            bookings: events.reduce((n, e) => n + (e.bookings || 0), 0),
-            attendees: events.reduce((n, e) => n + (e.attendees || 0), 0),
-            revenue: events.reduce((n, e) => n + (e.revenue || 0), 0)
-          },
-          events
+          event: platformEvents[0]
         });
         // eslint-disable-next-line no-console
-        console.log("  Subject:", mail.subject);
+        console.log("  Sample subject:", mail.subject);
       }
     }
     return;
   }
 
-  const result = await runWeeklyOrganizerSummary({ force: true });
+  const result = await runDailyOrganizerSummary({ force: true });
   // eslint-disable-next-line no-console
   console.log(result);
 }

@@ -78,6 +78,20 @@ const getMyBookings = asyncHandler(async (req, res) => {
   });
 });
 
+const resendMyBookingEmail = asyncHandler(async (req, res) => {
+  const bookingId = Number(req.params.bookingId);
+  const data = await bookingService.resendUserBookingConfirmationEmail({
+    userId: req.user.id,
+    userEmail: req.user.email,
+    bookingId
+  });
+  res.status(200).json({
+    success: true,
+    message: "Ticket confirmation email resent",
+    data
+  });
+});
+
 const enableOrganizer = asyncHandler(async (req, res) => {
   // Upgrade is instant and flag-based; organizers are still role='user'.
   const updated = await enableOrganizerById(req.user.id);
@@ -428,6 +442,7 @@ const submitPlatformTicketAccessRequest = asyncHandler(async (req, res) => {
 module.exports = {
   getMe,
   getMyBookings,
+  resendMyBookingEmail,
   enableOrganizer,
   updateMyProfile,
   changeMyPassword,

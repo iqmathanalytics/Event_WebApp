@@ -26,6 +26,7 @@ const { ensureGuestUserAccount } = require("./guestAccountService");
 const { publicBookingQrImageUrl } = require("../utils/bookingQr");
 const { sendTransactionalEmail } = require("../utils/emailIntegrations");
 const { assertCanViewEventAnalytics } = require("./eventAnalyticsService");
+const { listAcceptedShareEmailsForEvent } = require("../models/eventAnalyticsShareModel");
 const {
   buildBookingConfirmationEmail,
   buildOrganizerBookingNotificationEmail,
@@ -526,8 +527,16 @@ async function dispatchOrganizerBookingNotificationEmail(ctx) {
     isGuestBooking: Boolean(ctx.pricing.isGuest)
   });
 
+  let cc = [];
+  try {
+    cc = await listAcceptedShareEmailsForEvent(event.id, organizerId);
+  } catch (_err) {
+    cc = [];
+  }
+
   await sendTransactionalEmail({
     to: organizerEmail,
+    cc,
     subject: mail.subject,
     text: mail.text,
     html: mail.html
@@ -769,6 +778,84 @@ async function fetchUserBookings({ userId }) {
 }
 
 /**
+ * Resend ticket confirmation email for a booking owned by the signed-in customer.
+ * Does not re-notify the organizer.
+ */
+async function resendUserBookingConfirmationEmail({ userId, userEmail, bookingId }) {
+  const row = await findBookingById(bookingId);
+  if (!row) {
+    throw new ApiError(404, "Booking not found");
+  }
+
+  const ownsByUserId = row.user_id != null && Number(row.user_id) === Number(userId);
+  const bookingEmail = String(row.email || "").trim().toLowerCase();
+  const accountEmail = String(userEmail || "").trim().toLowerCase();
+  const ownsByEmail = Boolean(bookingEmail && accountEmail && bookingEmail === accountEmail);
+  if (!ownsByUserId && !ownsByEmail) {
+    throw new ApiError(403, "This booking does not belong to your account.");
+  }
+
+  const event = await findEventById(row.event_id);
+  if (!event) {
+    throw new ApiError(404, "Event not found");
+  }
+
+  const mapped = mapBookingRow(row);
+  const selectedDates = mapped.selected_dates || [];
+  const selectedSeats = mapped.selected_seats || [];
+  const selectedSeatsLabel = mapped.selected_seats_label || "";
+  const ticketCart = mapped.ticket_items || [];
+  const totalDays = Number(row.total_days) || Math.max(1, selectedDates.length || 1);
+  const attendeeCount = Number(row.attendee_count) || 0;
+  const paymentStatus = String(row.payment_status || "paid");
+  const isGuest =
+    mapped.is_guest_booking === 1 ||
+    row.user_id == null;
+
+  const pricing = {
+    event,
+    organizerId: row.organizer_id,
+    userName: row.name,
+    userEmail: row.email,
+    userPhone: row.phone,
+    selectedDates,
+    totalDays,
+    attendeeCount,
+    ticketCart,
+    selectedSeats,
+    subtotalAmount: row.subtotal_amount,
+    discountAmount: row.discount_amount,
+    totalAmount: row.total_amount,
+    couponCode: row.coupon_code,
+    isGuest
+  };
+
+  const ctx = bookingEmailContext({
+    bookingId: row.id,
+    checkInCode: row.check_in_code,
+    payload: {
+      name: row.name,
+      email: row.email,
+      phone: row.phone,
+      event_id: row.event_id
+    },
+    pricing,
+    paymentStatus
+  });
+  ctx.pricing = pricing;
+  ctx.bookingId = row.id;
+
+  await dispatchBookingConfirmationEmail(ctx);
+
+  return {
+    bookingId: row.id,
+    guestEmail: row.email,
+    seats: selectedSeatsLabel || null,
+    eventTitle: event.title || row.event_title
+  };
+}
+
+/**
  * Resend guest confirmation + organizer notification for a booking owned by this organizer.
  */
 async function resendOrganizerBookingEmails({ organizerId, bookingId }) {
@@ -850,5 +937,6 @@ module.exports = {
   fetchUserBookings,
   getOrganizerBookingsExport,
   getAdminBookingsExport,
+  resendUserBookingConfirmationEmail,
   resendOrganizerBookingEmails
 };

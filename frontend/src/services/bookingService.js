@@ -41,6 +41,11 @@ export async function fetchMyBookings() {
   return response.data;
 }
 
+export async function resendMyBookingEmail(bookingId) {
+  const response = await api.post(`/users/my-bookings/${bookingId}/resend-email`);
+  return response.data;
+}
+
 export async function fetchOrganizerBookings(params = {}) {
   const response = await api.get("/bookings/organizer", { params });
   return response.data;
@@ -53,6 +58,11 @@ export async function exportOrganizerBookings(params = {}) {
     responseType: "blob"
   });
   return { blob: response.data, format };
+}
+
+export async function resendOrganizerBookingEmail(bookingId) {
+  const response = await api.post(`/bookings/organizer/${bookingId}/resend-email`);
+  return response.data;
 }
 
 export async function fetchAdminBookings(params = {}) {

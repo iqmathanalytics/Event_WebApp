@@ -3,6 +3,7 @@ import { absoluteListingUrl, eventDetailPath } from "../utils/listingPaths";
 import ShareListingButton from "../components/ShareListingButton";
 import ListingFavoriteButton from "../components/ListingFavoriteButton";
 import BecomeSponsorButton from "../components/BecomeSponsorButton";
+import EventSponsorContactDetails from "../components/EventSponsorContactDetails";
 import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -385,6 +386,17 @@ function EventDetailsPage() {
                   </a>
                 ))}
               </div>
+            </div>
+          ) : null}
+
+          {event.sponsor_inquiry_enabled &&
+          (event.sponsor_contact_email || event.sponsor_contact_phone) ? (
+            <div className="mt-5 border-t border-slate-100 pt-5 lg:mt-5">
+              <EventSponsorContactDetails
+                email={event.sponsor_contact_email}
+                phone={event.sponsor_contact_phone}
+                eventTitle={event.title}
+              />
             </div>
           ) : null}
 

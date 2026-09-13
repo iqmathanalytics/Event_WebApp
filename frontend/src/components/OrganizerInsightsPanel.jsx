@@ -13,6 +13,7 @@ import {
   ViewsOverTimeChart
 } from "./insights/InsightsCharts";
 import TicketTierInsightsSection from "./TicketTierInsightsSection";
+import SharedEventBookingsPanel from "./SharedEventBookingsPanel";
 import {
   fetchOrganizerEventInsights,
   fetchOrganizerInsightsSummary
@@ -20,6 +21,7 @@ import {
 import { normalizeEventTicketSalesMode } from "../utils/eventTicketSalesMode";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { applyStoredHourlyPeak, hourlyPeakKey } from "../utils/hourlyViewsPeakStorage";
+import { resolveTicketLevelPalette, TIER_CHART_COLORS } from "../utils/ticketLevelPalettes";
 
 function formatSourceLabel(source) {
   const s = String(source || "direct");
@@ -337,27 +339,28 @@ export default function OrganizerInsightsPanel({
     [traffic?.countries]
   );
 
-  const bookingsPerEventData = useMemo(() => {
-    const grouped = (organizerBookings || []).reduce((acc, item) => {
-      const key = item.event_title || `Event #${item.event_id}`;
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(grouped)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-  }, [organizerBookings]);
-
-  const attendeeByTierData = useMemo(
-    () =>
-      (bookings?.tiers || []).map((tier, index) => ({
+  const attendeeByTierData = useMemo(() => {
+    const tiers = bookings?.tiers || [];
+    return tiers.map((tier, index) => {
+      const levelLike = {
+        id: tier.level_id,
+        name: tier.level_name,
+        price: tier.unit_price
+      };
+      const allLevels = tiers.map((t) => ({
+        id: t.level_id,
+        name: t.level_name,
+        price: t.unit_price
+      }));
+      const palette = resolveTicketLevelPalette(levelLike, index, allLevels);
+      const fill = tier.color || TIER_CHART_COLORS[palette.key] || TIER_CHART_COLORS.other;
+      return {
         name: tier.level_name || "Ticket",
         value: Number(tier.tickets_sold) || 0,
-        fill: tier.color || undefined
-      })),
-    [bookings?.tiers]
-  );
+        fill
+      };
+    });
+  }, [bookings?.tiers]);
 
   const dbBookingsCompleted =
     (Number(bookings?.paid_bookings) || 0) + (Number(bookings?.free_bookings) || 0);
@@ -711,48 +714,9 @@ export default function OrganizerInsightsPanel({
                 <BookingsRevenueChart data={bookingTrend} emptyMessage="No bookings yet for this event." />
               </SectionCard>
 
-              <SectionCard title="Payment breakdown" hint="How checkout attempts finished — paid, free, pending, or failed.">
-                <ul className="space-y-2 text-sm">
-                  <li className="flex justify-between rounded-lg bg-slate-50 px-3 py-2">
-                    <span>Paid</span>
-                    <span className="font-semibold">{bookings?.paid_bookings ?? 0}</span>
-                  </li>
-                  <li className="flex justify-between rounded-lg bg-slate-50 px-3 py-2">
-                    <span>Free / $0</span>
-                    <span className="font-semibold">{bookings?.free_bookings ?? 0}</span>
-                  </li>
-                  <li className="flex justify-between rounded-lg bg-slate-50 px-3 py-2">
-                    <span>Pending</span>
-                    <span className="font-semibold">{bookings?.pending_bookings ?? 0}</span>
-                  </li>
-                  <li className="flex justify-between rounded-lg bg-slate-50 px-3 py-2">
-                    <span>Failed</span>
-                    <span className="font-semibold">{bookings?.failed_bookings ?? 0}</span>
-                  </li>
-                  <li className="flex justify-between border-t border-slate-200 pt-2 font-semibold">
-                    <span>Coupon discounts</span>
-                    <span>{formatCurrency(bookings?.total_discounts ?? 0)}</span>
-                  </li>
-                </ul>
-              </SectionCard>
-
-              <SectionCard
-                title="Bookings per event"
-                hint="Completed bookings across all of your events."
-              >
-                <HorizontalBarChart
-                  data={bookingsPerEventData.map((row) => ({
-                    name: row.name,
-                    views: row.value
-                  }))}
-                  valueLabel="Bookings"
-                  emptyMessage="No bookings yet. Sales will appear here as guests check out."
-                />
-              </SectionCard>
-
               <SectionCard
                 title="Attendee distribution"
-                hint="How attendees are split across ticket tiers for this event."
+                hint="How attendees are split across ticket tiers for this event. Colors match each ticket tier."
               >
                 <DistributionDonutChart
                   data={attendeeByTierData}
@@ -760,6 +724,15 @@ export default function OrganizerInsightsPanel({
                   emptyMessage="No tier sales yet for this event."
                 />
               </SectionCard>
+
+              <div className="lg:col-span-2">
+                <SharedEventBookingsPanel
+                  eventId={activeEventId}
+                  embedded
+                  title="Event bookings"
+                  subtitle="Reservations for the selected event. Scroll sideways on smaller screens to see every column."
+                />
+              </div>
             </div>
           ) : null}
 

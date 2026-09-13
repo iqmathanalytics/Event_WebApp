@@ -18,6 +18,11 @@ router.patch(
   userController.changeMyPassword
 );
 router.get("/my-bookings", authMiddleware, userController.getMyBookings);
+router.post(
+  "/my-bookings/:bookingId/resend-email",
+  authMiddleware,
+  userController.resendMyBookingEmail
+);
 router.post("/enable-organizer", authMiddleware, userController.enableOrganizer);
 router.get(
   "/platform-ticket-access-request",

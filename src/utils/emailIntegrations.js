@@ -108,7 +108,7 @@ async function parseBrevoErrorResponse(res) {
  * @param {{ to: string, subject: string, text?: string, html?: string, replyTo?: string, attachments?: Array<{ name: string, content: string }> }} params
  * @returns {Promise<{ sent: boolean, skipped?: boolean, provider?: string, error?: string }>}
  */
-async function sendTransactionalEmail({ to, subject, text, html, replyTo, attachments }) {
+async function sendTransactionalEmail({ to, subject, text, html, replyTo, attachments, cc }) {
   const { apiKey, fromEmail, fromName } = getBrevoConfig();
   const recipient = String(to || "").trim();
 
@@ -131,6 +131,24 @@ async function sendTransactionalEmail({ to, subject, text, html, replyTo, attach
     htmlContent: html || undefined,
     textContent: text != null ? String(text) : undefined
   };
+
+  const ccList = (Array.isArray(cc) ? cc : cc ? [cc] : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((email) => email.toLowerCase() !== recipient.toLowerCase());
+  const uniqueCc = [];
+  const seenCc = new Set();
+  for (const email of ccList) {
+    const key = email.toLowerCase();
+    if (seenCc.has(key)) {
+      continue;
+    }
+    seenCc.add(key);
+    uniqueCc.push({ email });
+  }
+  if (uniqueCc.length) {
+    payload.cc = uniqueCc;
+  }
 
   if (!payload.htmlContent && payload.textContent == null) {
     payload.textContent = "";

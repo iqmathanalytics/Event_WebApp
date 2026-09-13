@@ -605,5 +605,6 @@ module.exports = {
   getAdminEventInsights,
   assertOrganizerOwnsEvent,
   assertCanViewEventAnalytics,
+  getBookingInsights,
   getBookingInsightsForWindow
 };

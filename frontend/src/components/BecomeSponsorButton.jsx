@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Handshake, Mail, Phone, X } from "lucide-react";
+import { Handshake, X } from "lucide-react";
+import EventSponsorContactDetails from "./EventSponsorContactDetails";
 
 /**
  * Event-page sponsor CTA — opens a modal with organizer contact details.
@@ -36,9 +37,6 @@ export default function BecomeSponsorButton({ email, phone, eventTitle }) {
   if (!contactEmail && !contactPhone) {
     return null;
   }
-
-  const mailto = contactEmail ? `mailto:${contactEmail}?subject=${encodeURIComponent(`Sponsorship inquiry — ${eventTitle || "your event"}`)}` : null;
-  const tel = contactPhone ? `tel:${contactPhone.replace(/[^\d+]/g, "")}` : null;
 
   const modal = (
     <AnimatePresence>
@@ -111,49 +109,7 @@ export default function BecomeSponsorButton({ email, phone, eventTitle }) {
                 Put your brand in front of a live audience. Reach out to sponsor this show — we’d love to build
                 something memorable together.
               </p>
-
-              <div className="space-y-2.5">
-                {contactEmail ? (
-                  <motion.a
-                    href={mailto}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.05 }}
-                    className="flex items-center gap-3 rounded-xl border border-slate-200/90 bg-slate-50/80 px-3.5 py-3 text-sm font-medium text-slate-800 transition hover:border-amber-300 hover:bg-amber-50/60 hover:text-slate-900"
-                  >
-                    <span className="grid h-9 w-9 place-content-center rounded-lg bg-white text-amber-700 shadow-sm ring-1 ring-slate-900/[0.04]">
-                      <Mail className="h-4 w-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        Email
-                      </span>
-                      <span className="block truncate">{contactEmail}</span>
-                    </span>
-                  </motion.a>
-                ) : null}
-
-                {contactPhone ? (
-                  <motion.a
-                    href={tel || undefined}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="flex items-center gap-3 rounded-xl border border-slate-200/90 bg-slate-50/80 px-3.5 py-3 text-sm font-medium text-slate-800 transition hover:border-amber-300 hover:bg-amber-50/60 hover:text-slate-900"
-                  >
-                    <span className="grid h-9 w-9 place-content-center rounded-lg bg-white text-amber-700 shadow-sm ring-1 ring-slate-900/[0.04]">
-                      <Phone className="h-4 w-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        Phone
-                      </span>
-                      <span className="block truncate">{contactPhone}</span>
-                    </span>
-                  </motion.a>
-                ) : null}
-              </div>
-
+              <EventSponsorContactDetails email={contactEmail} phone={contactPhone} eventTitle={eventTitle} compact />
               <p className="text-xs leading-relaxed text-slate-500">
                 Tap email or phone to reach the organizer directly about sponsorship packages.
               </p>

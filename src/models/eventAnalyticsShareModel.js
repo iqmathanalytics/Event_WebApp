@@ -52,6 +52,33 @@ async function listSharesForEvent(eventId, ownerUserId, conn) {
   return rows;
 }
 
+/** Accepted, non-revoked share recipient emails for booking notification CC. */
+async function listAcceptedShareEmailsForEvent(eventId, ownerUserId, conn) {
+  const runner = conn || pool;
+  const [rows] = await runner.query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(s.shared_with_email), '')) AS email
+     FROM event_analytics_shares s
+     LEFT JOIN users u ON u.id = s.shared_with_user_id
+     WHERE s.event_id = ?
+       AND s.owner_user_id = ?
+       AND s.revoked_at IS NULL
+       AND COALESCE(s.status, 'accepted') = 'accepted'`,
+    [eventId, ownerUserId]
+  );
+  const seen = new Set();
+  const emails = [];
+  for (const row of rows) {
+    const email = String(row.email || "").trim().toLowerCase();
+    if (!email || seen.has(email)) {
+      continue;
+    }
+    seen.add(email);
+    emails.push(email);
+  }
+  return emails;
+}
+
 /** Accepted shares only — pending invites stay off Shared with me until accepted. */
 async function listSharedEventsForUser(sharedWithUserId, conn) {
   const runner = conn || pool;
@@ -240,6 +267,7 @@ module.exports = {
   findAcceptedShare,
   hasActiveAnalyticsShare,
   listSharesForEvent,
+  listAcceptedShareEmailsForEvent,
   listSharedEventsForUser,
   createShare,
   findShareByIdForOwner,

@@ -833,157 +833,193 @@ function buildGoogleSignInReminderEmail({ firstName, email }) {
 }
 
 /**
- * Weekly digest for organizers and accepted analytics share recipients.
- * @param {{
- *   recipientName: string,
- *   weekLabel: string,
- *   timezoneLabel?: string,
- *   totals: { events: number, bookings: number, attendees: number, revenue: number },
- *   events: Array<{
- *     title: string,
- *     accessLabel: string,
- *     isPlatform: boolean,
- *     bookings: number,
- *     attendees: number,
- *     revenue: number,
- *     paidBookings?: number,
- *     freeBookings?: number,
- *     tiers?: Array<{ name: string, tickets: number, revenue: number }>
- *   }>
- * }} params
+ * Daily per-event digest for organizers and shared analytics viewers.
+ * Hero metrics are all-time totals; yesterday is a secondary snapshot.
  */
-function buildWeeklyOrganizerSummaryEmail({
+function buildDailyOrganizerEventSummaryEmail({
   recipientName,
-  weekLabel,
+  dayLabel,
   timezoneLabel = "ET",
-  totals,
-  events = []
+  event
 }) {
   const safeName = String(recipientName || "there").trim() || "there";
-  const subject = `${BRAND_NAME} weekly summary · ${weekLabel}`;
-  const eventCount = Number(totals?.events) || events.length || 0;
-  const bookingCount = Number(totals?.bookings) || 0;
-  const attendeeCount = Number(totals?.attendees) || 0;
-  const revenueTotal = Number(totals?.revenue) || 0;
+  const title = String(event?.title || "your event").trim() || "your event";
+  const subject = `Daily summary — ${title} · ${dayLabel}`;
+  const dayBookings = Number(event?.bookings) || 0;
+  const dayAttendees = Number(event?.attendees) || 0;
+  const dayRevenue = Number(event?.revenue) || 0;
+  const paidBookings = Number(event?.paidBookings) || 0;
+  const freeBookings = Number(event?.freeBookings) || 0;
+  const totalSales = Number(event?.totalSales != null ? event.totalSales : event?.revenue) || 0;
+  const totalTickets = Number(event?.totalTickets != null ? event.totalTickets : event?.attendees) || 0;
+  const totalBookings = Number(event?.totalBookings != null ? event.totalBookings : event?.bookings) || 0;
+  const lifetimeTiers = Array.isArray(event?.lifetimeTiers)
+    ? event.lifetimeTiers
+    : Array.isArray(event?.tiers)
+      ? event.tiers
+      : [];
+  const dayTiers = Array.isArray(event?.tiers) ? event.tiers : [];
+  const accessLabel = String(event?.accessLabel || "Event").trim() || "Event";
 
   const textLines = [
     `Hi ${safeName},`,
     "",
-    `Your ${BRAND_NAME} weekly summary for ${weekLabel} (${timezoneLabel}).`,
+    `Your ${BRAND_NAME} daily summary for ${title} — ${dayLabel} (${timezoneLabel}).`,
+    `Access: ${accessLabel}`,
     "",
-    `Events covered: ${eventCount}`,
-    `Bookings: ${bookingCount}`,
-    `Guests: ${attendeeCount}`,
-    `Revenue: ${formatUsd(revenueTotal)}`,
+    "All-time totals",
+    `Total sales: ${formatUsd(totalSales)}`,
+    `Tickets sold: ${totalTickets}`,
+    `Bookings: ${totalBookings}`,
     ""
   ];
-
-  (events || []).forEach((ev) => {
-    textLines.push(`• ${ev.title} (${ev.accessLabel})`);
-    if (!ev.isPlatform) {
-      textLines.push("  External ticketing — no on-site booking totals.");
-    } else {
-      textLines.push(
-        `  Bookings ${ev.bookings || 0} · Guests ${ev.attendees || 0} · Revenue ${formatUsd(ev.revenue || 0)}`
-      );
-      (ev.tiers || []).forEach((tier) => {
-        textLines.push(
-          `  - ${tier.name}: ${tier.tickets || 0} tickets · ${formatUsd(tier.revenue || 0)}`
-        );
-      });
-    }
-    textLines.push("");
+  lifetimeTiers.forEach((tier) => {
+    textLines.push(`- ${tier.name}: ${tier.tickets || 0} tickets · ${formatUsd(tier.revenue || 0)}`);
   });
-
+  textLines.push("");
+  textLines.push(`Yesterday (${dayLabel})`);
+  textLines.push(`Bookings: ${dayBookings} · Guests: ${dayAttendees} · Revenue: ${formatUsd(dayRevenue)}`);
+  textLines.push(`Paid ${paidBookings} · Complimentary ${freeBookings}`);
+  dayTiers.forEach((tier) => {
+    textLines.push(`- ${tier.name}: ${tier.tickets || 0} tickets · ${formatUsd(tier.revenue || 0)}`);
+  });
+  textLines.push("");
   textLines.push(`Open your dashboard: ${dashboardUrl("/dashboard/organizer")}`);
   textLines.push("");
   textLines.push(`${BRAND_NAME} Team`);
 
-  const eventsHtml = (events || [])
-    .map((ev) => {
-      const tiers = Array.isArray(ev.tiers) ? ev.tiers : [];
-      const tiersHtml = !ev.isPlatform
-        ? `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">External / off-site tickets — booking totals are not tracked on ${escapeHtml(BRAND_NAME)}.</p>`
-        : tiers.length
-          ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;">
-              ${tiers
-                .map(
-                  (tier) => `<tr>
-                    <td style="padding:6px 0;font-size:12px;color:#334155;border-top:1px solid #f1f5f9;">
-                      <strong style="color:#0f172a;">${escapeHtml(tier.name)}</strong>
-                      <span style="color:#64748b;"> · ${Number(tier.tickets) || 0} tickets</span>
-                    </td>
-                    <td style="padding:6px 0;font-size:12px;font-weight:700;color:#0f172a;text-align:right;border-top:1px solid #f1f5f9;white-space:nowrap;">
-                      ${escapeHtml(formatUsd(tier.revenue || 0))}
-                    </td>
-                  </tr>`
-                )
-                .join("")}
-            </table>`
-          : `<p style="margin:8px 0 0;font-size:12px;color:#64748b;">No ticket-tier breakdown for this week.</p>`;
+  const lifetimeTiersHtml = lifetimeTiers.length
+    ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:12px;">
+        <tr>
+          <td colspan="2" style="padding:0 0 6px;font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">
+            Sales by ticket tier
+          </td>
+        </tr>
+        ${lifetimeTiers
+          .map(
+            (tier) => `<tr>
+              <td style="padding:8px 0;font-size:13px;color:#334155;border-top:1px solid #e2e8f0;">
+                <strong style="color:#0f172a;">${escapeHtml(tier.name)}</strong>
+                <span style="color:#64748b;"> · ${Number(tier.tickets) || 0} ticket${Number(tier.tickets) === 1 ? "" : "s"}</span>
+              </td>
+              <td style="padding:8px 0;font-size:13px;font-weight:800;color:#0f172a;text-align:right;border-top:1px solid #e2e8f0;white-space:nowrap;">
+                ${escapeHtml(formatUsd(tier.revenue || 0))}
+              </td>
+            </tr>`
+          )
+          .join("")}
+      </table>`
+    : "";
 
-      const metricsHtml = ev.isPlatform
-        ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;">
+  const eventHtml = `<div style="margin:0 0 14px;border:1px solid #cbd5e1;border-radius:18px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);overflow:hidden;">
+      <div style="padding:16px 16px 14px;background:linear-gradient(135deg,#0f172a 0%,#1e293b 55%,#0f766e 140%);">
+        <div style="font-size:10px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">${escapeHtml(accessLabel)}</div>
+        <div style="margin-top:6px;font-size:18px;font-weight:800;color:#ffffff;line-height:1.3;">${escapeHtml(title)}</div>
+        <div style="margin-top:4px;font-size:12px;color:#cbd5e1;">All-time sales performance</div>
+      </div>
+      <div style="padding:14px 14px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr>
+            <td style="width:50%;padding:0 6px 0 0;vertical-align:top;">
+              <div style="border:1px solid #a7f3d0;border-radius:14px;background:linear-gradient(180deg,#ecfdf5 0%,#ffffff 100%);padding:14px 12px;text-align:center;">
+                <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#047857;">Total sales</div>
+                <div style="margin-top:8px;font-size:22px;font-weight:800;color:#064e3b;line-height:1.1;">${escapeHtml(formatUsd(totalSales))}</div>
+              </div>
+            </td>
+            <td style="width:50%;padding:0 0 0 6px;vertical-align:top;">
+              <div style="border:1px solid #bae6fd;border-radius:14px;background:linear-gradient(180deg,#f0f9ff 0%,#ffffff 100%);padding:14px 12px;text-align:center;">
+                <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#0369a1;">Tickets sold</div>
+                <div style="margin-top:8px;font-size:22px;font-weight:800;color:#0c4a6e;line-height:1.1;">${totalTickets}</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:10px 0 0;font-size:12px;color:#64748b;text-align:center;">
+          ${totalBookings} booking${totalBookings === 1 ? "" : "s"} overall
+        </p>
+        ${lifetimeTiersHtml}
+        <div style="margin-top:14px;border-top:1px dashed #cbd5e1;padding-top:12px;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">
+            Yesterday · ${escapeHtml(String(dayLabel || ""))} (${escapeHtml(String(timezoneLabel || "ET"))})
+          </div>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:8px;">
             <tr>
               <td style="width:33%;padding:0 4px 0 0;vertical-align:top;">
-                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:10px;">
+                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;padding:10px;">
                   <div style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Bookings</div>
-                  <div style="margin-top:4px;font-size:18px;font-weight:800;color:#0f172a;">${Number(ev.bookings) || 0}</div>
+                  <div style="margin-top:4px;font-size:16px;font-weight:800;color:#0f172a;">${dayBookings}</div>
                 </div>
               </td>
               <td style="width:33%;padding:0 4px;vertical-align:top;">
-                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:10px;">
+                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;padding:10px;">
                   <div style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Guests</div>
-                  <div style="margin-top:4px;font-size:18px;font-weight:800;color:#0f172a;">${Number(ev.attendees) || 0}</div>
+                  <div style="margin-top:4px;font-size:16px;font-weight:800;color:#0f172a;">${dayAttendees}</div>
                 </div>
               </td>
               <td style="width:33%;padding:0 0 0 4px;vertical-align:top;">
-                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:10px;">
+                <div style="border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;padding:10px;">
                   <div style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Revenue</div>
-                  <div style="margin-top:4px;font-size:16px;font-weight:800;color:#0f172a;">${escapeHtml(formatUsd(ev.revenue || 0))}</div>
+                  <div style="margin-top:4px;font-size:14px;font-weight:800;color:#0f172a;">${escapeHtml(formatUsd(dayRevenue))}</div>
                 </div>
               </td>
             </tr>
           </table>
           <p style="margin:8px 0 0;font-size:11px;color:#64748b;">
-            Paid ${Number(ev.paidBookings) || 0} · Complimentary ${Number(ev.freeBookings) || 0}
+            Paid ${paidBookings} · Complimentary ${freeBookings}
+            ${
+              dayBookings
+                ? ""
+                : " · No new bookings yesterday"
+            }
           </p>
-          ${tiersHtml}`
-        : tiersHtml;
-
-      return `<div style="margin:0 0 14px;border:1px solid #e2e8f0;border-radius:16px;background:#ffffff;padding:14px 14px 12px;">
-        <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">${escapeHtml(ev.accessLabel || "Event")}</div>
-        <div style="margin-top:4px;font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">${escapeHtml(ev.title || "Event")}</div>
-        ${metricsHtml}
-      </div>`;
-    })
-    .join("");
+        </div>
+      </div>
+    </div>`;
 
   const html = buildLayout({
-    preheader: `Weekly summary for ${weekLabel}: ${bookingCount} bookings · ${formatUsd(revenueTotal)}.`,
-    eyebrow: "Weekly summary",
-    title: "Your week on Book My Tickets",
-    subtitle: `Hi ${safeName}, here is a single digest of every event you host or have shared analytics access to — for ${weekLabel} (${timezoneLabel}).`,
+    preheader: `${title}: ${formatUsd(totalSales)} total sales · ${totalTickets} tickets.`,
+    eyebrow: "Daily summary",
+    title: "Event sales snapshot",
+    subtitle: `Hi ${safeName}, here are total sales and tickets for ${title}, plus yesterday’s activity — ${dayLabel} (${timezoneLabel}).`,
     headerTone: "emerald",
     highlights: [
-      `${eventCount} event${eventCount === 1 ? "" : "s"} covered`,
-      `${bookingCount} booking${bookingCount === 1 ? "" : "s"}`,
-      `${formatUsd(revenueTotal)} revenue`
+      `${formatUsd(totalSales)} total sales`,
+      `${totalTickets} ticket${totalTickets === 1 ? "" : "s"} sold`,
+      `${dayBookings} booking${dayBookings === 1 ? "" : "s"} yesterday`
     ],
     rows: [
-      { label: "Week", value: `${weekLabel} (${timezoneLabel})` },
-      { label: "Guests", value: String(attendeeCount) },
-      { label: "Paid bookings", value: String((events || []).reduce((n, e) => n + (Number(e.paidBookings) || 0), 0)) }
+      { label: "Day", value: `${dayLabel} (${timezoneLabel})` },
+      { label: "Event", value: title },
+      { label: "Access", value: accessLabel }
     ],
-    extraHtml: eventsHtml
-      ? `<div style="margin-top:8px;"><div style="margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">Per event</div>${eventsHtml}</div>`
-      : `<p style="margin:12px 0 0;font-size:14px;color:#64748b;">No events to summarize this week.</p>`,
+    extraHtml: eventHtml,
     ctaLabel: "Open organizer dashboard",
     ctaUrl: dashboardUrl("/dashboard/organizer"),
-    footerNote: `You're receiving this weekly digest because you host events or accepted shared analytics on ${BRAND_NAME}. Questions? ${BRAND_SUPPORT_EMAIL}`
+    footerNote: `You're receiving this daily digest because you host this event or accepted shared analytics on ${BRAND_NAME}. Questions? ${BRAND_SUPPORT_EMAIL}`
   });
 
   return { subject, text: textLines.join("\n"), html };
+}
+
+/** @deprecated Prefer buildDailyOrganizerEventSummaryEmail */
+function buildWeeklyOrganizerSummaryEmail(params) {
+  const events = Array.isArray(params?.events) ? params.events : [];
+  const event = events[0] || {
+    title: "your events",
+    accessLabel: "Events",
+    bookings: Number(params?.totals?.bookings) || 0,
+    attendees: Number(params?.totals?.attendees) || 0,
+    revenue: Number(params?.totals?.revenue) || 0,
+    paidBookings: 0,
+    freeBookings: 0,
+    tiers: []
+  };
+  return buildDailyOrganizerEventSummaryEmail({
+    recipientName: params.recipientName,
+    dayLabel: params.weekLabel || params.dayLabel,
+    timezoneLabel: params.timezoneLabel,
+    event
+  });
 }
 
 module.exports = {
@@ -997,6 +1033,7 @@ module.exports = {
   buildPlatformTicketRequestAdminEmail,
   buildPlatformTicketRequestUserEmail,
   buildAnalyticsShareInviteEmail,
+  buildDailyOrganizerEventSummaryEmail,
   buildWeeklyOrganizerSummaryEmail,
   ticketBlocksFromCart,
   formatUsd,

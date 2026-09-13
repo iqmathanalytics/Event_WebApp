@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { CalendarDays, ExternalLink, Heart, MapPin, Tag, Ticket } from "lucide-react";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import BookingPaymentBadge from "./BookingPaymentBadge";
@@ -6,6 +7,7 @@ import { bookingAmountPaidDollars } from "../utils/bookingPayment";
 import { formatBookingSeatsLabel } from "../utils/bookingSeats";
 import { dealDetailPath, eventDetailPath, influencerDetailPath } from "../utils/listingPaths";
 import { resolveTicketLevelPalette } from "../utils/ticketLevelPalettes";
+import { resendMyBookingEmail } from "../services/bookingService";
 
 function getDisplayPrice(item) {
   if (item.listing_type === "event") {
@@ -159,6 +161,8 @@ function BookingTicketTiers({ booking }) {
 }
 
 function UserBookingCard({ booking }) {
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendStatus, setResendStatus] = useState(null);
   const eventUrl =
     booking.event_id != null
       ? eventDetailPath({
@@ -173,8 +177,29 @@ function UserBookingCard({ booking }) {
   const seatsLabel = formatBookingSeatsLabel(booking);
   const paidAmount = bookingAmountPaidDollars(booking);
   const hasDiscount = Number(booking.discount_amount) > 0;
+  const bookingId = booking.booking_id ?? booking.id;
 
   const venueLine = [booking.venue_name, booking.venue_address].filter(Boolean).join(" · ");
+
+  const onResend = async () => {
+    if (!bookingId || resendBusy) {
+      return;
+    }
+    setResendBusy(true);
+    setResendStatus(null);
+    try {
+      await resendMyBookingEmail(bookingId);
+      setResendStatus({ ok: true, message: "Confirmation email resent" });
+    } catch (err) {
+      setResendStatus({
+        ok: false,
+        message: err?.response?.data?.message || "Could not resend email."
+      });
+    } finally {
+      setResendBusy(false);
+      window.setTimeout(() => setResendStatus(null), 4000);
+    }
+  };
 
   return (
     <article className="rounded-xl border border-slate-200/90 bg-white p-2.5 shadow-sm ring-1 ring-slate-900/[0.03] transition hover:border-slate-300 sm:p-3">
@@ -266,6 +291,22 @@ function UserBookingCard({ booking }) {
               ) : null}
             </p>
           )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => void onResend()}
+              disabled={resendBusy || !bookingId}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+            >
+              {resendBusy ? "Sending…" : "Resend ticket email"}
+            </button>
+            {resendStatus ? (
+              <span className={`text-[11px] font-medium ${resendStatus.ok ? "text-emerald-700" : "text-rose-600"}`}>
+                {resendStatus.message}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>
