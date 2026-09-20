@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import { FiBell, FiCalendar, FiInfo, FiMapPin, FiTrash2, FiUsers } from "react-icons/fi";
 import AdminSidebar from "../components/AdminSidebar";
 import AdminCitiesPanel from "../components/AdminCitiesPanel";
@@ -45,6 +46,7 @@ import {
   updateTeamUserCapabilities,
   updateAdminListingStatus,
   updateAdminEventListed,
+  updateAdminEventHomeFeatured,
   fetchAdminEventInsights
 } from "../services/adminService";
 const OrganizerInsightsPanel = lazy(() => import("../components/OrganizerInsightsPanel"));
@@ -692,6 +694,9 @@ function AdminDashboardPage() {
         }
         return;
       }
+      if (key === "ticket_levels_json") {
+        return;
+      }
       payload[key] = typeof value === "string" ? value.trim() : value;
     });
     if (payload.venue_name && !payload.venue) {
@@ -903,6 +908,28 @@ function AdminDashboardPage() {
       );
     } catch (err) {
       window.alert(err?.response?.data?.message || "Could not update event visibility.");
+    }
+  };
+
+  const handleToggleEventHomeFeatured = async (item, homeFeatured) => {
+    if (listingType !== "events") {
+      return;
+    }
+    try {
+      await updateAdminEventHomeFeatured({ id: item.id, home_featured: Boolean(homeFeatured) });
+      setRows((prev) =>
+        prev.map((row) =>
+          String(row.id) === String(item.id)
+            ? {
+                ...row,
+                home_featured: homeFeatured ? 1 : 0,
+                home_featured_at: homeFeatured ? new Date().toISOString() : null
+              }
+            : row
+        )
+      );
+    } catch (err) {
+      window.alert(err?.response?.data?.message || "Could not update home page spotlight.");
     }
   };
 
@@ -1769,7 +1796,8 @@ function AdminDashboardPage() {
 
         {activeSection === "cities" ? <AdminCitiesPanel /> : null}
 
-        {activeSection !== "team" &&
+        {activeSection !== "overview" &&
+        activeSection !== "team" &&
         activeSection !== "bookings" &&
         activeSection !== "communications" &&
         activeSection !== "users" &&
@@ -1986,13 +2014,14 @@ function AdminDashboardPage() {
           />
         ) : null}
 
-        {activeSection !== "team" &&
+        {activeSection !== "overview" &&
+        activeSection !== "team" &&
         activeSection !== "bookings" &&
         activeSection !== "communications" &&
         activeSection !== "users" &&
         activeSection !== "cities" &&
         activeSection !== "ticket-access" ? (
-          <div className={activeSection === "overview" ? "hidden lg:block" : ""}>
+          <div>
             <h2 className="mb-2 text-lg font-semibold capitalize text-slate-900">
               {listingType} Management
             </h2>
@@ -2005,6 +2034,7 @@ function AdminDashboardPage() {
               onReject={handleReject}
               onDelete={handleDelete}
               onToggleEventListed={listingType === "events" ? handleToggleEventListed : undefined}
+              onToggleEventHomeFeatured={listingType === "events" ? handleToggleEventHomeFeatured : undefined}
             />
           </div>
         ) : activeSection === "bookings" ? (

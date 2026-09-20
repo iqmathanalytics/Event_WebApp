@@ -21,7 +21,15 @@ const ticketLevelSchema = z.object({
   seats: z.coerce.number().int().min(1).max(50000).optional().nullable(),
   valid_upto: z
     .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()])
-    .optional()
+    .optional(),
+  color_key: z.preprocess(
+    (v) => (v == null ? undefined : String(v).trim().toLowerCase()),
+    z.string().max(32).optional()
+  ),
+  color: z.preprocess(
+    (v) => (v == null ? undefined : String(v).trim()),
+    z.string().max(16).optional()
+  )
 });
 
 const ticketLevelsField = z
@@ -59,6 +67,7 @@ const checkoutConfigFields = {
   vendor_discount_value: z.coerce.number().min(0).max(100000).optional(),
   coupon_codes_enabled: boolish,
   sponsor_inquiry_enabled: boolish,
+  sponsor_tickets_enabled: boolish,
   sponsor_contact_email: z.preprocess(
     (v) => (v === null || v === "" ? undefined : v),
     z.string().trim().email().max(190).optional()
@@ -400,5 +409,6 @@ module.exports = {
   fetchFeaturedEventsSchema,
   editOwnEventSchema,
   deleteOwnEventSchema,
-  trackEventAnalyticsSchema
+  trackEventAnalyticsSchema,
+  ticketLevelSchema
 };

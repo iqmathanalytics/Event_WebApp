@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { FiImage } from "react-icons/fi";
 import { sampleImageEdgeColors } from "../utils/imageEdgeColors";
+import {
+  displayImageBlurUrl,
+  LISTING_BANNER_SIZES,
+  listingBannerImageUrl,
+  listingBannerSrcSet
+} from "../utils/displayImage";
 
 const DEFAULT_EDGE = { left: "rgb(15, 23, 42)", right: "rgb(15, 23, 42)" };
 
@@ -18,11 +24,16 @@ export default function ListingDetailBannerImage({
 }) {
   const [edgeColors, setEdgeColors] = useState(DEFAULT_EDGE);
   const [loadFailed, setLoadFailed] = useState(false);
+  const trimmed = String(src || "").trim();
+  const displaySrc = listingBannerImageUrl(trimmed);
+  const srcSet = listingBannerSrcSet(trimmed);
+  const blurSrc = displayImageBlurUrl(trimmed);
+  const showBlurImage = Boolean(blurSrc && blurSrc !== displaySrc);
 
   useEffect(() => {
     setLoadFailed(false);
     setEdgeColors(DEFAULT_EDGE);
-  }, [src]);
+  }, [trimmed]);
 
   const applyEdgeColors = useCallback((img) => {
     const sampled = sampleImageEdgeColors(img);
@@ -44,7 +55,7 @@ export default function ListingDetailBannerImage({
     setEdgeColors(DEFAULT_EDGE);
   }, []);
 
-  if (!src || loadFailed) {
+  if (!trimmed || loadFailed) {
     return (
       <div
         className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 ${className}`}
@@ -70,15 +81,17 @@ export default function ListingDetailBannerImage({
         aria-hidden
       />
 
-      <img
-        src={src}
-        alt=""
-        aria-hidden
-        className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.38] blur-3xl saturate-[1.15]"
-        loading={eager ? "eager" : "lazy"}
-        decoding="async"
-        onError={handleError}
-      />
+      {showBlurImage ? (
+        <img
+          src={blurSrc}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.38] blur-3xl saturate-[1.15]"
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          onError={handleError}
+        />
+      ) : null}
 
       <div
         className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-[max(14%,72px)] sm:w-[max(12%,96px)]"
@@ -101,7 +114,9 @@ export default function ListingDetailBannerImage({
       />
 
       <img
-        src={src}
+        src={displaySrc}
+        srcSet={srcSet}
+        sizes={LISTING_BANNER_SIZES}
         alt={alt}
         onLoad={handleLoad}
         onError={handleError}
@@ -110,6 +125,7 @@ export default function ListingDetailBannerImage({
         }`}
         loading={eager ? "eager" : "lazy"}
         decoding="async"
+        fetchpriority={eager ? "high" : "auto"}
       />
     </div>
   );

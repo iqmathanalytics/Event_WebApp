@@ -6,6 +6,7 @@ import BookingPaymentBadge from "./BookingPaymentBadge";
 import { bookingAmountPaidDollars } from "../utils/bookingPayment";
 import { formatBookingSeatsLabel } from "../utils/bookingSeats";
 import { dealDetailPath, eventDetailPath, influencerDetailPath } from "../utils/listingPaths";
+import { thumbImageUrl } from "../utils/displayImage";
 import { resolveTicketLevelPalette } from "../utils/ticketLevelPalettes";
 import { resendMyBookingEmail } from "../services/bookingService";
 
@@ -206,7 +207,7 @@ function UserBookingCard({ booking }) {
       <div className="flex gap-2.5 sm:gap-3">
         <Link to={eventUrl} className="relative block h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-[4.25rem] sm:w-[4.25rem]">
           {thumb ? (
-            <img src={thumb} alt="" className="h-full w-full object-cover" />
+            <img src={thumbImageUrl(thumb)} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-slate-100">
               <Ticket className="h-6 w-6 text-slate-400" aria-hidden />
@@ -239,7 +240,7 @@ function UserBookingCard({ booking }) {
             </span>
             <span className="text-slate-300">|</span>
             <span>
-              {ticketCount} ticket{ticketCount === 1 ? "" : "s"}
+              {`${ticketCount} ${ticketCount === 1 ? "ticket" : "tickets"}`}
             </span>
             {seatsLabel ? (
               <>
@@ -323,7 +324,7 @@ function FavoriteListingCard({ item, toggleFavorite }) {
     "relative block h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-[4.25rem] sm:w-[4.25rem]";
 
   const thumbNode = thumb ? (
-    <img src={thumb} alt="" className="h-full w-full object-cover" />
+    <img src={thumbImageUrl(thumb)} alt="" className="h-full w-full object-cover" />
   ) : (
     <div className="flex h-full w-full items-center justify-center bg-slate-100">
       <Heart className="h-6 w-6 text-slate-400" aria-hidden />
@@ -501,7 +502,7 @@ export default function UserDashboardBookingsAndFavorites({
               <Heart className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
               <p className="mt-2 text-sm font-medium text-slate-800">Nothing saved yet</p>
               <p className="mt-1 text-xs text-slate-600">
-                Tap the heart on any event, deal, or creator card to keep it here for quick access.
+                Save any event, deal, or creator with the heart icon to keep it here for quick access.
               </p>
               <Link
                 to="/events"

@@ -1,5 +1,10 @@
 const { pool } = require("../config/db");
 
+const ADMIN_NOISE_SQL = `(
+  (title = 'Event updated' AND message LIKE '%auto-published%')
+  OR title = 'New event published'
+)`;
+
 async function createAdminNotification({
   targetAdminId = null,
   type,
@@ -43,7 +48,8 @@ async function listAdminNotifications({ adminId, limit = 25 }) {
   const [rows] = await pool.query(
     `SELECT id, type, entity_type, entity_id, title, message, is_read, created_at
      FROM admin_notifications
-     WHERE target_admin_id IS NULL OR target_admin_id = ?
+     WHERE (target_admin_id IS NULL OR target_admin_id = ?)
+       AND NOT ${ADMIN_NOISE_SQL}
      ORDER BY created_at DESC
      LIMIT ?`,
     [adminId, Number(limit)]
@@ -55,7 +61,9 @@ async function countUnreadAdminNotifications({ adminId }) {
   const [[row]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM admin_notifications
-     WHERE (target_admin_id IS NULL OR target_admin_id = ?) AND is_read = 0`,
+     WHERE (target_admin_id IS NULL OR target_admin_id = ?)
+       AND is_read = 0
+       AND NOT ${ADMIN_NOISE_SQL}`,
     [adminId]
   );
   return Number(row?.total || 0);

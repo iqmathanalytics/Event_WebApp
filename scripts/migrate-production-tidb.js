@@ -63,7 +63,10 @@ async function checkSchema(cfg) {
       "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_bookings' AND column_name = 'vendor_code'",
       "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_bookings' AND column_name = 'seatsio_hold_token'",
       "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_password_set_tokens'",
-      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_coupon_holds' AND column_name = 'guest_email'"
+      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'event_coupon_holds' AND column_name = 'guest_email'",
+      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'events' AND column_name = 'home_featured'",
+      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'events' AND column_name = 'home_featured_at'",
+      "SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'events' AND column_name = 'ga_page_views_30d'"
     ];
     const labels = [
       "events table",
@@ -73,7 +76,10 @@ async function checkSchema(cfg) {
       "event_bookings.vendor_code",
       "event_bookings.seatsio_hold_token",
       "user_password_set_tokens table",
-      "event_coupon_holds.guest_email"
+      "event_coupon_holds.guest_email",
+      "events.home_featured",
+      "events.home_featured_at",
+      "events.ga_page_views_30d"
     ];
     for (let i = 0; i < checks.length; i += 1) {
       const [r] = await conn.query(checks[i]);

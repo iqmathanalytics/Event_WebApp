@@ -34,35 +34,30 @@ function LogoFlightOverlay({ flight, onMoveComplete, onFadeComplete }) {
   }
 
   const { from, to } = flight;
+  const fromW = Math.max(1, Number(from.width) || 1);
+  const fromH = Math.max(1, Number(from.height) || 1);
+  const scaleX = Math.max(0.01, (Number(to.width) || fromW) / fromW);
+  const scaleY = Math.max(0.01, (Number(to.height) || fromH) / fromH);
+  const target = {
+    x: Number(to.left) || 0,
+    y: Number(to.top) || 0,
+    scaleX,
+    scaleY,
+    opacity: 1
+  };
 
   return (
     <motion.div
       aria-hidden
-      className="pointer-events-none fixed z-[300] overflow-visible will-change-[left,top,width,height,opacity]"
+      className="pointer-events-none fixed z-[300] overflow-visible will-change-transform"
       initial={{
-        left: from.left,
-        top: from.top,
-        width: from.width,
-        height: from.height,
+        x: Number(from.left) || 0,
+        y: Number(from.top) || 0,
+        scaleX: 1,
+        scaleY: 1,
         opacity: 1
       }}
-      animate={
-        phase === "move"
-          ? {
-              left: to.left,
-              top: to.top,
-              width: to.width,
-              height: to.height,
-              opacity: 1
-            }
-          : {
-              left: to.left,
-              top: to.top,
-              width: to.width,
-              height: to.height,
-              opacity: 0
-            }
-      }
+      animate={phase === "move" ? target : { ...target, opacity: 0 }}
       transition={
         phase === "move"
           ? { duration: BRAND_LOGO_HANDOFF_DURATION, ease: BRAND_LOGO_HANDOFF_EASE }
@@ -81,7 +76,14 @@ function LogoFlightOverlay({ flight, onMoveComplete, onFadeComplete }) {
           onFadeComplete?.();
         }
       }}
-      style={{ position: "fixed" }}
+      style={{
+        position: "fixed",
+        left: 0,
+        top: 0,
+        width: fromW,
+        height: fromH,
+        transformOrigin: "0 0"
+      }}
     >
       <img
         src={BRAND_LOGO_URL}

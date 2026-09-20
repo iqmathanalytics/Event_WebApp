@@ -1,3 +1,5 @@
+import { normalizeTierColorKey, normalizeTierHex } from "./ticketLevelPalettes";
+
 const MAX_LEVELS = 12;
 
 function todayYmd(referenceDate = new Date()) {
@@ -62,6 +64,8 @@ function normalizeTicketLevel(row, index) {
   const price = Number(row?.price);
   const seats = parseLevelSeats(row?.seats);
   const valid_upto = parseValidUpto(row?.valid_upto);
+  const colorKey = normalizeTierColorKey(row?.color_key);
+  const color = normalizeTierHex(row?.color) || "";
   const level = {
     id: String(row?.id || `level-${index}`).trim() || `level-${index}`,
     name,
@@ -69,7 +73,12 @@ function normalizeTicketLevel(row, index) {
     price: Number.isFinite(price) && price >= 0 ? price : 0,
     sort_order: Number.isFinite(Number(row?.sort_order)) ? Number(row.sort_order) : index,
     seats,
-    valid_upto
+    valid_upto,
+    ...(colorKey ? { color_key: colorKey } : {}),
+    ...(color ? { color } : {}),
+    ...(row?.is_sponsor === true || row?.is_sponsor === 1 || String(row?.id || "").trim() === "sponsor"
+      ? { is_sponsor: true }
+      : {})
   };
   if (row?.level_seats_remaining != null) {
     level.level_seats = row.level_seats ?? seats;
@@ -225,6 +234,8 @@ export function serializeTicketLevelsForApi(rows) {
       const price = Number(row?.price);
       const seats = parseLevelSeats(row?.seats);
       const valid_upto = parseValidUpto(row?.valid_upto);
+      const colorKey = normalizeTierColorKey(row?.color_key);
+      const color = normalizeTierHex(row?.color) || "";
       return {
         id: String(row?.id || newTicketLevelId()).trim(),
         name,
@@ -232,7 +243,9 @@ export function serializeTicketLevelsForApi(rows) {
         price: Number.isFinite(price) && price >= 0 ? price : 0,
         sort_order: index,
         ...(seats != null ? { seats } : {}),
-        ...(valid_upto ? { valid_upto } : {})
+        ...(valid_upto ? { valid_upto } : {}),
+        ...(colorKey ? { color_key: colorKey } : {}),
+        ...(color ? { color } : {})
       };
     })
     .filter(Boolean);
@@ -251,7 +264,9 @@ export function ticketLevelsToFormRows(levels) {
           ? String(level.level_seats)
           : "",
     valid_upto: level.valid_upto ? String(level.valid_upto).slice(0, 10) : "",
-    sort_order: level.sort_order ?? index
+    sort_order: level.sort_order ?? index,
+    color_key: normalizeTierColorKey(level.color_key),
+    color: normalizeTierHex(level.color) || level.color || ""
   }));
 }
 

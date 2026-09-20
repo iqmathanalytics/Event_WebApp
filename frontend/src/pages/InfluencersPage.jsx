@@ -336,11 +336,12 @@ function InfluencersPage() {
           <p className="col-span-full text-sm text-slate-500">No influencers match your current filters.</p>
         ) : null}
         {!loading
-          ? paginatedList.map((item) => {
+          ? paginatedList.map((item, idx) => {
               const socialLinks = parseInfluencerSocialLinks(item.social_links);
               return (
               <div key={item.id} className="listing-card-cell">
               <InfluencerCard
+                priority={idx === 0}
                 item={{
                   id: item.id,
                   name: item.name,

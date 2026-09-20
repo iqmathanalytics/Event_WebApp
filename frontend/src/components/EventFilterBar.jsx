@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   FiDollarSign,
   FiFilter,
@@ -9,10 +9,11 @@ import {
   FiX
 } from "react-icons/fi";
 import { categories, sortOptions } from "../utils/filterOptions";
-import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import FilterPopupField from "./FilterPopupField";
 import { formatDateUS } from "../utils/format";
 import useCityFilter from "../hooks/useCityFilter";
+
+const AirbnbDatePickerPanel = lazy(() => import("./AirbnbDatePickerPanel"));
 
 function EventFilterControls({
   query,
@@ -39,6 +40,7 @@ function EventFilterControls({
   const [cityQuery, setCityQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
   const { cities } = useCityFilter();
+  const searchFieldId = useId();
 
   useEffect(() => {
     const onDocClick = (event) => {
@@ -80,12 +82,16 @@ function EventFilterControls({
   return (
     <div ref={containerRef} className="contents">
       <label className="relative min-w-[210px] flex-1">
+        <span className="sr-only">{searchPlaceholder}</span>
         <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
-          type="text"
+          id={searchFieldId}
+          name="q"
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={searchPlaceholder}
+          aria-label={searchPlaceholder}
           className="w-full rounded-full border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none"
         />
       </label>
@@ -209,13 +215,17 @@ function EventFilterControls({
           }}
           panelClassName="w-fit max-w-[calc(100vw-2rem)]"
           panelContent={
-            <AirbnbDatePickerPanel
-              value={date}
-              onChange={setDate}
-              minDate={new Date()}
-              closeOnSelect
-              onClose={() => setActivePanel(null)}
-            />
+            activePanel === "date" ? (
+              <Suspense fallback={<div className="h-72 w-[18rem] animate-pulse rounded-2xl bg-slate-100" />}>
+                <AirbnbDatePickerPanel
+                  value={date}
+                  onChange={setDate}
+                  minDate={new Date()}
+                  closeOnSelect
+                  onClose={() => setActivePanel(null)}
+                />
+              </Suspense>
+            ) : null
           }
         />
       ) : null}

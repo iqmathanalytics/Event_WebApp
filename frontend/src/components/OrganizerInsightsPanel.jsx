@@ -353,7 +353,7 @@ export default function OrganizerInsightsPanel({
         price: t.unit_price
       }));
       const palette = resolveTicketLevelPalette(levelLike, index, allLevels);
-      const fill = tier.color || TIER_CHART_COLORS[palette.key] || TIER_CHART_COLORS.other;
+      const fill = tier.color || palette.chartColor || TIER_CHART_COLORS[palette.key] || TIER_CHART_COLORS.other;
       return {
         name: tier.level_name || "Ticket",
         value: Number(tier.tickets_sold) || 0,
@@ -456,17 +456,24 @@ export default function OrganizerInsightsPanel({
 
       {!skipEventPicker ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5">
-          <label className="text-sm font-semibold text-slate-900">Select event</label>
+          <label className="text-sm font-semibold text-slate-900" htmlFor="organizer-insights-event">
+            Select event
+          </label>
           <p className="mt-1 text-xs text-slate-500">Choose an event, then load analytics when you are ready.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
             <input
+              id="organizer-insights-search"
+              name="event-search"
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search your events…"
+              aria-label="Search your events"
               className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
             />
             <select
+              id="organizer-insights-event"
+              name="event-id"
               value={selectedEventId}
               onChange={(e) => {
                 setSelectedEventId(e.target.value);
@@ -474,6 +481,7 @@ export default function OrganizerInsightsPanel({
                 setLoadedEventId("");
                 setError("");
               }}
+              aria-label="Select event for analytics"
               className="min-w-[200px] rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium"
             >
               <option value="">Choose event</option>

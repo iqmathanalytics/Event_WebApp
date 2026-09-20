@@ -2,17 +2,6 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
-import HomePage from "./pages/HomePage";
-import EventsPage from "./pages/EventsPage";
-import InfluencersPage from "./pages/InfluencersPage";
-import DealsPage from "./pages/DealsPage";
-import LoginPage from "./pages/LoginPage";
-import StaffLoginPage from "./pages/StaffLoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import SetPasswordPage from "./pages/SetPasswordPage";
-import ContactPage from "./pages/ContactPage";
-import NewsletterPage from "./pages/NewsletterPage";
-import NotFoundPage from "./pages/NotFoundPage";
 import AdminRoute from "./components/AdminRoute";
 import UserRoute from "./components/UserRoute";
 import AnimatedBackground from "./components/AnimatedBackground";
@@ -20,10 +9,22 @@ import LogoutOverlay from "./components/LogoutOverlay";
 import NavigationProgress from "./components/NavigationProgress";
 import ScrollToTop from "./components/ScrollToTop";
 import { getEventLandingConfig } from "./eventLandings/registry";
+import HomeRoute from "./pages/HomeRoute";
 
+const EventsPage = lazy(() => import("./pages/EventsPage"));
 const EventDetailsPage = lazy(() => import("./pages/EventDetailsPage"));
-const DealDetailsPage = lazy(() => import("./pages/DealDetailsPage"));
+const InfluencersPage = lazy(() => import("./pages/InfluencersPage"));
 const InfluencerDetailsPage = lazy(() => import("./pages/InfluencerDetailsPage"));
+const DealsPage = lazy(() => import("./pages/DealsPage"));
+const DealDetailsPage = lazy(() => import("./pages/DealDetailsPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const SetPasswordPage = lazy(() => import("./pages/SetPasswordPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const NewsletterPage = lazy(() => import("./pages/NewsletterPage"));
+const LegalDocumentPage = lazy(() => import("./pages/LegalDocumentPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const UserDashboardPage = lazy(() => import("./pages/UserDashboardPage"));
 const UserSubmissionsPage = lazy(() => import("./pages/UserSubmissionsPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
@@ -34,6 +35,10 @@ const SeatingDesignerPage = lazy(() => import("./pages/SeatingDesignerPage"));
 
 function RouteFallback({ label = "Loading..." }) {
   return <p className="py-10 text-center text-sm text-slate-500">{label}</p>;
+}
+
+function SuspendedPage({ children, label = "Loading..." }) {
+  return <Suspense fallback={<RouteFallback label={label} />}>{children}</Suspense>;
 }
 
 function RedirectOrganizerDashboardToUser() {
@@ -76,47 +81,133 @@ function App() {
       <div className="relative z-[2]">
         <Routes>
           <Route element={<MainLayout />}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/events" element={<EventsPage />} />
+            <Route path="/" element={<HomeRoute />} />
+            <Route
+              path="/events"
+              element={
+                <SuspendedPage label="Loading events...">
+                  <EventsPage />
+                </SuspendedPage>
+              }
+            />
             <Route
               path="/events/:slug"
               element={
-                <Suspense fallback={<RouteFallback label="Loading event..." />}>
+                <SuspendedPage label="Loading event...">
                   <EventDetailsPage />
-                </Suspense>
+                </SuspendedPage>
               }
             />
-            <Route path="/influencers" element={<InfluencersPage />} />
+            <Route
+              path="/influencers"
+              element={
+                <SuspendedPage label="Loading influencers...">
+                  <InfluencersPage />
+                </SuspendedPage>
+              }
+            />
             <Route
               path="/influencers/:slug"
               element={
-                <Suspense fallback={<RouteFallback label="Loading profile..." />}>
+                <SuspendedPage label="Loading profile...">
                   <InfluencerDetailsPage />
-                </Suspense>
+                </SuspendedPage>
               }
             />
-            <Route path="/deals" element={<DealsPage />} />
+            <Route
+              path="/deals"
+              element={
+                <SuspendedPage label="Loading deals...">
+                  <DealsPage />
+                </SuspendedPage>
+              }
+            />
             <Route
               path="/deals/:slug"
               element={
-                <Suspense fallback={<RouteFallback label="Loading deal..." />}>
+                <SuspendedPage label="Loading deal...">
                   <DealDetailsPage />
-                </Suspense>
+                </SuspendedPage>
               }
             />
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/newsletter" element={<NewsletterPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/admin" element={<StaffLoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/set-password" element={<SetPasswordPage />} />
-            <Route path="/reset-password" element={<SetPasswordPage mode="reset" />} />
+            <Route
+              path="/contact"
+              element={
+                <SuspendedPage>
+                  <ContactPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/newsletter"
+              element={
+                <SuspendedPage>
+                  <NewsletterPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/privacy"
+              element={
+                <SuspendedPage>
+                  <LegalDocumentPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/terms"
+              element={
+                <SuspendedPage>
+                  <LegalDocumentPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/login"
+              element={
+                <SuspendedPage>
+                  <LoginPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <SuspendedPage>
+                  <StaffLoginPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <SuspendedPage>
+                  <RegisterPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/set-password"
+              element={
+                <SuspendedPage>
+                  <SetPasswordPage />
+                </SuspendedPage>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <SuspendedPage>
+                  <SetPasswordPage mode="reset" />
+                </SuspendedPage>
+              }
+            />
             <Route
               path="/booking/confirmed"
               element={
-                <Suspense fallback={<RouteFallback label="Loading confirmation..." />}>
+                <SuspendedPage label="Loading confirmation...">
                   <BookingConfirmedPage />
-                </Suspense>
+                </SuspendedPage>
               }
             />
             <Route
@@ -132,9 +223,9 @@ function App() {
           <Route
             path="/check-in"
             element={
-              <Suspense fallback={<RouteFallback label="Loading check-in..." />}>
+              <SuspendedPage label="Loading check-in...">
                 <CheckInPage />
-              </Suspense>
+              </SuspendedPage>
             }
           />
           <Route path="/dashboard/admin/verify-ticket" element={<RedirectLegacyVerifyTicket />} />
@@ -149,17 +240,17 @@ function App() {
             <Route
               path="/dashboard/user"
               element={
-                <Suspense fallback={<RouteFallback label="Loading dashboard..." />}>
+                <SuspendedPage label="Loading dashboard...">
                   <UserDashboardPage />
-                </Suspense>
+                </SuspendedPage>
               }
             />
             <Route
               path="/dashboard/user/submissions"
               element={
-                <Suspense fallback={<RouteFallback label="Loading submissions..." />}>
+                <SuspendedPage label="Loading submissions...">
                   <UserSubmissionsPage />
-                </Suspense>
+                </SuspendedPage>
               }
             />
           </Route>
@@ -170,9 +261,9 @@ function App() {
             path="/seating-designer/:eventId"
             element={
               <UserRoute>
-                <Suspense fallback={<RouteFallback label="Loading seating designer..." />}>
+                <SuspendedPage label="Loading seating designer...">
                   <SeatingDesignerPage />
-                </Suspense>
+                </SuspendedPage>
               </UserRoute>
             }
           />
@@ -187,9 +278,9 @@ function App() {
             <Route
               path="/dashboard/admin"
               element={
-                <Suspense fallback={<RouteFallback label="Loading admin dashboard..." />}>
+                <SuspendedPage label="Loading admin dashboard...">
                   <AdminDashboardPage />
-                </Suspense>
+                </SuspendedPage>
               }
             />
           </Route>
@@ -197,12 +288,19 @@ function App() {
           <Route
             path="/:eventSlug"
             element={
-              <Suspense fallback={<RouteFallback label="Loading event..." />}>
+              <SuspendedPage label="Loading event...">
                 <EventLandingPage />
-              </Suspense>
+              </SuspendedPage>
             }
           />
-          <Route path="/404" element={<NotFoundPage />} />
+          <Route
+            path="/404"
+            element={
+              <SuspendedPage>
+                <NotFoundPage />
+              </SuspendedPage>
+            }
+          />
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
       </div>

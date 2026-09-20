@@ -113,19 +113,28 @@ CREATE TABLE IF NOT EXISTS events (
   sponsor_inquiry_enabled TINYINT(1) NOT NULL DEFAULT 0,
   sponsor_contact_email VARCHAR(190) NULL,
   sponsor_contact_phone VARCHAR(40) NULL,
+  sponsor_tickets_enabled TINYINT(1) NOT NULL DEFAULT 0,
   show_on_events_page TINYINT(1) NOT NULL DEFAULT 1,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   is_listed TINYINT(1) NOT NULL DEFAULT 1,
+  home_featured TINYINT(1) NOT NULL DEFAULT 0,
+  home_featured_at TIMESTAMP NULL DEFAULT NULL,
   popularity_score INT NOT NULL DEFAULT 0,
   click_count INT NOT NULL DEFAULT 0,
   view_count INT NOT NULL DEFAULT 0,
+  ga_page_views_7d INT NOT NULL DEFAULT 0,
+  ga_page_views_30d INT NOT NULL DEFAULT 0,
+  ga_page_views_synced_at TIMESTAMP NULL DEFAULT NULL,
   reviewed_by BIGINT UNSIGNED NULL,
   reviewed_at TIMESTAMP NULL DEFAULT NULL,
   review_note VARCHAR(500) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  KEY idx_events_discovery (status, city_id, category_id, event_date, price)
+  KEY idx_events_discovery (status, city_id, category_id, event_date, price),
+  KEY idx_events_organizer (organizer_id),
+  KEY idx_events_home_featured (home_featured, home_featured_at),
+  KEY idx_events_listed_ga_popularity (status, is_listed, ga_page_views_30d)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS influencers (

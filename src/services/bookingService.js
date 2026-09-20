@@ -21,6 +21,13 @@ const {
   resolveBookingCart,
   computeCartSubtotal
 } = require("../utils/eventTicketLevels");
+const {
+  withSponsorTicketLevelForViewer,
+  canBookSponsorTickets,
+  cartHasSponsorTickets,
+  cartIsSponsorOnly,
+  buildSponsorTicketLevel
+} = require("../utils/sponsorTickets");
 const { applyCheckoutFees } = require("../utils/transactionFee");
 const { ensureGuestUserAccount } = require("./guestAccountService");
 const { publicBookingQrImageUrl } = require("../utils/bookingQr");
@@ -243,9 +250,13 @@ function resolveSignedInContactFields(payload, user) {
 async function resolveEventBookingPricingCore({ event, payload, userId, user, isGuest }) {
   assertPlatformEventForBooking(event);
 
-  const eventWithLevels = await attachTicketLevelAvailability(event, {
+  let eventWithLevels = await attachTicketLevelAvailability(event, {
     excludeHoldToken: payload.coupon_hold_token || null
   });
+  // Inject virtual sponsor tier for the owning organizer only (never for guests).
+  if (!isGuest && user) {
+    eventWithLevels = withSponsorTicketLevelForViewer(eventWithLevels, user);
+  }
 
   if (isGuest) {
     if (isExclusiveDealEvent(event)) {
@@ -276,11 +287,16 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
   let cart;
   let guests;
   const reservedSeating = isReservedSeating(eventWithLevels);
+  const holdTokenRaw = String(payload.seatsio_hold_token || "").trim();
+  const selectedSeatsRaw = Array.isArray(payload.selected_seats) ? payload.selected_seats : [];
+  const bookAsSponsor =
+    payload.book_as_sponsor === true ||
+    payload.book_as_sponsor === 1 ||
+    String(payload.book_as_sponsor || "") === "1";
 
   if (reservedSeating) {
-    const holdToken = String(payload.seatsio_hold_token || "").trim();
-    const selectedSeats = Array.isArray(payload.selected_seats) ? payload.selected_seats : [];
-    if (!holdToken || !selectedSeats.length) {
+    // Reserved seating always requires chart selection — including complimentary sponsor comps.
+    if (!holdTokenRaw || !selectedSeatsRaw.length) {
       throw new ApiError(400, "Select seats on the seating chart to continue.");
     }
     if (!eventWithLevels.seatsio_event_key) {
@@ -288,7 +304,7 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     }
     const chartMeta = await seatsioService.getChartSeatingMetaForEvent(eventWithLevels);
     const built = seatsioService.buildCartFromSelectedSeats(
-      selectedSeats,
+      selectedSeatsRaw,
       eventWithLevels.ticket_levels || [],
       totalDays,
       chartMeta.chartCategoryKeys,
@@ -296,18 +312,70 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     );
     cart = built.cart;
     guests = built.attendeeCount;
-    payload._seatsio_hold_token = holdToken;
-    payload._selected_seats = selectedSeats;
+    payload._seatsio_hold_token = holdTokenRaw;
+    payload._selected_seats = selectedSeatsRaw;
+
+    if (bookAsSponsor) {
+      if (isGuest || !canBookSponsorTickets(eventWithLevels, user)) {
+        throw new ApiError(403, "Sponsor tickets are only available to the event organizer.");
+      }
+      if (!guests) {
+        throw new ApiError(400, "Select seats on the seating chart to continue.");
+      }
+      const sponsorLevel = buildSponsorTicketLevel();
+      cart = [
+        {
+          level_id: sponsorLevel.id,
+          level_name: sponsorLevel.name,
+          unit_price: 0,
+          quantity: guests,
+          seats: selectedSeatsRaw.map((seat) => ({
+            label: seat.label,
+            category: seat.category,
+            category_label: seat.category_label || null
+          }))
+        }
+      ];
+    } else if (!cart.length) {
+      throw new ApiError(400, "Selected seats could not be matched to ticket types.");
+    }
   } else {
+    if (bookAsSponsor) {
+      throw new ApiError(
+        400,
+        "Use the Sponsor ticket tier for complimentary general-admission bookings."
+      );
+    }
     try {
       ({ cart, attendeeCount: guests } = resolveBookingCart(eventWithLevels, payload));
     } catch (err) {
       throw new ApiError(400, err.message || "Invalid ticket selection.");
     }
+    if (cartHasSponsorTickets(cart)) {
+      if (isGuest || !canBookSponsorTickets(eventWithLevels, user)) {
+        throw new ApiError(403, "Sponsor tickets are only available to the event organizer.");
+      }
+      if (!cartIsSponsorOnly(cart)) {
+        throw new ApiError(
+          400,
+          "Sponsor complimentary tickets must be booked separately from paid ticket types."
+        );
+      }
+    }
     const reservedSeats = await countReservedSeatsForEvent(payload.event_id, {
       excludeHoldToken: payload.coupon_hold_token || null
     });
     assertSeatsAvailableForBooking(eventWithLevels, guests, reservedSeats);
+  }
+
+  if (cartHasSponsorTickets(cart) && !cartIsSponsorOnly(cart)) {
+    throw new ApiError(
+      400,
+      "Sponsor complimentary tickets must be booked separately from paid ticket types."
+    );
+  }
+  if (cartHasSponsorTickets(cart) && (isGuest || !canBookSponsorTickets(eventWithLevels, user))) {
+    throw new ApiError(403, "Sponsor tickets are only available to the event organizer.");
   }
 
   let subtotalAmount = computeCartSubtotal(cart, totalDays);
@@ -316,6 +384,10 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
   let couponId = null;
   let couponCode = null;
   const holdToken = payload.coupon_hold_token || null;
+
+  if (holdToken && cartHasSponsorTickets(cart)) {
+    throw new ApiError(400, "Coupons cannot be applied to complimentary sponsor tickets.");
+  }
 
   if (holdToken) {
     const applied = await couponService.consumeHoldForBooking({

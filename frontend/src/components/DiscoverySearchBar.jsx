@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { FiCalendar, FiChevronDown, FiMapPin, FiNavigation, FiRotateCcw, FiSearch, FiSliders, FiTag } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { categories } from "../utils/filterOptions";
 import useCityFilter from "../hooks/useCityFilter";
-import AirbnbDatePickerPanel from "./AirbnbDatePickerPanel";
 import { formatDateUS } from "../utils/format";
+
+const AirbnbDatePickerPanel = lazy(() => import("./AirbnbDatePickerPanel"));
 
 function DiscoverySearchBar({ onCriteriaChange }) {
   const navigate = useNavigate();
@@ -388,15 +389,17 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                     style={{ position: "fixed", top: panelPosition.top, left: panelPosition.left, zIndex: 220 }}
                     className={`${panelBase} w-fit max-w-[calc(100vw-2rem)]`}
                   >
-                    <AirbnbDatePickerPanel
-                      value={date}
-                      onChange={setDate}
-                      minDate={new Date()}
-                      monthsShownDesktop={2}
-                      monthsShownMobile={1}
-                      closeOnSelect
-                      onClose={() => setActivePanel(null)}
-                    />
+                    <Suspense fallback={<div className="h-72 w-[18rem] animate-pulse rounded-2xl bg-slate-100" />}>
+                      <AirbnbDatePickerPanel
+                        value={date}
+                        onChange={setDate}
+                        minDate={new Date()}
+                        monthsShownDesktop={2}
+                        monthsShownMobile={1}
+                        closeOnSelect
+                        onClose={() => setActivePanel(null)}
+                      />
+                    </Suspense>
                   </motion.div>, document.body)
                 : null}
             </div>

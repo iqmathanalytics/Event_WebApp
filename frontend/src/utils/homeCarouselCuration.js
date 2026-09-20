@@ -1,7 +1,9 @@
 /**
  * Home page carousels: rank by GA popularity (30-day page views), then tag score as tiebreaker.
- * No separate slots for exclusive / premium items — order is purely by metrics.
+ * Spotlighted events are always placed first.
  */
+
+import { sortEventsWithHomeFeaturedFirst } from "./eventHomeFeatured";
 
 const TAG_WEIGHT = Object.freeze({
   Trending: 500,
@@ -37,29 +39,29 @@ function sortByPopularity(items) {
   return [...(items || [])].filter((x) => x && x.id != null).sort(byPopularityThenTags);
 }
 
-/** Top 6 listings by GA popularity (hero carousel). */
+/** Top 6 listings by GA popularity (hero carousel), with spotlighted events first. */
 export function pickHomeCarouselSix(items) {
-  return sortByPopularity(items).slice(0, 6);
+  return sortEventsWithHomeFeaturedFirst(sortByPopularity(items)).slice(0, 6);
 }
 
-/** First N items — caller should pass a list already sorted by event date. */
+/** First N items — spotlighted events stay first, then the incoming order. */
 export function pickHomeCarouselFromSorted(items, count = 6) {
   const cap = Math.max(1, Number(count) || 6);
-  return (items || []).filter((x) => x && x.id != null).slice(0, cap);
+  return sortEventsWithHomeFeaturedFirst((items || []).filter((x) => x && x.id != null)).slice(0, cap);
 }
 
 /**
- * Landing grid section — top N by GA popularity.
+ * Landing grid section — top N by GA popularity, with spotlighted events first.
  * @param {object[]} items
  * @param {{ limit?: number }} [opts]
  */
 export function pickLandingSectionCards(items, { limit = 5 } = {}) {
   const cap = Math.max(1, Number(limit) || 5);
-  return sortByPopularity(items).slice(0, cap);
+  return sortEventsWithHomeFeaturedFirst(sortByPopularity(items)).slice(0, cap);
 }
 
-/** First N items — caller should pass a list already sorted by event date. */
+/** First N items — spotlighted events stay first, then the incoming order. */
 export function pickLandingSectionFromSorted(items, { limit = 5 } = {}) {
   const cap = Math.max(1, Number(limit) || 5);
-  return (items || []).filter((x) => x && x.id != null).slice(0, cap);
+  return sortEventsWithHomeFeaturedFirst((items || []).filter((x) => x && x.id != null)).slice(0, cap);
 }

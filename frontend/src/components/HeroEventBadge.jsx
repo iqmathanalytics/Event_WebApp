@@ -1,5 +1,14 @@
 import { motion } from "framer-motion";
 
+function homeSpotlightBadgeMeta() {
+  return {
+    label: "Spotlight Event",
+    labelCompact: "Spotlight",
+    subLabel: "Pinned to the top",
+    gradient: "from-amber-400/95 via-orange-400/90 to-rose-500/90"
+  };
+}
+
 export function heroBadgeMeta(variant = "featured") {
   if (variant === "yay") {
     return {
@@ -8,6 +17,9 @@ export function heroBadgeMeta(variant = "featured") {
       subLabel: "Members-only perks",
       gradient: "from-amber-400/90 via-rose-500/90 to-fuchsia-500/90"
     };
+  }
+  if (variant === "home") {
+    return homeSpotlightBadgeMeta();
   }
   return {
     label: "Featured Event",

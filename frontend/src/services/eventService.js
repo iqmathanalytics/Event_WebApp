@@ -11,7 +11,10 @@ const PUBLIC_LIST_CACHE_TTL_MS = 3 * 60 * 1000;
 
 function bustPublicEventCaches() {
   clearClientCacheByPrefix("events:featured");
+  clearClientCacheByPrefix("events:list");
 }
+
+export { bustPublicEventCaches };
 
 export async function fetchEvents(params = {}) {
   const response = await api.get("/events", { params });

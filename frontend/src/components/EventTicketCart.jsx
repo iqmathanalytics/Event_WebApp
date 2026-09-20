@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Minus, Plus, Sparkles } from "lucide-react";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { cartTicketCount, computeCartSubtotal } from "../utils/eventTicketLevels";
@@ -20,24 +21,226 @@ function levelMetaLine(level) {
   return parts.join(" · ");
 }
 
-function availabilityStatus(level) {
-  if (level.level_sold_out) {
-    return { label: "Sold out", tone: "sold" };
-  }
-  if (level.level_seats_remaining != null) {
-    const n = Number(level.level_seats_remaining);
-    if (n <= 0) {
-      return { label: "Sold out", tone: "sold" };
-    }
-    if (n <= 5) {
-      return { label: `${n} left`, tone: "low" };
-    }
-    return { label: `${n} available`, tone: "ok" };
-  }
-  if (level.seats != null) {
-    return { label: `${level.seats} seats`, tone: "ok" };
-  }
-  return { label: "Select on chart", tone: "chart" };
+function TicketTierCard({
+  level,
+  index,
+  levelList,
+  qty,
+  active,
+  soldOut,
+  lineTotal,
+  totalDays,
+  chartMode,
+  disabled,
+  ticketTotal,
+  maxTickets,
+  atLevelCap,
+  setQty
+}) {
+  const palette = resolveTicketLevelPalette(level, index, levelList);
+  const isLuxe = palette.key === "luxe";
+  const meta = levelMetaLine(level);
+  const description = String(level.description || "").trim();
+  const longCopy = description.length > 160;
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className={`ticket-tier-card rounded-2xl border p-3.5 transition-all duration-300 sm:p-4 ${
+        soldOut
+          ? "border-slate-200 bg-slate-50 opacity-75"
+          : active
+            ? `ticket-tier-card--active ${palette.cardActive}`
+            : palette.cardIdle
+      }`}
+      style={
+        soldOut || !palette.styles
+          ? undefined
+          : active
+            ? { ...palette.styles.cardIdle, ...palette.styles.cardActive }
+            : palette.styles.cardIdle
+      }
+    >
+      {(palette.animateShine || active) && !soldOut ? (
+        <div
+          className={`ticket-tier-shine ${palette.animateShine ? "ticket-tier-shine--fast" : ""}`}
+          aria-hidden
+        />
+      ) : null}
+      {palette.animateGlow && active && !soldOut ? (
+        <div
+          className={`ticket-tier-glow ${palette.glow || ""}`}
+          style={palette.styles?.glow}
+          aria-hidden
+        />
+      ) : null}
+
+      <div className="relative z-[2] flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <span
+            className={`inline-flex min-w-0 max-w-[70%] items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tracking-wide ${
+              soldOut ? "bg-slate-200 text-slate-600" : palette.badge
+            }`}
+            style={soldOut ? undefined : palette.styles?.badge}
+          >
+            {isLuxe && !soldOut ? <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} /> : null}
+            <span className="truncate">{level.name}</span>
+          </span>
+          {chartMode ? (
+            soldOut ? (
+              <span className="shrink-0 rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                Sold out
+              </span>
+            ) : active ? (
+              <span
+                className={`shrink-0 text-sm font-extrabold tabular-nums ${palette.qty}`}
+                style={palette.styles?.qty}
+              >
+                {qty} selected
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 ring-1 ring-slate-200/80">
+                Select on chart
+              </span>
+            )
+          ) : (
+            <p
+              className={`shrink-0 text-right text-lg font-extrabold leading-none tabular-nums ${
+                soldOut ? "text-slate-500" : palette.price
+              }`}
+              style={soldOut ? undefined : palette.styles?.price}
+            >
+              {formatCurrency(level.price)}
+              <span
+                className={`mt-0.5 block text-[10px] font-semibold tracking-wide ${
+                  soldOut ? "text-slate-400" : palette.priceMuted
+                }`}
+                style={soldOut ? undefined : palette.styles?.priceMuted}
+              >
+                per ticket
+              </span>
+            </p>
+          )}
+        </div>
+
+        {description ? (
+          <div className="rounded-xl bg-white/55 px-3 py-2.5 ring-1 ring-black/[0.04]">
+            <p
+              className={`text-[13px] leading-6 ${soldOut ? "text-slate-500" : palette.desc} ${
+                longCopy && !expanded ? "line-clamp-3" : ""
+              }`}
+            >
+              {description}
+            </p>
+            {longCopy ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((open) => !open)}
+                className="mt-1.5 text-[11px] font-bold text-slate-700 underline-offset-2 hover:underline"
+              >
+                {expanded ? "Show less" : "Read more"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3">
+          <div className="min-w-0">
+            {chartMode ? (
+              meta && !soldOut ? (
+                <p className="text-[11px] font-semibold leading-snug text-slate-600">{meta}</p>
+              ) : null
+            ) : soldOut ? (
+              <span className="inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase text-slate-600">
+                Sold out
+              </span>
+            ) : meta ? (
+              <p className="text-[11px] font-semibold leading-snug text-slate-600">{meta}</p>
+            ) : (
+              <p className="text-[11px] font-medium text-slate-400">Ready to add</p>
+            )}
+            {active && !soldOut ? (
+              <p
+                className={`mt-1 text-xs font-bold tabular-nums ${palette.lineTotal}`}
+                style={palette.styles?.lineTotal}
+              >
+                {formatCurrency(lineTotal)}
+                {totalDays > 1 ? ` · ${totalDays}d` : ""}
+              </p>
+            ) : null}
+          </div>
+
+          {chartMode ? (
+            <p
+              className={`shrink-0 text-right text-lg font-extrabold leading-none tabular-nums ${
+                soldOut ? "text-slate-500" : palette.price
+              }`}
+              style={soldOut ? undefined : palette.styles?.price}
+            >
+              {formatCurrency(level.price)}
+              <span
+                className={`mt-0.5 block text-[10px] font-semibold tracking-wide ${
+                  soldOut ? "text-slate-400" : palette.priceMuted
+                }`}
+                style={soldOut ? undefined : palette.styles?.priceMuted}
+              >
+                per ticket
+              </span>
+            </p>
+          ) : (
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={disabled || soldOut || qty <= 0}
+                  onClick={() => setQty(level.id, qty - 1)}
+                  aria-label={`Remove one ${level.name}`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 ${
+                    active && !soldOut ? palette.btnActive : palette.btn
+                  }`}
+                  style={
+                    soldOut ? undefined : active ? palette.styles?.btnActive : palette.styles?.btn
+                  }
+                >
+                  <Minus className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+                <span
+                  className={`min-w-[2rem] text-center text-base font-extrabold tabular-nums ${
+                    soldOut ? "text-slate-400" : palette.qty
+                  }`}
+                  style={soldOut ? undefined : palette.styles?.qty}
+                >
+                  {qty}
+                </span>
+                <button
+                  type="button"
+                  disabled={
+                    disabled ||
+                    soldOut ||
+                    ticketTotal >= (maxTickets > 0 ? maxTickets : 50) ||
+                    atLevelCap
+                  }
+                  onClick={() => setQty(level.id, qty + 1)}
+                  aria-label={`Add one ${level.name}`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 ${
+                    active && !soldOut ? palette.btnActive : palette.btn
+                  }`}
+                  style={
+                    soldOut ? undefined : active ? palette.styles?.btnActive : palette.styles?.btn
+                  }
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+              </div>
+              {!active && !soldOut ? (
+                <p className="text-[10px] font-medium text-slate-400">Tap + to add</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -110,12 +313,7 @@ export default function EventTicketCart({
               <span className="bg-gradient-to-r from-amber-700 to-amber-500 bg-clip-text font-bold text-transparent">
                 {formatCurrency(subtotal)}
               </span>
-              {totalDays > 1 ? (
-                <span className="text-slate-500">
-                  {" "}
-                  · {totalDays} days
-                </span>
-              ) : null}
+              {totalDays > 1 ? <span className="text-slate-500"> · {totalDays} days</span> : null}
             </p>
           </div>
         ) : null}
@@ -124,154 +322,26 @@ export default function EventTicketCart({
       <div className="space-y-3">
         {levelList.map((level, index) => {
           const qty = Number(cart?.[level.id]) || 0;
-          const active = qty > 0;
-          const soldOut = Boolean(level.level_sold_out);
-          const lineTotal = Number(level.price || 0) * qty * Math.max(1, totalDays);
-          const palette = resolveTicketLevelPalette(level, index, levelList);
-          const isLuxe = palette.key === "luxe";
-          const meta = levelMetaLine(level);
-          const status = availabilityStatus(level);
-          const atLevelCap =
-            level.level_seats_remaining != null && qty >= Number(level.level_seats_remaining);
-
           return (
-            <div
+            <TicketTierCard
               key={level.id}
-              className={`ticket-tier-card rounded-2xl border p-3.5 transition-all duration-300 sm:p-4 ${
-                soldOut
-                  ? "border-slate-200 bg-slate-50 opacity-75"
-                  : active
-                    ? `ticket-tier-card--active ${palette.cardActive}`
-                    : palette.cardIdle
-              }`}
-            >
-              {(palette.animateShine || active) && !soldOut ? (
-                <div
-                  className={`ticket-tier-shine ${palette.animateShine ? "ticket-tier-shine--fast" : ""}`}
-                  aria-hidden
-                />
-              ) : null}
-              {palette.animateGlow && active && !soldOut ? (
-                <div className={`ticket-tier-glow ${palette.glow}`} aria-hidden />
-              ) : null}
-
-              <div className="relative z-[2] flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tracking-wide ${soldOut ? "bg-slate-200 text-slate-600" : palette.badge}`}
-                    >
-                      {isLuxe && !soldOut ? <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} /> : null}
-                      <span className="truncate">{level.name}</span>
-                    </span>
-                    {chartMode ? (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                          status.tone === "sold"
-                            ? "bg-slate-200 text-slate-600"
-                            : status.tone === "low"
-                              ? "bg-amber-100 text-amber-900"
-                              : status.tone === "chart"
-                                ? "bg-slate-100 text-slate-600"
-                                : "bg-emerald-100 text-emerald-800"
-                        }`}
-                      >
-                        {status.label}
-                      </span>
-                    ) : soldOut ? (
-                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
-                        Sold out
-                      </span>
-                    ) : null}
-                  </div>
-                  {level.description ? (
-                    <p className={`mt-1 text-xs leading-relaxed ${soldOut ? "text-slate-500" : palette.desc}`}>
-                      {level.description}
-                    </p>
-                  ) : null}
-                  {meta ? (
-                    <p className={`mt-1.5 text-[11px] font-medium ${soldOut ? "text-slate-500" : "text-slate-600"}`}>
-                      {meta}
-                    </p>
-                  ) : null}
-                  <p className={`mt-2 text-lg font-extrabold tabular-nums ${soldOut ? "text-slate-500" : palette.price}`}>
-                    {formatCurrency(level.price)}
-                    <span className={`ml-1.5 text-xs font-semibold ${soldOut ? "text-slate-400" : palette.priceMuted}`}>
-                      per ticket
-                    </span>
-                  </p>
-                </div>
-
-                {chartMode ? (
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    {active && !soldOut ? (
-                      <>
-                        <p className={`text-sm font-extrabold tabular-nums ${palette.qty}`}>
-                          {qty} seat{qty === 1 ? "" : "s"}
-                        </p>
-                        <p className={`text-xs font-bold tabular-nums ${palette.lineTotal}`}>
-                          {formatCurrency(lineTotal)}
-                          {totalDays > 1 ? ` · ${totalDays}d` : ""}
-                        </p>
-                      </>
-                    ) : soldOut ? (
-                      <p className="text-[10px] font-medium text-slate-500">Unavailable</p>
-                    ) : (
-                      <p className="max-w-[5.5rem] text-right text-[10px] font-medium leading-snug text-slate-400">
-                        Choose on chart
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={disabled || soldOut || qty <= 0}
-                        onClick={() => setQty(level.id, qty - 1)}
-                        aria-label={`Remove one ${level.name}`}
-                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 ${
-                          active && !soldOut ? palette.btnActive : palette.btn
-                        }`}
-                      >
-                        <Minus className="h-4 w-4" strokeWidth={2.5} />
-                      </button>
-                      <span
-                        className={`min-w-[2.25rem] text-center text-base font-extrabold tabular-nums ${soldOut ? "text-slate-400" : palette.qty}`}
-                      >
-                        {qty}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={
-                          disabled ||
-                          soldOut ||
-                          ticketTotal >= (maxTickets > 0 ? maxTickets : 50) ||
-                          atLevelCap
-                        }
-                        onClick={() => setQty(level.id, qty + 1)}
-                        aria-label={`Add one ${level.name}`}
-                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 ${
-                          active && !soldOut ? palette.btnActive : palette.btn
-                        }`}
-                      >
-                        <Plus className="h-4 w-4" strokeWidth={2.5} />
-                      </button>
-                    </div>
-                    {active && !soldOut ? (
-                      <p className={`text-xs font-bold tabular-nums ${palette.lineTotal}`}>
-                        {formatCurrency(lineTotal)}
-                        {totalDays > 1 ? ` · ${totalDays}d` : ""}
-                      </p>
-                    ) : soldOut ? (
-                      <p className="text-[10px] font-medium text-slate-500">Unavailable</p>
-                    ) : (
-                      <p className="text-[10px] font-medium text-slate-400">Tap + to add</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+              level={level}
+              index={index}
+              levelList={levelList}
+              qty={qty}
+              active={qty > 0}
+              soldOut={Boolean(level.level_sold_out)}
+              lineTotal={Number(level.price || 0) * qty * Math.max(1, totalDays)}
+              totalDays={totalDays}
+              chartMode={chartMode}
+              disabled={disabled}
+              ticketTotal={ticketTotal}
+              maxTickets={maxTickets}
+              atLevelCap={
+                level.level_seats_remaining != null && qty >= Number(level.level_seats_remaining)
+              }
+              setQty={setQty}
+            />
           );
         })}
       </div>

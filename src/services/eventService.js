@@ -12,6 +12,7 @@ const {
   publishOrganizerEvent,
   deleteEventByOrganizer,
   listFeaturedEvents,
+  listSpotlightEvents,
   incrementEventPopularity
 } = require("../models/eventModel");
 const { getPagination } = require("../utils/pagination");
@@ -70,17 +71,14 @@ async function resolveOrganizerTicketSalesMode(organizerId, requestedMode, exist
     "On-site ticket sales are not enabled for your account. Submit a hosting request from your user dashboard."
   );
 }
-const googleAnalytics = require("./googleAnalyticsService");
 
 const EVENT_TAG_RULES = Object.freeze({
   hotSellingMinBookings: 5,
-  /** GA page views (last 7 days) — not legacy DB click/view counters. */
+  /** Stored GA page views (last 7 days) — synced off the request path. */
   trendingMinViews7d: 3,
   trendingMinViews30d: 10,
   rareCategoryMaxEvents: 2
 });
-
-const GA_POPULARITY_FETCH_CAP = 500;
 
 function isYayDealEventRow(row) {
   return (
@@ -89,6 +87,11 @@ function isYayDealEventRow(row) {
     String(row?.is_yay_deal_event || "") === "1"
   );
 }
+
+const {
+  withSponsorTicketLevelForViewer,
+  isSponsorTicketsEnabled
+} = require("../utils/sponsorTickets");
 
 function sanitizePublicEventForViewer(event, viewerUser) {
   if (!event) {
@@ -104,11 +107,12 @@ function sanitizePublicEventForViewer(event, viewerUser) {
     delete next.sponsor_contact_phone;
     next.sponsor_inquiry_enabled = false;
   }
+  next.sponsor_tickets_enabled = isSponsorTicketsEnabled(next);
   const authed = Boolean(viewerUser && viewerUser.id);
   if (isYayDealEventRow(next) && !authed) {
     delete next.deal_event_discount_code;
   }
-  return next;
+  return withSponsorTicketLevelForViewer(next, viewerUser);
 }
 
 function toNumber(value) {
@@ -117,52 +121,23 @@ function toNumber(value) {
 }
 
 /**
- * Popularity for cards/sort comes only from GA4 page_view + bmt_event_id (not DB counters).
+ * Popularity for cards/sort comes from stored GA columns (synced off the request path).
+ * Until the first sync, keep the legacy DB score so sort/tags still have a signal.
  */
-async function applyGaPopularityMetrics(rows) {
+function withStoredPopularityMetrics(rows) {
   if (!rows?.length) {
     return rows;
   }
-  if (!googleAnalytics.isConfigured()) {
-    return rows.map((row) => ({
+  return rows.map((row) => {
+    const views30d = toNumber(row.ga_page_views_30d);
+    const views7d = toNumber(row.ga_page_views_7d);
+    return {
       ...row,
-      popularity_score: 0,
-      ga_page_views_30d: 0,
-      ga_page_views_7d: 0
-    }));
-  }
-  try {
-    const eventIds = rows.map((r) => String(r.id));
-    const [map30, map7] = await Promise.all([
-      googleAnalytics.getEventPageViewsMap(eventIds, 30),
-      googleAnalytics.getEventPageViewsMap(eventIds, 7)
-    ]);
-    return rows.map((row) => {
-      const id = String(row.id);
-      const views30d = map30[id] || 0;
-      const views7d = map7[id] || 0;
-      return {
-        ...row,
-        popularity_score: views30d,
-        ga_page_views_30d: views30d,
-        ga_page_views_7d: views7d
-      };
-    });
-  } catch (err) {
-    console.error("GA popularity error:", err?.message || err);
-    return rows.map((row) => ({
-      ...row,
-      popularity_score: 0,
-      ga_page_views_30d: 0,
-      ga_page_views_7d: 0
-    }));
-  }
-}
-
-function sortRowsByPopularity(rows) {
-  return [...rows].sort(
-    (a, b) => toNumber(b.ga_page_views_30d ?? b.popularity_score) - toNumber(a.ga_page_views_30d ?? a.popularity_score)
-  );
+      ga_page_views_30d: views30d,
+      ga_page_views_7d: views7d,
+      popularity_score: views30d || toNumber(row.popularity_score)
+    };
+  });
 }
 
 /** Sort listings by calendar date only (earliest show date), not time or popularity. */
@@ -175,6 +150,50 @@ function sortRowsByEventDate(rows, order = "asc") {
       return desc ? db.localeCompare(da) : da.localeCompare(db);
     }
     return String(a?.id ?? "").localeCompare(String(b?.id ?? ""), undefined, { numeric: true });
+  });
+}
+
+function isHomeFeaturedRow(event) {
+  const value = event?.home_featured;
+  if (value === true || value === 1 || value === "1" || value === "true") {
+    return true;
+  }
+  if (value && typeof value === "object" && Array.isArray(value.data)) {
+    return Number(value.data[0]) === 1;
+  }
+  return false;
+}
+
+function dedupeEventsById(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows || []) {
+    if (!row || row.id == null) {
+      continue;
+    }
+    const id = String(row.id);
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    out.push(row);
+  }
+  return out;
+}
+
+function sortRowsWithHomeFeaturedFirst(rows) {
+  return [...(rows || [])].sort((a, b) => {
+    const pa = isHomeFeaturedRow(a) ? 1 : 0;
+    const pb = isHomeFeaturedRow(b) ? 1 : 0;
+    if (pa !== pb) {
+      return pb - pa;
+    }
+    if (!pa) {
+      return 0;
+    }
+    const ta = Date.parse(a?.home_featured_at || 0) || 0;
+    const tb = Date.parse(b?.home_featured_at || 0) || 0;
+    return tb - ta;
   });
 }
 
@@ -369,15 +388,15 @@ async function submitEvent(payload, organizerId, { role } = {}) {
     }
   }
 
-  await notifyAdminSafe({
-    type: "event_submitted",
-    entityType: "event",
-    entityId: eventId,
-    title: autoApproved ? "New event published" : "New event submitted",
-    message: autoApproved
-      ? `Event #${eventId} was posted by a verified organizer and is live (auto-approved).`
-      : `Event #${eventId} is awaiting moderation.`
-  });
+  if (!autoApproved) {
+    await notifyAdminSafe({
+      type: "event_submitted",
+      entityType: "event",
+      entityId: eventId,
+      title: "New event submitted",
+      message: `Event #${eventId} is awaiting moderation.`
+    });
+  }
 
   return { eventId, autoApproved, status: autoApproved ? "approved" : "pending" };
 }
@@ -421,7 +440,6 @@ async function fetchEvents(query, viewerUser) {
   const status = query.status || "approved";
   const sort = query.sort || "event_date";
   const sortByPopularity = sort === "popularity";
-  const useGaPopularitySort = sortByPopularity && googleAnalytics.isConfigured();
 
   const filters = {
     status,
@@ -435,33 +453,31 @@ async function fetchEvents(query, viewerUser) {
     priceMin: query.price_min ? Number(query.price_min) : null,
     priceMax: query.price_max ? Number(query.price_max) : null,
     q: search,
-    sortBy: useGaPopularitySort ? "newest" : sort,
-    sortOrder: query.sort_order || "asc",
+    sortBy: sort,
+    sortOrder: query.sort_order || (sortByPopularity ? "desc" : "asc"),
     futureOnly: status === "approved" && !query.date && !query.month
   };
 
-  const listPagination = useGaPopularitySort
-    ? { page: 1, limit: GA_POPULARITY_FETCH_CAP, offset: 0 }
-    : pagination;
+  const data = await listEvents({ filters, pagination });
+  let rows = withStoredPopularityMetrics(data.rows || []);
 
-  const data = await listEvents({ filters, pagination: listPagination });
-  let rows = await applyGaPopularityMetrics(data.rows || []);
-
-  if (useGaPopularitySort) {
-    rows = sortRowsByPopularity(rows);
-    const total = rows.length;
-    const start = (pagination.page - 1) * pagination.limit;
-    rows = rows.slice(start, start + pagination.limit);
-    rows = rows
-      .map(attachDynamicEventTags)
-      .map((row) => sanitizePublicEventForViewer(row, viewerUser));
-    return {
-      ...data,
-      total,
-      rows,
-      page: pagination.page,
-      limit: pagination.limit
-    };
+  if (pagination.page === 1 && status === "approved") {
+    const spotlightRows = withStoredPopularityMetrics(
+      await listSpotlightEvents({
+        categoryId: filters.categoryId,
+        q: filters.q,
+        date: filters.date,
+        limit: 24
+      })
+    );
+    if (spotlightRows.length) {
+      const rest = rows.filter((row) => !isHomeFeaturedRow(row));
+      const merged = dedupeEventsById([...spotlightRows, ...rest]);
+      rows =
+        spotlightRows.length >= pagination.limit
+          ? merged.filter(isHomeFeaturedRow)
+          : merged.slice(0, pagination.limit);
+    }
   }
 
   rows = rows
@@ -471,6 +487,7 @@ async function fetchEvents(query, viewerUser) {
   if (sort === "event_date") {
     rows = sortRowsByEventDate(rows, filters.sortOrder);
   }
+  rows = sortRowsWithHomeFeaturedFirst(rows);
 
   return {
     ...data,
@@ -486,15 +503,20 @@ async function fetchEventById(slugOrId, viewerUser) {
   if (!event) {
     throw new ApiError(404, "Event not found");
   }
-  const [withGaPopularity] = await applyGaPopularityMetrics([event]);
+  const [withPopularity] = withStoredPopularityMetrics([event]);
   const enriched = attachDynamicEventTags({
-    ...withGaPopularity,
-    display_date: getPrimaryEventDate(withGaPopularity)
+    ...withPopularity,
+    display_date: getPrimaryEventDate(withPopularity)
   });
   const withSeats = await attachEventSeatAvailability(enriched);
   const withLevelSeats = await attachTicketLevelAvailability(withSeats);
   let checkoutCouponsAvailable = false;
+  const couponsEnabledForEvent = !(
+    withLevelSeats?.coupon_codes_enabled === false ||
+    Number(withLevelSeats?.coupon_codes_enabled) === 0
+  );
   if (
+    couponsEnabledForEvent &&
     withLevelSeats?.id &&
     withLevelSeats?.organizer_id &&
     normalizeTicketSalesMode(withLevelSeats.ticket_sales_mode) === "platform"
@@ -625,14 +647,6 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
 
   await publishOrganizerEvent({ eventId, organizerId });
 
-  await notifyAdminSafe({
-    type: "event_submitted",
-    entityType: "event",
-    entityId: eventId,
-    title: "Event updated",
-    message: `Event #${eventId} was updated by the organizer and is live (auto-published).`
-  });
-
   return { skipReapproval: true, autoPublished: true, status: "approved" };
 }
 
@@ -656,9 +670,13 @@ async function deleteOwnEvent(eventId, organizerId) {
 
 async function fetchFeaturedEvents({ city, limit }, viewerUser) {
   const cityId = city ? Number(city) : null;
-  let rows = await listFeaturedEvents({ cityId, limit: Number(limit) || 6 });
-  rows = await applyGaPopularityMetrics(rows);
-  rows = sortRowsByEventDate(rows, "asc");
+  const feedLimit = Number(limit) || 6;
+  const [spotlightRows, feedRows] = await Promise.all([
+    listSpotlightEvents({ limit: 24 }),
+    listFeaturedEvents({ cityId, limit: feedLimit })
+  ]);
+  let rows = withStoredPopularityMetrics(dedupeEventsById([...spotlightRows, ...feedRows]));
+  rows = sortRowsWithHomeFeaturedFirst(sortRowsByEventDate(rows, "asc"));
   return rows
     .map(attachDynamicEventTags)
     .map((row) => sanitizePublicEventForViewer(row, viewerUser));

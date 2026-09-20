@@ -4,7 +4,9 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, EffectFade, Navigation, Pagination } from "swiper/modules";
 import { buildHeroNarrativeFromSlide } from "../utils/heroSlideCopy";
 import { eventDetailPath } from "../utils/listingPaths";
+import { HERO_IMAGE_SIZES, heroImageSrcSet, heroImageUrl } from "../utils/displayImage";
 import { trackEventClick } from "../services/eventService";
+import { isHomeFeaturedEvent } from "../utils/eventHomeFeatured";
 import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/pagination";
@@ -24,58 +26,39 @@ function pushNarrative(swiper, slidesList, onHeroNarrativeChangeP) {
   }
 }
 
-function optimizeHeroImageUrl(url) {
-  const raw = String(url || "").trim();
-  if (!raw) {
-    return raw;
-  }
-  try {
-    const parsed = new URL(raw);
-    if (parsed.hostname.includes("unsplash.com") || parsed.hostname.includes("plus.unsplash.com")) {
-      parsed.searchParams.set("w", "960");
-      parsed.searchParams.set("q", "75");
-      parsed.searchParams.set("auto", "format");
-      parsed.searchParams.set("fit", "crop");
-    }
-    return parsed.toString();
-  } catch {
-    return raw;
-  }
-}
-
 const slides = [
   {
-    image: optimizeHeroImageUrl(
+    image: heroImageUrl(
       "https://plus.unsplash.com/premium_photo-1683129651802-1c7ba429a137?q=80&w=1170&auto=format&fit=crop"
     ),
     label: "Music Festival Night"
   },
   {
-    image: optimizeHeroImageUrl(
+    image: heroImageUrl(
       "https://images.unsplash.com/photo-1523580494863-6f3031224c94?q=80&w=1170&auto=format&fit=crop"
     ),
     label: "Comedy Show"
   },
   {
-    image: optimizeHeroImageUrl(
+    image: heroImageUrl(
       "https://images.unsplash.com/photo-1566808925909-1485ad6cddb3?q=80&w=1170&auto=format&fit=crop"
     ),
     label: "Food & Lifestyle Events"
   },
   {
-    image: optimizeHeroImageUrl(
+    image: heroImageUrl(
       "https://images.unsplash.com/photo-1541445976433-f466f228a409?q=80&w=1170&auto=format&fit=crop"
     ),
     label: "City Fireworks Festival"
   },
   {
-    image: optimizeHeroImageUrl(
+    image: heroImageUrl(
       "https://images.unsplash.com/photo-1522158637959-30385a09e0da?q=80&w=1170&auto=format&fit=crop"
     ),
     label: "Live Concert Crowd"
   },
   {
-    image: optimizeHeroImageUrl(
+    image: heroImageUrl(
       "https://images.unsplash.com/photo-1561489396-888724a1543d?q=80&w=1170&auto=format&fit=crop"
     ),
     label: "Professional Networking Event"
@@ -90,14 +73,14 @@ function HeroSlideFrame({ slide, onOpen, children }) {
       <button
         type="button"
         onClick={() => onOpen(slide)}
-        className="relative block w-full cursor-pointer text-left"
+        className="relative block h-full w-full cursor-pointer text-left"
         aria-label={`View ${slide.title}`}
       >
         {children}
       </button>
     );
   }
-  return <article className="relative w-full">{children}</article>;
+  return <article className="relative h-full w-full">{children}</article>;
 }
 
 function HeroSlideImage({ slide, shouldLoad, isFirst }) {
@@ -107,7 +90,11 @@ function HeroSlideImage({ slide, shouldLoad, isFirst }) {
   return (
     <img
       src={slide.image}
+      srcSet={heroImageSrcSet(slide.image)}
+      sizes={HERO_IMAGE_SIZES}
       alt={slide.title}
+      width={1600}
+      height={900}
       loading={isFirst ? "eager" : "lazy"}
       decoding="async"
       fetchpriority={isFirst ? "high" : "low"}
@@ -142,13 +129,13 @@ function HeroSlideshow({
         .filter((ev) => ev && ev.id != null)
         .slice(0, 6)
         .map((ev) => ({
-          image: optimizeHeroImageUrl(ev.image_url || slides[0].image),
+          image: heroImageUrl(ev.image_url || slides[0].image),
           title: ev.title || "Featured Event",
           description: ev.description || "",
           id: ev.id,
           public_slug: ev.public_slug,
           detailPath: eventDetailPath(ev),
-          variant: isYayEvent(ev) ? "yay" : "featured",
+          variant: isHomeFeaturedEvent(ev) ? "home" : isYayEvent(ev) ? "yay" : "featured",
           countdownLabel: ev.countdownLabel ?? null
         })),
     [featuredEvents]
@@ -255,13 +242,13 @@ function HeroSlideshow({
           : false
       }
       watchSlidesProgress
-      className="block w-full lg:hidden"
+      className="block h-full w-full lg:hidden"
       onSlideChange={emitSlide}
     >
       {effectiveSlides.map((slide, idx) => (
-        <SwiperSlide key={`${slide.title}-${idx}`}>
+        <SwiperSlide key={`${slide.title}-${idx}`} className="!h-full">
           <HeroSlideFrame slide={slide} onOpen={openSlide}>
-            <div className="relative aspect-[16/10] w-full sm:aspect-[16/9]">{renderSlideBody(slide, idx)}</div>
+            <div className="relative h-full w-full">{renderSlideBody(slide, idx)}</div>
           </HeroSlideFrame>
         </SwiperSlide>
       ))}
@@ -287,13 +274,13 @@ function HeroSlideshow({
       pagination={{ clickable: true, dynamicBullets: true }}
       navigation
       watchSlidesProgress
-      className="hidden w-full lg:block"
+      className="hidden h-full w-full lg:block"
       onSlideChange={emitSlide}
     >
       {effectiveSlides.map((slide, idx) => (
-        <SwiperSlide key={`${slide.title}-${idx}`}>
+        <SwiperSlide key={`${slide.title}-${idx}`} className="!h-full">
           <HeroSlideFrame slide={slide} onOpen={openSlide}>
-            <div className="relative aspect-[16/9] w-full lg:aspect-[16/9] xl:aspect-[2/1]">{renderSlideBody(slide, idx)}</div>
+            <div className="relative h-full w-full">{renderSlideBody(slide, idx)}</div>
           </HeroSlideFrame>
         </SwiperSlide>
       ))}
@@ -301,7 +288,7 @@ function HeroSlideshow({
   );
 
   return (
-    <div className="hero-swiper overflow-hidden rounded-2xl border border-white/10 bg-slate-900/20 shadow-xl lg:rounded-3xl lg:shadow-2xl">
+    <div className="hero-swiper aspect-[16/10] w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-900/20 shadow-xl sm:aspect-[16/9] lg:rounded-3xl lg:shadow-2xl xl:aspect-[2/1]">
       {isDesktop ? desktopSwiper : mobileSwiper}
     </div>
   );

@@ -4,11 +4,209 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Book My Tickets — your city's event guide" />
-    <link rel="icon" type="image/png" href="/branding/BMT2%20RM.png" />
-    <link rel="apple-touch-icon" href="/branding/BMT2%20RM.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/branding/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/branding/apple-touch-icon.png" />
     <title>Book My Tickets — your city's event guide</title>
+    <script>
+      (function () {
+        var p = location.pathname || "";
+        if (p === "/" || p === "") {
+          document.documentElement.classList.add("bmt-home-boot");
+        }
+      })();
+    </script>
+    <style>
+      html.bmt-home-boot,
+      html.bmt-home-boot body {
+        background: #020617;
+      }
+      #root {
+        min-height: 100svh;
+      }
+      #bmt-boot-splash {
+        display: none;
+      }
+      html.bmt-home-boot #bmt-boot-splash {
+        display: flex;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483646;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        background: #020617;
+        overflow: hidden;
+        opacity: 1;
+        transition: opacity 0.42s cubic-bezier(0.19, 1, 0.22, 1);
+      }
+      html.bmt-home-boot #bmt-boot-splash.bmt-boot-handoff {
+        z-index: 199;
+      }
+      html.bmt-home-boot #bmt-boot-splash.bmt-boot-exit {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #bmt-boot-splash-glow {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      #bmt-boot-splash-glow span {
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(100px);
+      }
+      #bmt-boot-splash-glow span:nth-child(1) {
+        left: 50%;
+        top: 18%;
+        width: min(120vw, 720px);
+        height: min(120vw, 720px);
+        transform: translateX(-50%);
+        background: linear-gradient(to bottom right, rgba(244, 63, 94, 0.38), rgba(217, 70, 239, 0.32), rgba(99, 102, 241, 0.28));
+        animation: bmt-boot-glow-a 5.5s ease-in-out infinite;
+      }
+      #bmt-boot-splash-glow span:nth-child(2) {
+        right: -10%;
+        bottom: -15%;
+        width: 85vw;
+        height: 85vh;
+        background: linear-gradient(to top left, rgba(34, 211, 238, 0.35), rgba(139, 92, 246, 0.3), rgba(244, 63, 94, 0.35));
+        animation: bmt-boot-glow-b 6.2s ease-in-out infinite;
+      }
+      #bmt-boot-splash-glow span:nth-child(3) {
+        left: -20%;
+        top: 40%;
+        width: 70vw;
+        height: 70vh;
+        background: linear-gradient(to right, rgba(251, 191, 36, 0.25), rgba(244, 63, 94, 0.35), rgba(147, 51, 234, 0.25));
+        animation: bmt-boot-glow-c 7s ease-in-out infinite;
+      }
+      #bmt-boot-splash-inner {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 1.5rem;
+      }
+      #bmt-boot-splash-logo-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #bmt-boot-splash-logo-wrap::before {
+        content: "";
+        position: absolute;
+        inset: -48%;
+        border-radius: 999px;
+        background: linear-gradient(to right, rgba(251, 113, 133, 0.35), rgba(232, 121, 249, 0.25), rgba(129, 140, 248, 0.35));
+        filter: blur(48px);
+        animation: bmt-boot-halo 3.2s ease-in-out infinite;
+        pointer-events: none;
+      }
+      #bmt-boot-splash-logo {
+        position: relative;
+        z-index: 1;
+        display: block;
+        width: auto;
+        height: min(36vw, 11rem);
+        max-width: min(47vw, 16rem);
+        object-fit: contain;
+        filter: drop-shadow(0 22px 56px rgba(0, 0, 0, 0.48));
+        animation: bmt-boot-logo-idle 2.6s ease-in-out infinite;
+      }
+      @media (min-width: 640px) {
+        #bmt-boot-splash-logo {
+          height: min(25vw, 13rem);
+          max-width: min(41vw, 18rem);
+        }
+      }
+      @media (min-width: 1024px) {
+        #bmt-boot-splash-logo {
+          height: min(21vw, 14rem);
+          max-width: min(35vw, 20rem);
+        }
+      }
+      #bmt-boot-splash-caption {
+        margin-top: 2.5rem;
+        max-width: 20rem;
+        text-align: center;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 0.875rem;
+        font-weight: 500;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.8);
+      }
+      #bmt-boot-splash-dots {
+        display: flex;
+        gap: 0.375rem;
+        margin-top: 1.75rem;
+      }
+      #bmt-boot-splash-dots i {
+        display: block;
+        width: 0.375rem;
+        height: 0.375rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.55);
+        animation: bmt-boot-dot 1.15s ease-in-out infinite;
+      }
+      #bmt-boot-splash-dots i:nth-child(2) { animation-delay: 0.2s; }
+      #bmt-boot-splash-dots i:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes bmt-boot-logo-idle {
+        0%, 100% { transform: rotate(0deg) translateY(0) scale(1); }
+        16% { transform: rotate(-2.2deg) translateY(-5px) scale(1.045); }
+        32% { transform: rotate(2.4deg) translateY(4px) scale(0.985); }
+        48% { transform: rotate(-1.8deg) translateY(-3px) scale(1.03); }
+        64% { transform: rotate(1.6deg) translateY(3px) scale(0.992); }
+        80% { transform: rotate(-1.1deg) translateY(-2px) scale(1.018); }
+      }
+      @keyframes bmt-boot-glow-a {
+        0%, 100% { opacity: 0.65; transform: translateX(-50%) scale(1); }
+        40% { opacity: 0.95; transform: translateX(-50%) scale(1.08); }
+        70% { opacity: 0.72; transform: translateX(-50%) scale(1.02); }
+      }
+      @keyframes bmt-boot-glow-b {
+        0%, 100% { opacity: 0.5; transform: translateX(0); }
+        40% { opacity: 0.82; transform: translateX(-20px); }
+        70% { opacity: 0.55; transform: translateX(10px); }
+      }
+      @keyframes bmt-boot-glow-c {
+        0%, 100% { opacity: 0.35; transform: translateY(0); }
+        40% { opacity: 0.55; transform: translateY(24px); }
+        70% { opacity: 0.4; transform: translateY(-12px); }
+      }
+      @keyframes bmt-boot-halo {
+        0%, 100% { opacity: 0.35; transform: scale(0.92); }
+        50% { opacity: 0.65; transform: scale(1.05); }
+      }
+      @keyframes bmt-boot-dot {
+        0%, 100% { opacity: 0.3; transform: scale(0.82) translateY(0); }
+        50% { opacity: 1; transform: scale(1.2) translateY(-3px); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #bmt-boot-splash-logo,
+        #bmt-boot-splash-glow span,
+        #bmt-boot-splash-logo-wrap::before,
+        #bmt-boot-splash-dots i {
+          animation: none !important;
+        }
+      }
+    </style>
   </head>
   <body class="bg-slate-50">
+    <div id="bmt-boot-splash" aria-hidden="true">
+      <div id="bmt-boot-splash-glow">
+        <span></span><span></span><span></span>
+      </div>
+      <div id="bmt-boot-splash-inner">
+        <div id="bmt-boot-splash-logo-wrap">
+          <img id="bmt-boot-splash-logo" src="/branding/bmt2-rm.webp" width="400" height="364" alt="" fetchpriority="high" decoding="async" />
+        </div>
+        <p id="bmt-boot-splash-caption">Loading events, deals &amp; creators…</p>
+        <div id="bmt-boot-splash-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

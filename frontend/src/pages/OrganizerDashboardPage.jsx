@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import { FiCalendar, FiInfo, FiMapPin } from "react-icons/fi";
 import { GitBranch, LayoutGrid } from "lucide-react";
 import { createEvent, deleteEvent, fetchMyEvents, updateEvent } from "../services/eventService";
@@ -89,6 +90,7 @@ const initialForm = {
   sponsor_inquiry_enabled: false,
   sponsor_contact_email: "",
   sponsor_contact_phone: "",
+  sponsor_tickets_enabled: false,
   ticket_levels: [],
   seating_mode: SEATING_MODES.GENERAL,
   pending_seatsio_chart_key: ""
@@ -564,6 +566,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         String(event.sponsor_inquiry_enabled || "") === "1",
       sponsor_contact_email: event.sponsor_contact_email || "",
       sponsor_contact_phone: event.sponsor_contact_phone || "",
+      sponsor_tickets_enabled:
+        event.sponsor_tickets_enabled === 1 ||
+        event.sponsor_tickets_enabled === true ||
+        String(event.sponsor_tickets_enabled || "") === "1",
       ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event)),
       seating_mode: normalizeSeatingMode(event.seating_mode),
       pending_seatsio_chart_key: String(event.seatsio_chart_key || "").trim()
@@ -1008,7 +1014,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           : null,
         sponsor_contact_phone: form.sponsor_inquiry_enabled
           ? String(form.sponsor_contact_phone || "").trim()
-          : null
+          : null,
+        sponsor_tickets_enabled:
+          resolvedTicketMode === "platform" ? Boolean(form.sponsor_tickets_enabled) : false
       };
 
       const pendingChartKey = String(
@@ -2389,6 +2397,34 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         </label>
                       </div>
                     </>
+                  ) : null}
+
+                  {(form.ticket_sales_mode || "external") === "platform" ? (
+                    <div>
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.sponsor_tickets_enabled)}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              sponsor_tickets_enabled: e.target.checked
+                            }))
+                          }
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">
+                            Allow free sponsor &amp; guest tickets
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            You’ll be able to issue free tickets for sponsors, partners, or VIP guests from your event
+                            page. Regular buyers won’t see this option. For reserved seating, pick seats on the chart as
+                            usual — no payment is needed.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
                   ) : null}
 
                   <div>

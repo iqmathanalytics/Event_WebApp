@@ -1,5 +1,6 @@
 import { FiPlus, FiTrash2 } from "react-icons/fi";
 import { MAX_LEVELS, newTicketLevelId, TICKET_LEVEL_PRESETS } from "../utils/eventTicketLevels";
+import { TIER_PALETTE_OPTIONS, normalizeTierColorKey, normalizeTierHex } from "../utils/ticketLevelPalettes";
 
 function emptyLevel(sortOrder = 0) {
   return {
@@ -9,8 +10,19 @@ function emptyLevel(sortOrder = 0) {
     price: "",
     seats: "",
     valid_upto: "",
-    sort_order: sortOrder
+    sort_order: sortOrder,
+    color_key: "",
+    color: ""
   };
+}
+
+function colorSelection(row) {
+  const key = normalizeTierColorKey(row?.color_key);
+  const hex = normalizeTierHex(row?.color);
+  if (key === "custom" || (!key && hex)) {
+    return { key: "custom", hex: hex || "#E31C5F" };
+  }
+  return { key: key || "", hex: hex || "" };
 }
 
 export default function EventTicketLevelsEditor({ levels, onChange, disabled = false }) {
@@ -40,12 +52,31 @@ export default function EventTicketLevelsEditor({ levels, onChange, disabled = f
           price: "",
           seats: "",
           valid_upto: "",
-          sort_order: sortOrder
+          sort_order: sortOrder,
+          color_key: "",
+          color: ""
         }
       ]);
       return;
     }
     onChange([...rows, emptyLevel(sortOrder)]);
+  };
+
+  const setPalette = (index, key) => {
+    if (!key) {
+      updateRow(index, { color_key: "", color: "" });
+      return;
+    }
+    if (key === "custom") {
+      const current = normalizeTierHex(rows[index]?.color) || "#E31C5F";
+      updateRow(index, { color_key: "custom", color: current });
+      return;
+    }
+    const option = TIER_PALETTE_OPTIONS.find((item) => item.key === key);
+    updateRow(index, {
+      color_key: key,
+      color: typeof option?.swatch === "string" && option.swatch.startsWith("#") ? option.swatch : ""
+    });
   };
 
   return (
@@ -54,8 +85,8 @@ export default function EventTicketLevelsEditor({ levels, onChange, disabled = f
         <div>
           <p className="text-sm font-semibold text-slate-900">Ticket levels</p>
           <p className="mt-0.5 text-xs text-slate-600">
-            Add tiers with price, optional seat cap per level, and optional sale end date. Expired levels are hidden
-            from buyers automatically.
+            Add tiers with price, optional seat cap per level, and optional sale end date. Choose a cart color for
+            each tier — or pick a custom color. Expired levels are hidden from buyers automatically.
           </p>
         </div>
         <button
@@ -160,6 +191,90 @@ export default function EventTicketLevelsEditor({ levels, onChange, disabled = f
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
                   <p className="mt-1 text-[10px] text-slate-500">Hidden from buyers after this date.</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                    Cart color
+                  </label>
+                  <p className="mt-0.5 text-[10px] text-slate-500">Shown on the ticket cart. Auto matches the tier name.</p>
+                  {(() => {
+                    const selected = colorSelection(row);
+                    return (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {TIER_PALETTE_OPTIONS.map((option) => {
+                            const active = selected.key === option.key;
+                            return (
+                              <button
+                                key={option.key || "auto"}
+                                type="button"
+                                disabled={disabled}
+                                title={option.label}
+                                onClick={() => setPalette(index, option.key)}
+                                className={`flex h-8 items-center gap-1.5 rounded-full border px-2 text-[10px] font-semibold transition ${
+                                  active
+                                    ? "border-slate-900 bg-slate-900 text-white"
+                                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+                                }`}
+                              >
+                                <span
+                                  className="h-3.5 w-3.5 rounded-full border border-white/70 shadow-sm"
+                                  style={{ background: option.swatch }}
+                                  aria-hidden
+                                />
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setPalette(index, "custom")}
+                            className={`flex h-8 items-center gap-1.5 rounded-full border px-2 text-[10px] font-semibold transition ${
+                              selected.key === "custom"
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+                            }`}
+                          >
+                            <span
+                              className="h-3.5 w-3.5 rounded-full border border-white/70 shadow-sm"
+                              style={{ background: selected.key === "custom" ? selected.hex : "#E31C5F" }}
+                              aria-hidden
+                            />
+                            Custom
+                          </button>
+                        </div>
+                        {selected.key === "custom" ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="color"
+                              value={selected.hex}
+                              disabled={disabled}
+                              onChange={(e) =>
+                                updateRow(index, {
+                                  color_key: "custom",
+                                  color: normalizeTierHex(e.target.value) || "#E31C5F"
+                                })
+                              }
+                              className="h-9 w-12 cursor-pointer rounded-lg border border-slate-300 bg-white p-1"
+                              aria-label={`Custom color for ${row.name || `level ${index + 1}`}`}
+                            />
+                            <input
+                              value={selected.hex}
+                              disabled={disabled}
+                              maxLength={7}
+                              onChange={(e) => {
+                                const next = e.target.value.toUpperCase();
+                                updateRow(index, { color_key: "custom", color: next });
+                              }}
+                              placeholder="#E31C5F"
+                              className="w-28 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm uppercase"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="sm:col-span-2">
                   <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">

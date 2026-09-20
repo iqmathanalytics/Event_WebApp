@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, Users } from "lucide-react";
 import { fetchOrganizerCheckInInsights } from "../services/organizerAnalyticsService";
@@ -69,6 +69,7 @@ export default function OrganizerCheckInPanel({ events = [] }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const requestSeq = useRef(0);
 
   const eventOptions = useMemo(
     () =>
@@ -93,20 +94,31 @@ export default function OrganizerCheckInPanel({ events = [] }) {
   }, [eventOptions, selectedEventId]);
 
   const loadInsights = useCallback(async (eventId) => {
+    const seq = ++requestSeq.current;
     if (!eventId) {
       setData(null);
+      setLoading(false);
       return;
     }
+    setData(null);
     setLoading(true);
     setError("");
     try {
       const res = await fetchOrganizerCheckInInsights(eventId);
+      if (seq !== requestSeq.current) {
+        return;
+      }
       setData(res?.data || null);
     } catch (err) {
+      if (seq !== requestSeq.current) {
+        return;
+      }
       setData(null);
       setError(err?.response?.data?.message || "Could not load check-in analytics.");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -118,9 +130,11 @@ export default function OrganizerCheckInPanel({ events = [] }) {
     void loadInsights(selectedEventId);
   }, [selectedEventId, loadInsights]);
 
-  const totals = data?.totals || null;
-  const categories = data?.by_category || [];
-  const statusDonut = data?.status_breakdown || [];
+  const boundToSelected =
+    data?.event && String(data.event.id) === String(selectedEventId) ? data : null;
+  const totals = boundToSelected?.totals || null;
+  const categories = boundToSelected?.by_category || [];
+  const statusDonut = boundToSelected?.status_breakdown || [];
 
   const categoryCheckedInChart = useMemo(
     () =>

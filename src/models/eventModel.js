@@ -13,6 +13,125 @@ const {
 const { parsePromoVideoUrls, promoVideoUrlsDbValue } = require("../utils/youtubeVideo");
 const { sqlAssignFragment, toJsonDbString } = require("../utils/jsonDb");
 
+const UPCOMING_EVENT_SQL = `(
+  (e.schedule_type = 'range' AND e.event_end_date >= CURDATE())
+  OR (e.schedule_type = 'multiple' AND e.event_date >= CURDATE())
+  OR ((e.schedule_type = 'single' OR e.schedule_type IS NULL) AND e.event_date >= CURDATE())
+)`;
+
+const PUBLIC_LISTED_SQL = `e.is_listed = 1 AND e.show_on_events_page = 1`;
+
+/** Public card/list projection — omits description, seating keys, and organizer internals. */
+const EVENT_CARD_SELECT_SQL = `e.id,
+       e.public_slug,
+       e.title,
+       e.image_url,
+       e.gallery_image_urls,
+       e.event_date,
+       e.event_time,
+       e.duration_minutes,
+       e.schedule_type,
+       e.event_start_date,
+       e.event_end_date,
+       e.event_dates_json,
+       e.price,
+       e.ticket_levels_json,
+       e.ticket_sales_mode,
+       e.seating_mode,
+       e.city_id,
+       e.category_id,
+       e.venue,
+       e.venue_name,
+       e.status,
+       e.is_listed,
+       e.show_on_events_page,
+       e.home_featured,
+       e.home_featured_at,
+       e.is_yay_deal_event,
+       e.one_of_a_kind_manual,
+       e.deal_event_discount_code,
+       e.popularity_score,
+       e.ga_page_views_7d,
+       e.ga_page_views_30d,
+       e.click_count,
+       e.view_count,
+       e.created_at,
+       e.updated_at,
+       c.name AS city_name,
+       cat.name AS category_name`;
+
+const EVENT_FEATURED_SELECT_SQL = `${EVENT_CARD_SELECT_SQL},
+       e.description`;
+
+async function attachDiscoveryCounts(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return rows;
+  }
+  const ids = rows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id) && id > 0);
+  if (!ids.length) {
+    return rows.map((row) => ({ ...row, booking_count: 0, category_event_count: 0 }));
+  }
+
+  const bookingMap = new Map();
+  try {
+    const [bookingRows] = await pool.query(
+      `SELECT event_id, COUNT(*) AS booking_count
+       FROM event_bookings
+       WHERE event_id IN (?) AND payment_status IN ('paid', 'free')
+       GROUP BY event_id`,
+      [ids]
+    );
+    for (const row of bookingRows || []) {
+      bookingMap.set(Number(row.event_id), Number(row.booking_count) || 0);
+    }
+  } catch (err) {
+    if (err?.code !== "ER_BAD_FIELD_ERROR") {
+      throw err;
+    }
+    const [bookingRows] = await pool.query(
+      `SELECT event_id, COUNT(*) AS booking_count
+       FROM event_bookings
+       WHERE event_id IN (?)
+       GROUP BY event_id`,
+      [ids]
+    );
+    for (const row of bookingRows || []) {
+      bookingMap.set(Number(row.event_id), Number(row.booking_count) || 0);
+    }
+  }
+
+  const cityIds = [...new Set(rows.map((row) => Number(row.city_id)).filter((id) => id > 0))];
+  const categoryIds = [...new Set(rows.map((row) => Number(row.category_id)).filter((id) => id > 0))];
+  const categoryMap = new Map();
+  if (cityIds.length && categoryIds.length) {
+    const [catRows] = await pool.query(
+      `SELECT city_id, category_id, COUNT(*) AS category_event_count
+       FROM events
+       WHERE status = 'approved'
+         AND is_listed = 1
+         AND show_on_events_page = 1
+         AND city_id IN (?)
+         AND category_id IN (?)
+       GROUP BY city_id, category_id`,
+      [cityIds, categoryIds]
+    );
+    for (const row of catRows || []) {
+      categoryMap.set(`${Number(row.city_id)}:${Number(row.category_id)}`, Number(row.category_event_count) || 0);
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    booking_count: bookingMap.get(Number(row.id)) || 0,
+    category_event_count:
+      categoryMap.get(`${Number(row.city_id) || 0}:${Number(row.category_id) || 0}`) || 0
+  }));
+}
+
+async function mapDiscoveryRows(rows) {
+  return attachDiscoveryCounts((rows || []).map(normalizeEventRow));
+}
+
 function parseHighlights(value) {
   if (!value) {
     return [];
@@ -81,6 +200,7 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
   const platformEnabled = toBoolFlag(payload.platform_fee_enabled, false);
   const vendorEnabled = toBoolFlag(payload.vendor_code_enabled, false);
   const sponsorEnabled = toBoolFlag(payload.sponsor_inquiry_enabled, false);
+  const sponsorTicketsEnabled = toBoolFlag(payload.sponsor_tickets_enabled, false);
   const sponsorEmail = sponsorEnabled
     ? String(payload.sponsor_contact_email || "").trim().toLowerCase() || null
     : null;
@@ -103,6 +223,7 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
     sponsor_inquiry_enabled: sponsorEnabled ? 1 : 0,
     sponsor_contact_email: sponsorEmail,
     sponsor_contact_phone: sponsorPhone,
+    sponsor_tickets_enabled: sponsorTicketsEnabled ? 1 : 0,
     show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0,
     // Mirrors show_on_events_page so new events stay consistent with admin Active.
     is_listed: toBoolFlag(
@@ -156,7 +277,9 @@ function normalizeEventRow(row) {
     sponsor_inquiry_enabled: toBoolFlag(row.sponsor_inquiry_enabled, false),
     sponsor_contact_email: row.sponsor_contact_email ? String(row.sponsor_contact_email).trim() : null,
     sponsor_contact_phone: row.sponsor_contact_phone ? String(row.sponsor_contact_phone).trim() : null,
+    sponsor_tickets_enabled: toBoolFlag(row.sponsor_tickets_enabled, false),
     show_on_events_page: toBoolFlag(row.show_on_events_page, true),
+    home_featured: toBoolFlag(row.home_featured, false),
     event_highlights: parseHighlights(row.event_highlights),
     gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
     promo_video_urls: parsePromoVideoUrls(row.promo_video_urls),
@@ -272,9 +395,10 @@ async function createEvent(payload) {
        platform_fee_enabled, platform_fee_type, platform_fee_value,
        vendor_code_enabled, vendor_code, vendor_discount_type, vendor_discount_value,
        coupon_codes_enabled, sponsor_inquiry_enabled, sponsor_contact_email, sponsor_contact_phone,
+       sponsor_tickets_enabled,
        show_on_events_page, is_listed,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -322,6 +446,7 @@ async function createEvent(payload) {
       checkoutConfig.sponsor_inquiry_enabled,
       checkoutConfig.sponsor_contact_email,
       checkoutConfig.sponsor_contact_phone,
+      checkoutConfig.sponsor_tickets_enabled,
       checkoutConfig.show_on_events_page,
       checkoutConfig.is_listed,
       initialStatus
@@ -371,21 +496,7 @@ const EVENT_DETAIL_SELECT_SQL = `SELECT
            e.*,
            c.name AS city_name,
            cat.name AS category_name,
-           u.name AS organizer_name,
-           (SELECT COUNT(*) FROM event_bookings eb WHERE eb.event_id = e.id) AS booking_count,
-           (
-             SELECT COUNT(*)
-             FROM events e2
-             WHERE e2.status = 'approved'
-               AND e2.city_id = e.city_id
-               AND e2.category_id = e.category_id
-           ) AS category_event_count,
-           (
-             CASE
-               WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
-               ELSE 0
-             END
-           ) AS recent_engagement_score
+           u.name AS organizer_name
          FROM events e
          LEFT JOIN cities c ON c.id = e.city_id
          LEFT JOIN categories cat ON cat.id = e.category_id
@@ -405,14 +516,15 @@ async function queryEventDetail({ id, slug, publicOnly }) {
   }
   if (publicOnly) {
     where.push("e.status = 'approved'");
-    where.push("COALESCE(e.is_listed, 1) = 1");
-    where.push("COALESCE(e.show_on_events_page, 1) = 1");
+    where.push("e.is_listed = 1");
+    where.push("e.show_on_events_page = 1");
   }
   const [rows] = await pool.query(
     `${EVENT_DETAIL_SELECT_SQL} WHERE ${where.join(" AND ")} LIMIT 1`,
     params
   );
-  return normalizeEventRow(rows[0] || null);
+  const [event] = await attachDiscoveryCounts((rows || []).map(normalizeEventRow));
+  return event || null;
 }
 
 function canPreviewPrivateEvent(event, viewerUser) {
@@ -532,6 +644,19 @@ async function updateEventListed({ eventId, isListed }) {
   return result.affectedRows > 0;
 }
 
+async function updateEventHomeFeatured({ eventId, homeFeatured }) {
+  const flag = homeFeatured ? 1 : 0;
+  const [result] = await pool.query(
+    `UPDATE events
+     SET home_featured = ?,
+         home_featured_at = IF(? = 1, NOW(), NULL),
+         updated_at = NOW()
+     WHERE id = ?`,
+    [flag, flag, eventId]
+  );
+  return result.affectedRows > 0;
+}
+
 async function listEventsByOrganizer(organizerId) {
   const [rows] = await pool.query(
     `SELECT e.*, c.name AS city_name, cat.name AS category_name
@@ -591,6 +716,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "sponsor_inquiry_enabled",
     "sponsor_contact_email",
     "sponsor_contact_phone",
+    "sponsor_tickets_enabled",
     "show_on_events_page",
     "is_listed",
     "ticket_levels",
@@ -653,6 +779,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         key === "vendor_code_enabled" ||
         key === "coupon_codes_enabled" ||
         key === "sponsor_inquiry_enabled" ||
+        key === "sponsor_tickets_enabled" ||
         key === "show_on_events_page" ||
         key === "is_listed"
       ) {
@@ -789,13 +916,7 @@ async function listEvents({ filters, pagination }) {
 
   // Default: hide expired events unless caller provided explicit date/month filters.
   if (filters.futureOnly) {
-    conditions.push(
-      `(
-        (e.schedule_type = 'range' AND e.event_end_date >= CURDATE())
-        OR (e.schedule_type = 'multiple' AND e.event_date >= CURDATE())
-        OR ((e.schedule_type = 'single' OR e.schedule_type IS NULL) AND e.event_date >= CURDATE())
-      )`
-    );
+    conditions.push(UPCOMING_EVENT_SQL);
   }
 
   if (filters.status) {
@@ -803,11 +924,11 @@ async function listEvents({ filters, pagination }) {
     whereValues.push(filters.status);
   }
   if (filters.publicListedOnly) {
-    conditions.push("COALESCE(e.is_listed, 1) = 1");
-    conditions.push("COALESCE(e.show_on_events_page, 1) = 1");
+    conditions.push("e.is_listed = 1");
+    conditions.push("e.show_on_events_page = 1");
   }
   if (filters.cityId) {
-    conditions.push("e.city_id = ?");
+    conditions.push("(e.home_featured = 1 OR e.city_id = ?)");
     whereValues.push(filters.cityId);
   }
   if (filters.categoryId) {
@@ -853,7 +974,7 @@ async function listEvents({ filters, pagination }) {
   if (filters.sortBy === "price") {
     orderBy = `e.price ${sortOrder}`;
   } else if (filters.sortBy === "popularity") {
-    orderBy = `e.popularity_score ${sortOrder}`;
+    orderBy = `e.ga_page_views_30d ${sortOrder}, e.popularity_score ${sortOrder}`;
   } else if (filters.sortBy === "newest") {
     orderBy = "e.created_at DESC";
   } else if (filters.sortBy === "event_date") {
@@ -861,6 +982,7 @@ async function listEvents({ filters, pagination }) {
   } else if (filters.sortBy === "relevance" && filters.q) {
     orderBy = "relevance_score DESC, e.popularity_score DESC";
   }
+  orderBy = `e.home_featured DESC, e.home_featured_at DESC, ${orderBy}`;
 
   let relevanceSelect = "0 AS relevance_score";
   if (filters.q) {
@@ -880,27 +1002,7 @@ async function listEvents({ filters, pagination }) {
 
   const [rows] = await pool.query(
     `SELECT
-       e.*,
-       c.name AS city_name,
-       cat.name AS category_name,
-       (
-         SELECT COUNT(*)
-         FROM event_bookings eb
-         WHERE eb.event_id = e.id
-       ) AS booking_count,
-       (
-         SELECT COUNT(*)
-         FROM events e2
-         WHERE e2.status = 'approved'
-           AND e2.city_id = e.city_id
-           AND e2.category_id = e.category_id
-       ) AS category_event_count,
-       (
-         CASE
-           WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
-           ELSE 0
-         END
-       ) AS recent_engagement_score,
+       ${EVENT_CARD_SELECT_SQL},
        ${relevanceSelect}
      FROM events e
      LEFT JOIN cities c ON c.id = e.city_id
@@ -911,12 +1013,12 @@ async function listEvents({ filters, pagination }) {
     [...selectValues, ...whereValues, pagination.limit, pagination.offset]
   );
 
-  return { total: countRows[0].total, rows: rows.map(normalizeEventRow) };
+  return { total: countRows[0].total, rows: await mapDiscoveryRows(rows) };
 }
 
 async function listFeaturedEvents({ cityId, limit = 6 }) {
   const values = [];
-  const cityClause = cityId ? "AND e.city_id = ?" : "";
+  const cityClause = cityId ? "AND (e.home_featured = 1 OR e.city_id = ?)" : "";
   if (cityId) {
     values.push(cityId);
   }
@@ -924,40 +1026,63 @@ async function listFeaturedEvents({ cityId, limit = 6 }) {
 
   const [rows] = await pool.query(
     `SELECT
-       e.*,
-       c.name AS city_name,
-       cat.name AS category_name,
-       (
-         SELECT COUNT(*) FROM event_bookings eb WHERE eb.event_id = e.id
-       ) AS booking_count,
-       (
-         SELECT COUNT(*)
-         FROM events e2
-         WHERE e2.status = 'approved'
-           AND e2.city_id = e.city_id
-           AND e2.category_id = e.category_id
-       ) AS category_event_count
-      ,
-       (
-         CASE
-           WHEN e.updated_at >= (NOW() - INTERVAL 14 DAY) THEN (COALESCE(e.click_count, 0) + (COALESCE(e.view_count, 0) * 2))
-           ELSE 0
-         END
-       ) AS recent_engagement_score
+       ${EVENT_FEATURED_SELECT_SQL}
      FROM events e
      LEFT JOIN cities c ON c.id = e.city_id
      LEFT JOIN categories cat ON cat.id = e.category_id
      WHERE e.status = 'approved'
-       AND COALESCE(e.is_listed, 1) = 1
-       AND COALESCE(e.show_on_events_page, 1) = 1
-       AND e.event_date >= CURDATE()
+       AND ${PUBLIC_LISTED_SQL}
+       AND ${UPCOMING_EVENT_SQL}
        ${cityClause}
-     ORDER BY e.event_date ASC, e.id ASC
+     ORDER BY e.home_featured DESC, e.home_featured_at DESC, e.event_date ASC, e.id ASC
      LIMIT ?`,
     values
   );
 
-  return rows.map(normalizeEventRow);
+  return mapDiscoveryRows(rows);
+}
+
+async function listSpotlightEvents({ categoryId, q, date, limit = 24 } = {}) {
+  const values = [];
+  const conditions = [
+    "e.status = 'approved'",
+    PUBLIC_LISTED_SQL,
+    "e.home_featured = 1",
+    UPCOMING_EVENT_SQL
+  ];
+  if (categoryId) {
+    conditions.push("e.category_id = ?");
+    values.push(categoryId);
+  }
+  if (q) {
+    conditions.push("(e.title LIKE ? OR e.description LIKE ?)");
+    values.push(`%${q}%`, `%${q}%`);
+  }
+  if (date) {
+    conditions.push(
+      `(
+        (e.schedule_type = 'range' AND e.event_start_date <= ? AND e.event_end_date >= ?)
+        OR (e.schedule_type = 'multiple' AND JSON_CONTAINS(COALESCE(e.event_dates_json, '[]'), JSON_QUOTE(?)))
+        OR ((e.schedule_type = 'single' OR e.schedule_type IS NULL) AND e.event_date = ?)
+      )`
+    );
+    values.push(date, date, date, date);
+  }
+  values.push(Math.max(1, Number(limit) || 24));
+
+  const [rows] = await pool.query(
+    `SELECT
+       ${EVENT_FEATURED_SELECT_SQL}
+     FROM events e
+     LEFT JOIN cities c ON c.id = e.city_id
+     LEFT JOIN categories cat ON cat.id = e.category_id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY e.home_featured_at DESC, e.event_date ASC, e.id ASC
+     LIMIT ?`,
+    values
+  );
+
+  return mapDiscoveryRows(rows);
 }
 
 async function incrementEventPopularity({ eventId, delta, clickDelta = 0, viewDelta = 0 }) {
@@ -1005,6 +1130,7 @@ module.exports = {
   findPublicEventBySlugOrId,
   findEventDetailBySlugOrIdForViewer,
   updateEventListed,
+  updateEventHomeFeatured,
   enableCouponCodesForOrganizerEvents,
   enableCouponCodesForAllPlatformEvents,
   listEvents,
@@ -1013,6 +1139,7 @@ module.exports = {
   publishOrganizerEvent,
   deleteEventByOrganizer,
   listFeaturedEvents,
+  listSpotlightEvents,
   incrementEventPopularity,
   getEventClickCount
 };

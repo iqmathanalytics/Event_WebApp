@@ -79,6 +79,19 @@ const updateEventListed = asyncHandler(async (req, res) => {
   });
 });
 
+const updateEventHomeFeatured = asyncHandler(async (req, res) => {
+  await adminService.updateEventHomeFeaturedVisibility({
+    eventId: Number(req.validated.params.id),
+    homeFeatured: req.validated.body.home_featured
+  });
+  return res.status(200).json({
+    success: true,
+    message: req.validated.body.home_featured
+      ? "Event is pinned to the top of the home page"
+      : "Event removed from the home page spotlight"
+  });
+});
+
 const editListing = asyncHandler(async (req, res) => {
   const updated = await adminService.editListing({
     type: req.validated.params.type,
@@ -523,6 +536,7 @@ module.exports = {
   getListingById,
   updateListingStatus,
   updateEventListed,
+  updateEventHomeFeatured,
   editListing,
   deleteListing,
   createTeamUser,

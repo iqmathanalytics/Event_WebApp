@@ -28,7 +28,13 @@ const { publicCacheMiddleware } = require("../middleware/publicCacheMiddleware")
 
 const router = express.Router();
 
-router.get("/", optionalAuthMiddleware, validateRequest(fetchEventsSchema), eventController.fetchEvents);
+router.get(
+  "/",
+  optionalAuthMiddleware,
+  validateRequest(fetchEventsSchema),
+  publicCacheMiddleware({ maxAge: 60, staleWhileRevalidate: 300 }),
+  eventController.fetchEvents
+);
 router.get(
   "/featured",
   optionalAuthMiddleware,

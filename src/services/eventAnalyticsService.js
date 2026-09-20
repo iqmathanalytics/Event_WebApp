@@ -61,7 +61,7 @@ function buildTierInsightsFromBookings(event, bookingRows) {
         level_id: id,
         level_name: level.name || levelName || "Ticket",
         tier_key: tierKey,
-        color: chartColorForTierKey(tierKey),
+        color: chartColorForTierKey(tierKey, level.color),
         unit_price: Number(level.price ?? unitPrice) || 0,
         tickets_sold: 0,
         gross_revenue: 0,
@@ -125,8 +125,10 @@ function buildTierInsightsFromBookings(event, bookingRows) {
       id: l.id,
       name: l.name,
       price: l.price,
+      color_key: l.color_key || "",
+      color: l.color || "",
       tier_key: resolveTicketTierKey(l, index, configuredLevels),
-      color: chartColorForTierKey(resolveTicketTierKey(l, index, configuredLevels))
+      chart_color: chartColorForTierKey(resolveTicketTierKey(l, index, configuredLevels), l.color)
     })),
     total_tier_tickets: totalTickets,
     total_tier_revenue: Number(totalTierRevenue.toFixed(2))
@@ -488,7 +490,7 @@ async function getOrganizerCheckInInsights(organizerId, eventIdParam) {
         level_id: id,
         level_name: level.name || levelName || "Ticket",
         tier_key: tierKey,
-        color: chartColorForTierKey(tierKey),
+        color: chartColorForTierKey(tierKey, level.color),
         total_persons: 0,
         checked_in: 0,
         remaining: 0
@@ -528,13 +530,21 @@ async function getOrganizerCheckInInsights(organizerId, eventIdParam) {
 
     let bookingPersons = 0;
     for (const item of items) {
-      const levelId = String(item.level_id || item.levelId || "").trim();
+      const rawId = String(item.level_id || item.levelId || "").trim();
       const qty = Math.max(0, Number(item.quantity) || 0);
-      if (!levelId || qty <= 0) {
+      if (qty <= 0) {
         continue;
       }
       bookingPersons += qty;
-      const cat = ensureCategory(levelId, item.level_name, item.unit_price, byCategory.size);
+      const configured = rawId ? levelById.get(rawId) : null;
+      const levelId = configured ? rawId : configuredLevels.length ? "other" : rawId || "legacy";
+      const levelName = configured?.name || (configuredLevels.length && !rawId ? configuredLevels[0]?.name : null) || (levelId === "other" ? "Other" : item.level_name);
+      const cat = ensureCategory(
+        levelId,
+        levelName,
+        configured?.price ?? item.unit_price,
+        byCategory.size
+      );
       cat.total_persons += qty;
       if (isCheckedIn) {
         cat.checked_in += qty;

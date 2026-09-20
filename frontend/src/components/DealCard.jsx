@@ -63,7 +63,8 @@ function DealCard({
   isPremium = false,
   showPremiumBadge = false,
   tags = [],
-  variant = "default"
+  variant = "default",
+  priority = false
 }) {
   const isLanding = variant === "landing";
   const { isAuthenticated } = useAuth();
@@ -108,7 +109,7 @@ function DealCard({
             </span>
           </div>
         ) : null}
-        <ListingCardImage src={item.image} alt={item.title} emptyLabel="No deal image" />
+        <ListingCardImage src={item.image} alt={item.title} emptyLabel="No deal image" priority={priority} />
       </div>
       <div className={`flex flex-1 flex-col p-3 sm:p-4 ${isLanding ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
         <div className="flex items-start justify-between gap-1.5">

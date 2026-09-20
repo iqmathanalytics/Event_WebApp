@@ -137,6 +137,16 @@ function Navbar({
 
   const isHomePage = location.pathname === "/";
   const showCompactSearch = isHomePage && !isHeroSearchVisible;
+  const showGlobalCityFilter =
+    !location.pathname.startsWith("/dashboard") &&
+    location.pathname !== "/admin" &&
+    location.pathname !== "/login" &&
+    location.pathname !== "/register" &&
+    location.pathname !== "/set-password" &&
+    location.pathname !== "/reset-password" &&
+    !location.pathname.startsWith("/booking") &&
+    location.pathname !== "/privacy" &&
+    location.pathname !== "/terms";
   const filteredCities = useMemo(() => {
     const query = cityMenuQuery.trim().toLowerCase();
     if (!query) {
@@ -257,6 +267,7 @@ function Navbar({
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
+          {showGlobalCityFilter ? (
           <div className="relative">
             <button
               type="button"
@@ -334,6 +345,7 @@ function Navbar({
               ) : null}
             </AnimatePresence>
           </div>
+          ) : null}
 
           {isAuthenticated ? (
             <div className="flex min-w-0 items-center gap-2">
@@ -379,21 +391,20 @@ function Navbar({
         </button>
       </div>
 
+      {showCompactSearch ? (
       <motion.div
         initial={false}
         animate={{
-          opacity: showCompactSearch ? 1 : 0,
-          y: showCompactSearch ? 0 : -8,
-          scale: showCompactSearch ? 1 : 0.97
+          opacity: 1,
+          y: 0,
+          scale: 1
         }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
         className="pointer-events-none absolute inset-x-0 top-full mt-[10px]"
       >
         <div className="container-page flex justify-center max-lg:px-0">
           <div
-            className={`relative flex h-12 w-fit max-w-[88vw] items-center gap-1.5 px-1 py-1 ${
-              showCompactSearch ? "pointer-events-auto" : "pointer-events-none"
-            }`}
+            className="relative flex h-12 w-fit max-w-[88vw] items-center gap-1.5 px-1 py-1 pointer-events-auto"
             style={{ willChange: "transform, opacity" }}
           >
             <div className="pointer-events-none absolute inset-0 rounded-full border border-slate-200 bg-white shadow-lg ring-1 ring-black/5" />
@@ -433,6 +444,7 @@ function Navbar({
           </div>
         </div>
       </motion.div>
+      ) : null}
 
       <AnimatePresence>
         {isMenuOpen ? (
@@ -509,6 +521,7 @@ function Navbar({
                       </div>
                     </div>
                   ) : null}
+                  {showGlobalCityFilter ? (
                   <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">City Filter</p>
@@ -521,6 +534,7 @@ function Navbar({
                       value={cityMenuQuery}
                       onChange={(e) => setCityMenuQuery(e.target.value)}
                       placeholder="Search cities"
+                      aria-label="Search cities"
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none"
                     />
                     <div className="hide-scrollbar max-h-[132px] space-y-1 overflow-y-auto pr-1">
@@ -568,6 +582,7 @@ function Navbar({
                       {filteredCities.length === 0 ? <p className="px-1 text-xs text-slate-500">No cities found.</p> : null}
                     </div>
                   </div>
+                  ) : null}
 
                   {isAuthenticated ? (
                     <div className="grid grid-cols-2 gap-2">

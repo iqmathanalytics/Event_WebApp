@@ -1,4 +1,5 @@
 import api from "./api";
+import { bustPublicEventCaches } from "./eventService";
 
 export async function fetchAdminAnalytics(params = {}) {
   const response = await api.get("/admin/analytics/counts", { params });
@@ -47,6 +48,12 @@ export async function updateAdminListingStatus({ type, id, status, note }) {
 
 export async function updateAdminEventListed({ id, is_listed }) {
   const response = await api.patch(`/admin/listings/events/${id}/listed`, { is_listed });
+  return response.data;
+}
+
+export async function updateAdminEventHomeFeatured({ id, home_featured }) {
+  const response = await api.patch(`/admin/listings/events/${id}/home-featured`, { home_featured });
+  bustPublicEventCaches();
   return response.data;
 }
 

@@ -65,16 +65,8 @@ function isCouponsEnabled(event) {
   return !(event.coupon_codes_enabled === false || Number(event.coupon_codes_enabled) === 0);
 }
 
-async function assertCouponsAllowedForEvent(event, conn) {
+async function assertCouponsAllowedForEvent(event, _conn) {
   if (isCouponsEnabled(event)) {
-    return;
-  }
-  const activeCount = await couponModel.countActiveCouponsForEvent(
-    event.id,
-    event.organizer_id,
-    conn
-  );
-  if (activeCount > 0) {
     return;
   }
   throw new ApiError(400, "Coupon codes are not enabled for this event.");

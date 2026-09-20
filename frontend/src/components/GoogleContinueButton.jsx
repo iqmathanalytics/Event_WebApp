@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { GoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google";
 
 export function isGoogleAuthConfigured() {
   return Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
+}
+
+function googleClientId() {
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || "";
 }
 
 export function AuthDividerOr({ className = "" }) {
@@ -38,30 +42,33 @@ export default function GoogleContinueButton({ disabled, onCredential }) {
     };
   }, []);
 
-  if (!isGoogleAuthConfigured()) {
+  const clientId = googleClientId();
+  if (!clientId) {
     return null;
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`flex w-full justify-center ${disabled ? "pointer-events-none opacity-55" : ""}`}
-    >
-      <GoogleLogin
-        onSuccess={(credentialResponse) => {
-          onCredential?.(credentialResponse.credential);
-        }}
-        onError={() => {
-          onCredential?.(null);
-        }}
-        useOneTap={false}
-        theme="outline"
-        size="large"
-        text="continue_with"
-        shape="rectangular"
-        logo_alignment="left"
-        width={String(buttonWidth)}
-      />
-    </div>
+    <GoogleOAuthProvider clientId={clientId}>
+      <div
+        ref={containerRef}
+        className={`flex w-full justify-center ${disabled ? "pointer-events-none opacity-55" : ""}`}
+      >
+        <GoogleLogin
+          onSuccess={(credentialResponse) => {
+            onCredential?.(credentialResponse.credential);
+          }}
+          onError={() => {
+            onCredential?.(null);
+          }}
+          useOneTap={false}
+          theme="outline"
+          size="large"
+          text="continue_with"
+          shape="rectangular"
+          logo_alignment="left"
+          width={String(buttonWidth)}
+        />
+      </div>
+    </GoogleOAuthProvider>
   );
 }

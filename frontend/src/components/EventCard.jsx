@@ -10,8 +10,10 @@ import { getEventSortDate } from "../utils/eventSchedule";
 import useAuth from "../hooks/useAuth";
 import ListingCardImage from "./ListingCardImage";
 import PremiumLockOverlay from "./PremiumLockOverlay";
+import HomeSpotlightChip from "./HomeSpotlightChip";
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 import { resolveEventListPrice } from "../utils/eventTicketLevels";
+import { isHomeFeaturedEvent } from "../utils/eventHomeFeatured";
 
 function EventCard({
   item,
@@ -21,7 +23,8 @@ function EventCard({
   countdownLabel,
   isYayDealEvent = false,
   showPremiumBadge = false,
-  variant = "default"
+  variant = "default",
+  priority = false
 }) {
   const isLanding = variant === "landing";
   const navigate = useNavigate();
@@ -49,6 +52,7 @@ function EventCard({
     : "";
   const eventImage = String(item.image || "").trim() || fallbackGalleryImage;
   const listPrice = resolveEventListPrice(item);
+  const homeFeatured = isHomeFeaturedEvent(item);
 
   const openEvent = (e) => {
     e?.preventDefault?.();
@@ -81,9 +85,11 @@ function EventCard({
     <motion.article
       whileHover={{ y: -4, scale: 1.01 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className={`group relative flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm ${
-        isLanding ? "h-full w-full" : "h-full"
-      }`}
+      className={`group relative flex flex-col overflow-hidden rounded-3xl border bg-white shadow-sm ${
+        homeFeatured
+          ? "border-amber-300/90 shadow-[0_10px_28px_rgba(245,158,11,0.18)] ring-1 ring-amber-200/80"
+          : "border-slate-200"
+      } ${isLanding ? "h-full w-full" : "h-full"}`}
     >
       {locked ? <PremiumLockOverlay open={premiumGateOpen} onClose={() => setPremiumGateOpen(false)} variant="event" /> : null}
 
@@ -112,7 +118,12 @@ function EventCard({
             </span>
           </div>
         ) : null}
-        <ListingCardImage src={eventImage} alt={item.title} emptyLabel="No event image" />
+        <ListingCardImage src={eventImage} alt={item.title} emptyLabel="No event image" priority={priority} />
+        {homeFeatured ? (
+          <div className="pointer-events-none absolute left-2 top-2 z-20 sm:left-2.5 sm:top-2.5">
+            <HomeSpotlightChip compact />
+          </div>
+        ) : null}
       </button>
       <div className={`flex flex-1 flex-col p-3 sm:p-4 ${isLanding ? "gap-2" : "gap-1.5 sm:gap-2"}`}>
         <div className="flex items-center justify-between gap-1.5">

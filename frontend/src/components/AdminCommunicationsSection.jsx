@@ -118,7 +118,7 @@ function AdminCommunicationsSection({
         >
           <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-slate-800">
-              {nTotal} subscriber{nTotal === 1 ? "" : "s"}
+              {`${nTotal} ${nTotal === 1 ? "subscriber" : "subscribers"}`}
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -316,7 +316,7 @@ function AdminCommunicationsSection({
         >
           <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-slate-800">
-              {cTotal} message{cTotal === 1 ? "" : "s"}
+              {`${cTotal} ${cTotal === 1 ? "message" : "messages"}`}
             </p>
             <div className="flex flex-wrap gap-2">
               <button

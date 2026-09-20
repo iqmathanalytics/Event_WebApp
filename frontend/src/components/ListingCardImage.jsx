@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FiImage } from "react-icons/fi";
 import { sampleImageEdgeColors } from "../utils/imageEdgeColors";
+import {
+  displayImageBlurUrl,
+  LISTING_CARD_SIZES,
+  listingCardImageUrl,
+  listingCardSrcSet
+} from "../utils/displayImage";
 
 const DEFAULT_EDGE = { left: "rgb(226, 232, 240)", right: "rgb(203, 213, 225)" };
 
@@ -15,13 +21,20 @@ export default function ListingCardImage({
   fit = "cover",
   className,
   placeholderClassName = "flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500",
-  emptyLabel = "No image"
+  emptyLabel = "No image",
+  priority = false
 }) {
   const rootRef = useRef(null);
-  const [shouldLoad, setShouldLoad] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(Boolean(priority));
   const [edgeColors, setEdgeColors] = useState(DEFAULT_EDGE);
   const trimmed = String(src || "").trim();
   const isContainEdge = fit === "contain-edge";
+  const displaySrc = listingCardImageUrl(trimmed);
+  const srcSet = listingCardSrcSet(trimmed);
+  const blurSrc = displayImageBlurUrl(trimmed);
+  const showBlurImage = Boolean(isContainEdge && blurSrc && blurSrc !== displaySrc);
+  const loadingAttr = priority ? "eager" : "lazy";
+  const fetchPriority = priority ? "high" : "auto";
   const imageClassName =
     className ||
     (isContainEdge
@@ -33,7 +46,7 @@ export default function ListingCardImage({
     if (!node || !trimmed) {
       return undefined;
     }
-    if (typeof IntersectionObserver === "undefined") {
+    if (priority || typeof IntersectionObserver === "undefined") {
       setShouldLoad(true);
       return undefined;
     }
@@ -48,7 +61,7 @@ export default function ListingCardImage({
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [trimmed]);
+  }, [trimmed, priority]);
 
   useEffect(() => {
     setEdgeColors(DEFAULT_EDGE);
@@ -86,14 +99,17 @@ export default function ListingCardImage({
               }}
               aria-hidden
             />
-            <img
-              src={trimmed}
-              alt=""
-              aria-hidden
-              loading="lazy"
-              decoding="async"
-              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl saturate-[1.2]"
-            />
+            {showBlurImage ? (
+              <img
+                src={blurSrc}
+                alt=""
+                aria-hidden
+                loading={loadingAttr}
+                fetchPriority={fetchPriority}
+                decoding="async"
+                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl saturate-[1.2]"
+              />
+            ) : null}
             <div
               className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-[max(12%,40px)]"
               style={{
@@ -113,11 +129,13 @@ export default function ListingCardImage({
               aria-hidden
             />
             <img
-              src={trimmed}
+              src={displaySrc}
+              srcSet={srcSet}
+              sizes={LISTING_CARD_SIZES}
               alt={alt}
-              loading="lazy"
+              loading={loadingAttr}
+              fetchPriority={fetchPriority}
               decoding="async"
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
               onLoad={handleLoad}
               className={imageClassName}
             />
@@ -126,11 +144,13 @@ export default function ListingCardImage({
           <>
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-900/10 via-transparent to-slate-900/10" />
             <img
-              src={trimmed}
+              src={displaySrc}
+              srcSet={srcSet}
+              sizes={LISTING_CARD_SIZES}
               alt={alt}
-              loading="lazy"
+              loading={loadingAttr}
+              fetchPriority={fetchPriority}
               decoding="async"
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
               className={imageClassName}
             />
           </>

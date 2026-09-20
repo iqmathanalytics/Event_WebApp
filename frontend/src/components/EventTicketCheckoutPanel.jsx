@@ -12,6 +12,7 @@ import {
 import { confirmBookingPaymentWithRetry } from "../utils/confirmBookingPaymentWithRetry";
 import { profileMobileOrEmpty } from "../utils/phone";
 const StripePaymentModal = lazy(() => import("./StripePaymentModal"));
+const GuestSeatSelectionModal = lazy(() => import("./seating/GuestSeatSelectionModal"));
 import StripePaymentReturnRelay from "./StripePaymentReturnRelay";
 import {
   buildStripeReturnUrl,
@@ -30,6 +31,7 @@ import {
   validateGuestEventCoupon
 } from "../services/couponService";
 import useAuth from "../hooks/useAuth";
+import { canBookSponsorTickets, isSponsorTicketLevel, splitCheckoutLevels } from "../utils/sponsorTickets";
 import { formatCurrency, formatDateUS, formatTime12Hour } from "../utils/format";
 import {
   formatBookingContactName,
@@ -63,7 +65,6 @@ import {
   saveEventCheckoutDraft
 } from "../utils/eventCheckoutDraft";
 import { applyCheckoutFees, toBoolFlag } from "../utils/transactionFee";
-import GuestSeatSelectionModal from "./seating/GuestSeatSelectionModal";
 import { releaseSeatsioHold } from "../services/seatingService";
 import { isReservedSeating } from "../utils/seatingMode";
 import {
@@ -144,7 +145,8 @@ function buildBookingPayload({
   seatsioHoldToken = "",
   selectedSeats = [],
   chartCategoryKeys = [],
-  chartPricing = []
+  chartPricing = [],
+  bookAsSponsor = false
 }) {
   const sortedDates = normalizeDateList(selectedDates);
   const first = String(firstName || "").trim();
@@ -169,10 +171,11 @@ function buildBookingPayload({
       name: name || undefined,
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
-      coupon_hold_token: couponHold?.holdToken || undefined,
+      coupon_hold_token: bookAsSponsor ? undefined : couponHold?.holdToken || undefined,
       vendor_code,
       seatsio_hold_token: seatsioHoldToken || undefined,
-      selected_seats: selectedSeats
+      selected_seats: selectedSeats,
+      book_as_sponsor: bookAsSponsor ? true : undefined
     };
   }
 
@@ -337,6 +340,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const userId = user?.id ?? user?.userId;
+  const canUseSponsorTickets = useMemo(() => canBookSponsorTickets(event, user), [event, user]);
   const [email, setEmail] = useState("");
   const guestCheckoutKey = useMemo(() => {
     if (!guestMode) {
@@ -353,7 +357,11 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
   const [selectedDates, setSelectedDates] = useState([]);
   const ticketLevels = useMemo(() => getCheckoutTicketLevels(event), [event]);
+  const { paidLevels, sponsorLevels } = useMemo(() => splitCheckoutLevels(ticketLevels), [ticketLevels]);
   const [ticketCart, setTicketCart] = useState(() => createEmptyCart(getCheckoutTicketLevels(event)));
+  const [sponsorCart, setSponsorCart] = useState(() => createEmptyCart([]));
+  /** Reserved seating: book selected chart seats as free organizer sponsor comps (payment skipped only). */
+  const [bookAsSponsor, setBookAsSponsor] = useState(false);
   const [seatModalOpen, setSeatModalOpen] = useState(false);
   const [seatsioHoldToken, setSeatsioHoldToken] = useState("");
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -366,8 +374,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (reservedSeating) {
       return selectedSeats.length;
     }
-    return cartTicketCount(ticketCart);
-  }, [reservedSeating, selectedSeats.length, ticketCart]);
+    const sponsorCount = canUseSponsorTickets ? cartTicketCount(sponsorCart) : 0;
+    return cartTicketCount(ticketCart) + sponsorCount;
+  }, [reservedSeating, selectedSeats.length, ticketCart, sponsorCart, canUseSponsorTickets]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -533,6 +542,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }, [eventId, checkoutUserId, event, scheduleType, buildHoldState]);
 
   useEffect(() => {
+    if (!reservedSeating) {
+      return undefined;
+    }
+    void import("./seating/GuestSeatSelectionModal");
+    return undefined;
+  }, [reservedSeating]);
+
+  useEffect(() => {
     const dates = getEventAvailableDates(event);
     if (!dates.length || restoredFromDraftRef.current || !eventId || !checkoutUserId) {
       return;
@@ -559,20 +576,82 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (reservedSeating) {
       setTicketCart(
         selectedSeats.length
-          ? buildCartFromSelectedSeats(selectedSeats, ticketLevels, chartCategoryKeys, chartPricing)
-          : createEmptyCart(ticketLevels)
+          ? buildCartFromSelectedSeats(selectedSeats, paidLevels, chartCategoryKeys, chartPricing)
+          : createEmptyCart(paidLevels)
       );
     }
-  }, [reservedSeating, selectedSeats, ticketLevels, chartCategoryKeys, chartPricing]);
+  }, [reservedSeating, selectedSeats, paidLevels, chartCategoryKeys, chartPricing]);
+
+  useEffect(() => {
+    setSponsorCart((prev) => {
+      const next = createEmptyCart(sponsorLevels);
+      sponsorLevels.forEach((level) => {
+        if (prev[level.id] != null) {
+          next[level.id] = prev[level.id];
+        }
+      });
+      return next;
+    });
+  }, [eventId, sponsorLevels]);
+
+  const onSponsorCartChange = useCallback(
+    (next) => {
+      // General admission only — reserved sponsor comps use chart seats + bookAsSponsor toggle.
+      setSponsorCart(next);
+      if (cartTicketCount(next) > 0) {
+        setTicketCart(createEmptyCart(paidLevels));
+      }
+    },
+    [paidLevels]
+  );
+
+  const onPaidTicketCartChange = useCallback((next) => {
+    setTicketCart(next);
+    if (cartTicketCount(next) > 0) {
+      setSponsorCart(createEmptyCart(sponsorLevels));
+    }
+  }, [sponsorLevels]);
 
   const checkoutCart = useMemo(() => {
     if (reservedSeating) {
-      return selectedSeats.length
-        ? buildCartFromSelectedSeats(selectedSeats, ticketLevels, chartCategoryKeys, chartPricing)
-        : createEmptyCart(ticketLevels);
+      if (!selectedSeats.length) {
+        return createEmptyCart(ticketLevels);
+      }
+      if (bookAsSponsor && canUseSponsorTickets && sponsorLevels.length) {
+        const merged = createEmptyCart(ticketLevels);
+        merged[sponsorLevels[0].id] = selectedSeats.length;
+        return merged;
+      }
+      return buildCartFromSelectedSeats(selectedSeats, paidLevels, chartCategoryKeys, chartPricing);
     }
-    return ticketCart;
-  }, [reservedSeating, selectedSeats, ticketLevels, chartCategoryKeys, chartPricing, ticketCart]);
+    const base = ticketCart;
+    if (!canUseSponsorTickets) {
+      return base;
+    }
+    const merged = { ...createEmptyCart(ticketLevels), ...base };
+    sponsorLevels.forEach((level) => {
+      merged[level.id] = Number(sponsorCart[level.id]) || 0;
+    });
+    return merged;
+  }, [
+    reservedSeating,
+    selectedSeats,
+    paidLevels,
+    chartCategoryKeys,
+    chartPricing,
+    ticketCart,
+    canUseSponsorTickets,
+    ticketLevels,
+    sponsorLevels,
+    sponsorCart,
+    bookAsSponsor
+  ]);
+
+  const sponsorTicketCount = useMemo(
+    () => (canUseSponsorTickets ? cartTicketCount(sponsorCart) : 0),
+    [canUseSponsorTickets, sponsorCart]
+  );
+  const reservedSponsorCheckout = reservedSeating && bookAsSponsor && canUseSponsorTickets;
 
   useEffect(() => {
     if (
@@ -648,7 +727,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setSeatHoldCountdown("");
       setChartCategoryKeys([]);
       setChartPricing([]);
-      setTicketCart(createEmptyCart(ticketLevels));
+      setTicketCart(createEmptyCart(paidLevels));
       if (expired) {
         setError(`Your seat hold expired after ${SEATSIO_HOLD_MINUTES} minutes. Please select seats again.`);
       }
@@ -658,7 +737,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       selectedSeats,
       seatingEventKey,
       eventId,
-      ticketLevels
+      paidLevels
     ]
   );
 
@@ -706,7 +785,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const subtotalAmount = awaitingSeatSelection
     ? 0
     : computeCartSubtotal(ticketLevels, checkoutCart, totalDays);
-  const discountAmount = couponHold ? Number(couponHold.discount || 0) : 0;
+  const discountAmount =
+    reservedSponsorCheckout || sponsorTicketCount > 0 ? 0 : couponHold ? Number(couponHold.discount || 0) : 0;
   const {
     serviceFeeAmount,
     platformFeeAmount,
@@ -716,17 +796,36 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     discountAmount,
     event
   });
+  // Strictly respect the event's coupon toggle — do not show the box just because
+  // the organizer has active coupons that apply to other/all events.
   const couponsEnabled = toBoolFlag(event?.coupon_codes_enabled, true);
-  const checkoutCouponsAvailable = toBoolFlag(event?.checkout_coupons_available, false);
-  const showCouponCheckout = (couponsEnabled || checkoutCouponsAvailable) && attendeeCount > 0;
+  const showCouponCheckout =
+    couponsEnabled && attendeeCount > 0 && !reservedSponsorCheckout && sponsorTicketCount < 1;
   const vendorCodeEnabled = toBoolFlag(event?.vendor_code_enabled, false);
   const isCouponHoldApplied = Boolean(couponHold?.holdToken);
 
   const sortedSelected = useMemo(() => normalizeDateList(selectedDates), [selectedDates]);
-  const reservedSeatGroups = useMemo(
-    () => groupSelectedSeatsForDisplay(selectedSeats, ticketLevels, chartCategoryKeys, chartPricing),
-    [selectedSeats, ticketLevels, chartCategoryKeys, chartPricing]
-  );
+  const reservedSeatGroups = useMemo(() => {
+    if (!selectedSeats.length) {
+      return [];
+    }
+    if (reservedSponsorCheckout) {
+      return [
+        {
+          levelId: "sponsor",
+          levelName: "Sponsor",
+          seatLabels: selectedSeats.map((seat) => seat.label).filter(Boolean)
+        }
+      ];
+    }
+    return groupSelectedSeatsForDisplay(selectedSeats, ticketLevels, chartCategoryKeys, chartPricing);
+  }, [
+    selectedSeats,
+    ticketLevels,
+    chartCategoryKeys,
+    chartPricing,
+    reservedSponsorCheckout
+  ]);
 
   const gridLeftTitle = scheduleType === "single" ? "Date" : "Starts";
   const gridRightTitle = scheduleType === "single" ? "Time" : "Ends";
@@ -931,8 +1030,15 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
   }, [email, guestMode, couponHold?.holdToken, clearCouponHold]);
 
+  useEffect(() => {
+    if (couponsEnabled || !couponHold?.holdToken) {
+      return;
+    }
+    void clearCouponHold();
+  }, [couponsEnabled, couponHold?.holdToken, clearCouponHold]);
+
   const applyPromoCode = async (rawCode) => {
-    if (!couponsEnabled && !checkoutCouponsAvailable) {
+    if (!couponsEnabled) {
       setError("Coupon codes are not available for this event.");
       return;
     }
@@ -1040,7 +1146,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     }
     if (reservedSeating) {
       if (!selectedSeats.length || !seatsioHoldToken) {
-        return "Choose your seats on the seating chart to continue.";
+        return "Choose your seats on the seating chart.";
       }
     } else if (!Number.isFinite(attendeeCount) || attendeeCount < 1) {
       return "Select at least one ticket.";
@@ -1085,22 +1191,28 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   ]);
 
   useEffect(() => {
-    if (!ticketLevels.length) {
+    if (!paidLevels.length && !sponsorLevels.length) {
       return;
     }
     if (reservedSeating) {
       return;
     }
     setTicketCart((prev) => {
-      const next = createEmptyCart(ticketLevels);
-      ticketLevels.forEach((level) => {
+      const next = createEmptyCart(paidLevels);
+      paidLevels.forEach((level) => {
         if (prev[level.id] != null) {
           next[level.id] = prev[level.id];
         }
       });
       return next;
     });
-  }, [eventId, ticketLevels, reservedSeating]);
+  }, [eventId, paidLevels, reservedSeating, sponsorLevels.length]);
+
+  useEffect(() => {
+    if (!canUseSponsorTickets) {
+      setBookAsSponsor(false);
+    }
+  }, [canUseSponsorTickets]);
 
   const onContinueToConfirm = () => {
     setError("");
@@ -1118,7 +1230,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
   const finishBookingSuccess = useCallback(
     (data, sortedDates) => {
-      const items = buildTicketItemsPayload(ticketLevels, ticketCart).map((row) => {
+      const items = buildTicketItemsPayload(ticketLevels, checkoutCart).map((row) => {
         const level = ticketLevels.find((l) => l.id === row.level_id);
         return { level_id: row.level_id, level_name: level?.name, quantity: row.quantity };
       });
@@ -1167,7 +1279,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       navigate,
       needsCardPayment,
       subtotalAmount,
-      ticketCart,
+      checkoutCart,
       ticketLevels,
       totalAmount,
       totalDays
@@ -1190,19 +1302,20 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     const payload = buildBookingPayload({
       eventId,
       levels: ticketLevels,
-      ticketCart,
+      ticketCart: checkoutCart,
       selectedDates: sortedDates,
       firstName,
       lastName,
       email,
       phone,
-      couponHold,
+      couponHold: reservedSponsorCheckout ? null : couponHold,
       vendorCode: vendorCodeInput,
       reservedSeating,
       seatsioHoldToken,
       selectedSeats,
       chartCategoryKeys,
-      chartPricing
+      chartPricing,
+      bookAsSponsor: reservedSponsorCheckout
     });
 
     try {
@@ -1412,7 +1525,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           <p className="text-sm text-slate-600">
             {needsCardPayment
               ? `You will pay ${formatCheckoutCurrency(totalAmount)} securely with Stripe in a popup on this page.`
-              : "No card payment is required for this booking total."}
+              : reservedSponsorCheckout
+                ? "These seats will be confirmed as free sponsor tickets. No payment is required."
+                : "No card payment is required for this booking total."}
           </p>
         </div>
 
@@ -1434,9 +1549,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                           {group.levelName} × {group.seatLabels.length}
                         </span>
                         <span className="block text-xs text-slate-600">{group.seatLabels.join(", ")}</span>
+                        {reservedSponsorCheckout ? (
+                          <span className="mt-1 block text-xs font-medium text-emerald-800">
+                            Free sponsor / guest tickets
+                          </span>
+                        ) : null}
                       </li>
                     ))
-                  : buildTicketItemsPayload(ticketLevels, ticketCart).map((row) => {
+                  : buildTicketItemsPayload(ticketLevels, checkoutCart).map((row) => {
                       const level = ticketLevels.find((l) => l.id === row.level_id);
                       return (
                         <li key={row.level_id}>
@@ -1536,38 +1656,97 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <div className="border-t border-slate-200/90 bg-gradient-to-b from-slate-100/60 via-white to-amber-50/30 px-3.5 pb-3.5 pt-4">
           {reservedSeating ? (
             <div className="space-y-3">
-              {ticketLevels.length ? (
+              {selectedSeats.length && reservedSponsorCheckout ? (
                 <EventTicketCart
                   eventId={eventId}
-                  levels={ticketLevels}
+                  levels={sponsorLevels}
                   cart={checkoutCart}
                   totalDays={totalDays}
                   selectionMode="chart"
                 />
-              ) : (
+              ) : paidLevels.length ? (
+                <EventTicketCart
+                  eventId={eventId}
+                  levels={paidLevels}
+                  cart={checkoutCart}
+                  totalDays={totalDays}
+                  selectionMode="chart"
+                />
+              ) : null}
+              {canUseSponsorTickets && sponsorLevels.length ? (
+                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={bookAsSponsor}
+                      onChange={(e) => {
+                        const next = e.target.checked;
+                        setBookAsSponsor(next);
+                        if (next && couponHold?.holdToken) {
+                          void clearCouponHold();
+                        }
+                      }}
+                      className="mt-1 h-4 w-4 rounded border-emerald-400 text-emerald-700 focus:ring-emerald-500"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-emerald-950">
+                        Issue these seats as free sponsor tickets
+                      </span>
+                      <span className="mt-1 block text-xs text-emerald-900/80">
+                        Choose seats on the chart as usual. We’ll confirm them for your sponsors or partners at no
+                        charge.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              ) : null}
+              {!paidLevels.length && !(canUseSponsorTickets && sponsorLevels.length) ? (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-4 text-center text-sm text-amber-900">
                   No ticket types are available to book right now. Sale periods may have ended for all tiers.
                 </p>
-              )}
-              <button
-                type="button"
-                onClick={openSeatSelectionModal}
-                disabled={!ticketLevels.length}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {selectedSeats.length ? "Change seats on chart" : "Choose seats on chart"}
-              </button>
+              ) : null}
+              {paidLevels.length || (canUseSponsorTickets && sponsorLevels.length) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    openSeatSelectionModal();
+                  }}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400"
+                >
+                  {selectedSeats.length ? "Change seats on chart" : "Choose seats on chart"}
+                </button>
+              ) : null}
             </div>
-          ) : ticketLevels.length ? (
+          ) : paidLevels.length || (canUseSponsorTickets && sponsorLevels.length) ? (
             <>
-              <EventTicketCart
-                eventId={eventId}
-                levels={ticketLevels}
-                cart={ticketCart}
-                onChange={setTicketCart}
-                totalDays={totalDays}
-                maxTickets={maxTickets > 0 ? maxTickets : 50}
-              />
+              {paidLevels.length ? (
+                <EventTicketCart
+                  eventId={eventId}
+                  levels={paidLevels}
+                  cart={ticketCart}
+                  onChange={onPaidTicketCartChange}
+                  totalDays={totalDays}
+                  maxTickets={maxTickets > 0 ? maxTickets : 50}
+                />
+              ) : null}
+              {canUseSponsorTickets && sponsorLevels.length ? (
+                <div className="mt-3 rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3">
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-800">
+                    Sponsor &amp; guest tickets
+                  </p>
+                  <p className="mb-3 text-xs text-emerald-900/80">
+                    Give free entry to sponsors, partners, or VIP guests. This option is only visible to you.
+                  </p>
+                  <EventTicketCart
+                    eventId={eventId}
+                    levels={sponsorLevels}
+                    cart={sponsorCart}
+                    onChange={onSponsorCartChange}
+                    totalDays={totalDays}
+                    maxTickets={maxTickets > 0 ? maxTickets : 50}
+                  />
+                </div>
+              ) : null}
               <p className="mt-3 text-center text-[11px] font-medium text-slate-500">Max 50 tickets per order</p>
             </>
           ) : (
@@ -1717,35 +1896,39 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
 
       {error ? <p className="mt-3 text-center text-sm font-medium text-rose-700">{error}</p> : null}
     </CheckoutCard>
-    <GuestSeatSelectionModal
-      open={seatModalOpen}
-      onClose={() => setSeatModalOpen(false)}
-      eventId={eventId}
-      eventTitle={event?.title}
-      maxSeats={maxTickets > 0 ? maxTickets : 20}
-      totalDays={totalDays}
-      initialSelectedSeats={selectedSeats}
-      existingHoldToken={seatsioHoldToken}
-      existingEventKey={seatingEventKey}
-      onConfirm={({ holdToken, selectedSeats: seats, eventKey, chartCategoryKeys: categoryKeys, chartPricing: pricing, holdExpiresAt }) => {
-        setSeatsioHoldToken(holdToken);
-        setSelectedSeats(seats);
-        setSeatHoldExpiresAt((prev) => {
-          if (prev && prev > Date.now()) {
-            return prev;
-          }
-          const fromApi = parseExpiresMs(holdExpiresAt);
-          if (fromApi && fromApi > Date.now()) {
-            return fromApi;
-          }
-          return seatHoldExpiresAtFromNow();
-        });
-        setSeatingEventKey(eventKey || "");
-        setChartCategoryKeys(Array.isArray(categoryKeys) ? categoryKeys : []);
-        setChartPricing(Array.isArray(pricing) ? pricing : []);
-        setSeatModalOpen(false);
-      }}
-    />
+    {seatModalOpen ? (
+      <Suspense fallback={null}>
+        <GuestSeatSelectionModal
+          open={seatModalOpen}
+          onClose={() => setSeatModalOpen(false)}
+          eventId={eventId}
+          eventTitle={event?.title}
+          maxSeats={maxTickets > 0 ? maxTickets : 20}
+          totalDays={totalDays}
+          initialSelectedSeats={selectedSeats}
+          existingHoldToken={seatsioHoldToken}
+          existingEventKey={seatingEventKey}
+          onConfirm={({ holdToken, selectedSeats: seats, eventKey, chartCategoryKeys: categoryKeys, chartPricing: pricing, holdExpiresAt }) => {
+            setSeatsioHoldToken(holdToken);
+            setSelectedSeats(seats);
+            setSeatHoldExpiresAt((prev) => {
+              if (prev && prev > Date.now()) {
+                return prev;
+              }
+              const fromApi = parseExpiresMs(holdExpiresAt);
+              if (fromApi && fromApi > Date.now()) {
+                return fromApi;
+              }
+              return seatHoldExpiresAtFromNow();
+            });
+            setSeatingEventKey(eventKey || "");
+            setChartCategoryKeys(Array.isArray(categoryKeys) ? categoryKeys : []);
+            setChartPricing(Array.isArray(pricing) ? pricing : []);
+            setSeatModalOpen(false);
+          }}
+        />
+      </Suspense>
+    ) : null}
   </>
   );
 }

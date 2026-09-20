@@ -87,6 +87,12 @@ function Footer() {
             <Link to="/newsletter" className="transition hover:text-slate-900">
               City Newsletter
             </Link>
+            <Link to="/privacy" className="transition hover:text-slate-900">
+              Privacy
+            </Link>
+            <Link to="/terms" className="transition hover:text-slate-900">
+              Terms
+            </Link>
             <Link to="/contact" className="transition hover:text-slate-900">
               Contact Support
             </Link>

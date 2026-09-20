@@ -153,6 +153,17 @@ function RegisterPage() {
                 {REGISTRATION_DISCLAIMER_PARAGRAPHS.map((para, i) => (
                   <p key={i}>{para}</p>
                 ))}
+                <p>
+                  Read the full{" "}
+                  <Link to="/terms" className="font-semibold text-brand-700 underline">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link to="/privacy" className="font-semibold text-brand-700 underline">
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
               </div>
               <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200/80 bg-white/80 p-3 sm:p-4">
                 <input
@@ -162,8 +173,15 @@ function RegisterPage() {
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                 />
                 <span className="text-sm font-semibold leading-snug text-slate-800">
-                  I have read and agree to the acknowledgment above, and I understand that the Book My Tickets Terms of
-                  Service and Privacy Policy apply to my use of the platform.
+                  I have read and agree to the acknowledgment above, and I understand that the Book My Tickets{" "}
+                  <Link to="/terms" className="text-brand-700 underline">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link to="/privacy" className="text-brand-700 underline">
+                    Privacy Policy
+                  </Link>{" "}
+                  apply to my use of the platform.
                 </span>
               </label>
             </div>

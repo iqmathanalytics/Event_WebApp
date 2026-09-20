@@ -360,9 +360,10 @@ function DealsPage() {
           <p className="col-span-full text-sm text-slate-500">No deals match your current filters.</p>
         ) : null}
         {!loading
-          ? paginatedList.map((item) => (
+          ? paginatedList.map((item, idx) => (
               <DealCard
                 key={item.id}
+                priority={idx === 0}
                 item={{
                   id: item.id,
                   title: item.title,

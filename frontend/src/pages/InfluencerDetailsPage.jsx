@@ -18,6 +18,7 @@ import {
   Youtube
 } from "lucide-react";
 import { FiArrowLeft, FiImage, FiInfo } from "react-icons/fi";
+import { displayImageUrl, listingBannerImageUrl, listingCardImageUrl } from "../utils/displayImage";
 import { FaFacebookF } from "react-icons/fa";
 import useAuth from "../hooks/useAuth";
 import {
@@ -138,7 +139,7 @@ function GalleryLightbox({ images, activeIndex, onClose, onPrev, onNext }) {
             </button>
             <div className="overflow-hidden rounded-2xl bg-slate-900 shadow-2xl ring-1 ring-white/10 sm:rounded-3xl">
               <img
-                src={active.image_url}
+                src={listingBannerImageUrl(active.image_url)}
                 alt=""
                 className="max-h-[min(78vh,880px)] w-full object-contain"
               />
@@ -392,7 +393,7 @@ export default function InfluencerDetailsPage() {
               <div className="absolute -inset-1 rounded-[1.35rem] bg-gradient-to-br from-brand-400/60 via-fuchsia-500/40 to-violet-600/50 blur-sm lg:rounded-[2rem]" />
               {profileSrc ? (
                 <img
-                  src={profileSrc}
+                  src={displayImageUrl(profileSrc, 360)}
                   alt=""
                   className="relative h-28 w-28 rounded-[1.35rem] object-contain bg-white/80 p-1 shadow-2xl ring-[3px] ring-white/10 sm:h-32 sm:w-32 md:h-36 md:w-36 lg:h-44 lg:w-44 lg:rounded-[1.75rem] lg:ring-4"
                 />
@@ -649,7 +650,7 @@ export default function InfluencerDetailsPage() {
                     }`}
                   >
                     <img
-                      src={img.image_url}
+                      src={listingCardImageUrl(img.image_url)}
                       alt=""
                       loading="lazy"
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
@@ -773,7 +774,7 @@ export default function InfluencerDetailsPage() {
                   <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {galleryUrls.map((u, idx) => (
                       <li key={`${u}-${idx}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-                        <img src={u} alt="" className="aspect-square w-full object-cover" />
+                        <img src={listingCardImageUrl(u)} alt="" className="aspect-square w-full object-cover" />
                         <button
                           type="button"
                           onClick={() => setGalleryUrls((prev) => prev.filter((_, j) => j !== idx))}

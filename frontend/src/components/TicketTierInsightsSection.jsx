@@ -19,7 +19,7 @@ function TierStatCard({ tier, configuredLevels }) {
       style={{ borderColor: `${tier.color}44` }}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${palette.badge}`}>
+        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${palette.badge}`} style={palette.styles?.badge}>
           {isLuxe ? <Sparkles className="h-3 w-3" /> : null}
           {palette.tierLabel}
         </span>
@@ -84,6 +84,7 @@ export default function TicketTierInsightsSection({ bookings, eventLevels = [] }
               <li
                 key={level.id}
                 className={`rounded-xl border px-3 py-2.5 text-sm ${palette.cardIdle}`}
+                style={palette.styles?.cardIdle}
               >
                 <p className="font-semibold text-slate-900">{level.name}</p>
                 <p className={`mt-0.5 font-bold tabular-nums ${palette.price}`}>{formatCurrency(level.price)}</p>

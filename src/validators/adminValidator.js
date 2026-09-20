@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { coerceTicketSalesModeBodyInput } = require("../utils/eventTicketSalesMode");
+const { ticketLevelSchema } = require("./eventValidator");
 
 const listListingsSchema = z.object({
   body: z.object({}).passthrough(),
@@ -101,6 +102,8 @@ const editListingSchema = z.object({
     price_per_day: z.coerce.number().min(0).optional(),
     is_yay_deal_event: z.boolean().optional(),
     deal_event_discount_code: z.union([z.string().max(80), z.null()]).optional(),
+    ticket_levels: z.array(ticketLevelSchema).max(12).optional(),
+    ticket_levels_json: z.union([z.array(ticketLevelSchema).max(12), z.string().max(50000)]).optional(),
     expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     website_or_social_link: z.string().url().max(500).optional(),
     profile_image_url: z.string().url().max(500).optional()
@@ -314,6 +317,16 @@ const updateEventListedSchema = z.object({
   })
 });
 
+const updateEventHomeFeaturedSchema = z.object({
+  body: z.object({
+    home_featured: z.boolean()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
 module.exports = {
   analyticsSchema,
   listListingsSchema,
@@ -322,6 +335,7 @@ module.exports = {
   editListingSchema,
   deleteListingSchema,
   updateEventListedSchema,
+  updateEventHomeFeaturedSchema,
   createTeamUserSchema,
   listTeamUsersSchema,
   listUsersSchema,

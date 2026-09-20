@@ -135,7 +135,14 @@ function InfluencerSocialStats({ item }) {
   );
 }
 
-function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDetails, variant = "default" }) {
+function InfluencerCard({
+  item,
+  isFavorite = false,
+  onToggleFavorite,
+  onViewDetails,
+  variant = "default",
+  priority = false
+}) {
   const isLanding = variant === "landing";
   const navigate = useNavigate();
   const tags = Array.isArray(item?.tags) ? item.tags : [];
@@ -183,6 +190,7 @@ function InfluencerCard({ item, isFavorite = false, onToggleFavorite, onViewDeta
           fit="contain-edge"
           emptyLabel="No profile image"
           placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500"
+          priority={priority}
         />
       </div>
 

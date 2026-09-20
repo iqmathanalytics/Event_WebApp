@@ -204,9 +204,9 @@ export default function BookingConfirmedPage() {
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tickets / days</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">
-                    {summary?.attendeeCount || 1} ticket{(summary?.attendeeCount || 1) === 1 ? "" : "s"} �{" "}
-                    {summary?.totalDays || dates.length || 1} day
-                    {(summary?.totalDays || dates.length || 1) === 1 ? "" : "s"}
+                    {`${summary?.attendeeCount || 1} ${(summary?.attendeeCount || 1) === 1 ? "ticket" : "tickets"} · ${
+                      summary?.totalDays || dates.length || 1
+                    } ${(summary?.totalDays || dates.length || 1) === 1 ? "day" : "days"}`}
                   </p>
                 </div>
               </div>
@@ -235,7 +235,7 @@ export default function BookingConfirmedPage() {
           </motion.div>
         ) : (
           <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white px-5 py-6 text-sm text-slate-600">
-            We couldn�t find booking details for this session. If you just completed a purchase, open your dashboard
+            We couldn’t find booking details for this session. If you just completed a purchase, open your dashboard
             or check your confirmation email.
           </div>
         )}

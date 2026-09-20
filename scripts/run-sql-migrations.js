@@ -67,7 +67,10 @@ const FILES = [
   "event_coupon_guest_holds.sql",
   "event_analytics_shares.sql",
   "event_analytics_share_invites.sql",
-  "event_sponsor_inquiry.sql"
+  "event_sponsor_inquiry.sql",
+  "event_sponsor_tickets.sql",
+  "event_home_featured.sql",
+  "event_discovery_perf.sql"
 ];
 
 function buildSsl() {

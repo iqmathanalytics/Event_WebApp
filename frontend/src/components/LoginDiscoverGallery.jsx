@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { fetchFeaturedEvents } from "../services/eventService";
 import { fetchDeals, fetchInfluencers } from "../services/listingService";
 import { dealDetailPath, eventDetailPath, influencerDetailPath } from "../utils/listingPaths";
+import { listingCardImageUrl, listingCardSrcSet, LISTING_CARD_SIZES } from "../utils/displayImage";
 
 const ROTATE_MS = 5200;
 
@@ -196,7 +197,9 @@ function GalleryTile({ entry, reduceMotion, large, roundClass }) {
           <AnimatePresence initial={false}>
             <motion.img
               key={entry.id}
-              src={entry.image}
+              src={listingCardImageUrl(entry.image)}
+              srcSet={listingCardSrcSet(entry.image)}
+              sizes={LISTING_CARD_SIZES}
               alt=""
               loading="lazy"
               decoding="async"

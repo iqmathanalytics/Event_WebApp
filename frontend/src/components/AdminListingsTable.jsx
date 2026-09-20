@@ -22,6 +22,10 @@ function isEventListed(item) {
   return item?.is_listed !== false && item?.is_listed !== 0;
 }
 
+function isEventHomeFeatured(item) {
+  return item?.home_featured === true || item?.home_featured === 1 || String(item?.home_featured || "") === "1";
+}
+
 function getStatusBadgeClass(status) {
   const value = String(status || "").toLowerCase();
   if (value === "approved") return "bg-emerald-100 text-emerald-700";
@@ -71,7 +75,8 @@ function AdminListingsTable({
   onApprove,
   onReject,
   onDelete,
-  onToggleEventListed
+  onToggleEventListed,
+  onToggleEventHomeFeatured
 }) {
   const labels = useMemo(() => getColumnLabels(type), [type]);
   const perPage = 5;
@@ -143,15 +148,26 @@ function AdminListingsTable({
 
             <div className="p-3">
               {type === "events" && String(item.status || "").toLowerCase() === "approved" ? (
-                <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={isEventListed(item)}
-                    onChange={(e) => onToggleEventListed?.(item, e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  Active (visible on site)
-                </label>
+                <div className="mb-3 space-y-2">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={isEventListed(item)}
+                      onChange={(e) => onToggleEventListed?.(item, e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Active (visible on site)
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                    <input
+                      type="checkbox"
+                      checked={isEventHomeFeatured(item)}
+                      onChange={(e) => onToggleEventHomeFeatured?.(item, e.target.checked)}
+                      className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    Spotlight on home page
+                  </label>
+                </div>
               ) : null}
               <div className="grid grid-cols-2 gap-2">
                 {String(item.status || "").toLowerCase() === "pending" ? (
@@ -218,14 +234,15 @@ function AdminListingsTable({
         ) : null}
       </div>
       <div className="hidden md:block">
-      <ScrollableTableFrame minWidthClass="min-w-[980px]" className="rounded-2xl">
+      <ScrollableTableFrame minWidthClass="min-w-[1120px]" className="rounded-2xl">
       <table className="w-full table-fixed text-left text-sm">
         <colgroup>
-          <col className="w-[28%]" />
-          <col className="w-[14%]" />
-          <col className="w-[14%]" />
+          <col className="w-[24%]" />
           <col className="w-[12%]" />
-          {type === "events" ? <col className="w-[10%]" /> : null}
+          <col className="w-[12%]" />
+          <col className="w-[10%]" />
+          {type === "events" ? <col className="w-[9%]" /> : null}
+          {type === "events" ? <col className="w-[11%]" /> : null}
           <col className="w-[10%]" />
           <col className="w-[12%]" />
         </colgroup>
@@ -237,6 +254,9 @@ function AdminListingsTable({
             <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
             {type === "events" ? (
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Active</th>
+            ) : null}
+            {type === "events" ? (
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Home</th>
             ) : null}
             <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">{labels.value}</th>
             <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Actions</th>
@@ -274,6 +294,23 @@ function AdminListingsTable({
                         className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                       />
                       Active
+                    </label>
+                  ) : (
+                    <span className="text-xs text-slate-400">—</span>
+                  )}
+                </td>
+              ) : null}
+              {type === "events" ? (
+                <td className="px-4 py-3">
+                  {String(item.status || "").toLowerCase() === "approved" ? (
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-amber-800">
+                      <input
+                        type="checkbox"
+                        checked={isEventHomeFeatured(item)}
+                        onChange={(e) => onToggleEventHomeFeatured?.(item, e.target.checked)}
+                        className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      Spotlight
                     </label>
                   ) : (
                     <span className="text-xs text-slate-400">—</span>

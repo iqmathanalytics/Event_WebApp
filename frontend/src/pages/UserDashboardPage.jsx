@@ -26,6 +26,7 @@ import PlatformTicketAccessRequestModal from "../components/PlatformTicketAccess
 import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
 import { acceptAnalyticsInvite } from "../services/organizerAnalyticsService";
 import { profileMobileOrEmpty } from "../utils/phone";
+import { useIsLgUp } from "../hooks/useMediaQuery";
 
 const interestOptions = [
   "Events",
@@ -273,6 +274,7 @@ function UserDashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { cities } = useCityFilter();
+  const isLgUp = useIsLgUp();
   const {
     user,
     accessToken,
@@ -1031,8 +1033,8 @@ function UserDashboardPage() {
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="space-y-4"
     >
-      {/* Mobile + Tablet layout (does not affect desktop). */}
-      <div className="lg:hidden space-y-4">
+      {!isLgUp ? (
+      <div className="space-y-4">
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-3.5 text-white shadow-soft sm:rounded-3xl sm:p-4">
           <div className="flex items-start justify-between gap-2.5 sm:gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
@@ -1183,9 +1185,8 @@ function UserDashboardPage() {
           />
         ) : null}
       </div>
-
-      {/* Desktop layout (unchanged). */}
-      <div className="hidden lg:block space-y-4">
+      ) : (
+      <div className="space-y-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your space</p>
@@ -1400,6 +1401,7 @@ function UserDashboardPage() {
         </>
       )}
       </div>
+      )}
 
       {renderInPortal(
         <AnimatePresence>

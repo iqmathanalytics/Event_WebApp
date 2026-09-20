@@ -4,6 +4,7 @@ import ShareListingButton from "../components/ShareListingButton";
 import ListingFavoriteButton from "../components/ListingFavoriteButton";
 import BecomeSponsorButton from "../components/BecomeSponsorButton";
 import EventSponsorContactDetails from "../components/EventSponsorContactDetails";
+import HomeSpotlightChip from "../components/HomeSpotlightChip";
 import { useCanonicalListingUrl } from "../utils/useCanonicalListingUrl";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -22,6 +23,7 @@ import GuestPromoVideoCard from "../components/GuestPromoVideoCard";
 import EventAirbnbBookingShell from "../components/EventAirbnbBookingShell";
 import RichTextContent from "../components/RichTextContent";
 import { truncateDescriptionPlain } from "../utils/richText";
+import { isHomeFeaturedEvent } from "../utils/eventHomeFeatured";
 
 const EventTicketCheckoutPanel = lazy(() => import("../components/EventTicketCheckoutPanel"));
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
@@ -237,6 +239,12 @@ function EventDetailsPage() {
           >
             {event.title}
           </h1>
+
+          {isHomeFeaturedEvent(event) ? (
+            <div className="mt-3">
+              <HomeSpotlightChip />
+            </div>
+          ) : null}
 
           {Array.isArray(event.tags) && event.tags.length ? (
             <div className="mt-3 flex flex-wrap gap-1.5 lg:mt-3 lg:gap-2">

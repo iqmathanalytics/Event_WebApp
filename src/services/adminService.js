@@ -501,6 +501,8 @@ function resolveEditableColumns(type) {
       "price_per_day",
       "is_yay_deal_event",
       "deal_event_discount_code",
+      "ticket_levels",
+      "ticket_levels_json",
       "service_fee_enabled",
       "service_fee_type",
       "service_fee_value",
@@ -619,6 +621,14 @@ async function editListing({ type, id, payload }) {
       if (key === "deal_event_discount_code") {
         return [key, value == null || value === "" ? null : String(value).trim()];
       }
+      if (key === "ticket_levels_json" && Object.prototype.hasOwnProperty.call(normalizedPayload, "ticket_levels")) {
+        return null;
+      }
+      if (key === "ticket_levels" || key === "ticket_levels_json") {
+        const { normalizeTicketLevelsInput } = require("../utils/eventTicketLevels");
+        const levels = normalizeTicketLevelsInput(value);
+        return ["ticket_levels_json", levels.length ? JSON.stringify(levels) : null];
+      }
       if (
         key === "service_fee_enabled" ||
         key === "platform_fee_enabled" ||
@@ -677,7 +687,7 @@ async function editListing({ type, id, payload }) {
       }
     }
     return [key, value];
-  });
+  }).filter(Boolean);
 
   const setClause = mappedEntries.map(([key]) => sqlAssignFragment(key)).join(", ");
   const values = mappedEntries.map(([, value]) => value);
@@ -1022,6 +1032,19 @@ async function updateEventListingVisibility({ eventId, isListed }) {
   return true;
 }
 
+async function updateEventHomeFeaturedVisibility({ eventId, homeFeatured }) {
+  const { updateEventHomeFeatured, findEventById } = require("../models/eventModel");
+  const existing = await findEventById(eventId);
+  if (!existing) {
+    throw new ApiError(404, "Event not found");
+  }
+  const updated = await updateEventHomeFeatured({ eventId, homeFeatured: Boolean(homeFeatured) });
+  if (!updated) {
+    throw new ApiError(404, "Event not found");
+  }
+  return true;
+}
+
 module.exports = {
   getModerationQueue,
   getAnalytics,
@@ -1031,6 +1054,7 @@ module.exports = {
   editListing,
   deleteListing,
   updateEventListingVisibility,
+  updateEventHomeFeaturedVisibility,
   createStaffUser,
   fetchTeamUsers,
   fetchAllUsers,

@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import MobileBottomNav from "../components/MobileBottomNav";
 import LogoFlightOverlay from "../components/LogoFlightOverlay";
+import { shouldShowHomeSplash } from "../utils/homeSplashPolicy";
 
 function MainLayout() {
   const [homeSearchSummary, setHomeSearchSummary] = useState({
@@ -16,7 +17,7 @@ function MainLayout() {
   /** Increments when splash → header flight completes; navbar plays a one-shot landing celebration. */
   const [headerLogoCelebrateKey, setHeaderLogoCelebrateKey] = useState(0);
   /** `splash` = intro visible; `exit` = post-reveal until flight/ready; `ready` = normal header logo */
-  const [brandLogoPhase, setBrandLogoPhase] = useState("ready");
+  const [brandLogoPhase, setBrandLogoPhase] = useState(() => (shouldShowHomeSplash() ? "splash" : "ready"));
   const headerLogoRef = useRef(null);
   const [logoFlight, setLogoFlight] = useState(null);
   const flightStartedRef = useRef(false);

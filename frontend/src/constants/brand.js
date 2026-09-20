@@ -5,15 +5,13 @@ export const BRAND_NAME = "Book My Tickets";
 export const EXCLUSIVE_DEAL_EVENT_LABEL = "Exclusive deal event";
 
 /** Splash, auth, route loading, and logo-flight handoff (`public/branding/`). */
-const BRAND_LOGO_FILENAME = "BMT2 RM.png";
-export const BRAND_LOGO_URL = `/branding/${encodeURIComponent(BRAND_LOGO_FILENAME)}`;
+export const BRAND_LOGO_URL = "/branding/bmt2-rm.webp";
 
 /** Sticky navbar mark only — splash / auth keep `BRAND_LOGO_URL`. */
-const BRAND_HEADER_LOGO_FILENAME = "BMT2 New.png";
-export const BRAND_HEADER_LOGO_URL = `/branding/${encodeURIComponent(BRAND_HEADER_LOGO_FILENAME)}`;
+export const BRAND_HEADER_LOGO_URL = "/branding/bmt2-new.webp";
 
 /** Horizontal banner beside the mark in the sticky header (`public/branding/`). */
-export const BRAND_BANNER_URL = "/branding/Banner.png";
+export const BRAND_BANNER_URL = "/branding/banner.webp";
 
 /** Public support and communication email (also used for platform ticket requests). */
 export const BRAND_SUPPORT_EMAIL = "howdy@bookmytickets.us";

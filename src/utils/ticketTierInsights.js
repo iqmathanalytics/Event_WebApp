@@ -15,8 +15,22 @@ const CHART_COLORS = {
   standard: "#0ea5e9",
   premium: "#8b5cf6",
   luxe: "#f59e0b",
+  rose: "#f43f5e",
+  emerald: "#10b981",
+  indigo: "#6366f1",
+  coral: "#f97316",
+  teal: "#14b8a6",
+  crimson: "#dc2626",
+  slate: "#475569",
   other: "#64748b"
 };
+
+function normalizeHex(value) {
+  const match = String(value || "")
+    .trim()
+    .match(/^#?([0-9a-f]{6})$/i);
+  return match ? `#${match[1].toUpperCase()}` : "";
+}
 
 function paletteKeyFromName(name) {
   const n = String(name || "").trim();
@@ -44,6 +58,15 @@ function paletteKeyFromPriceRank(rank, count) {
 }
 
 function resolveTicketTierKey(level, index, allLevels = []) {
+  const colorKey = String(level?.color_key || "")
+    .trim()
+    .toLowerCase();
+  if (colorKey === "custom") {
+    return "custom";
+  }
+  if (colorKey && CHART_COLORS[colorKey]) {
+    return colorKey;
+  }
   const byName = paletteKeyFromName(level?.name);
   if (byName) {
     return byName;
@@ -59,8 +82,12 @@ function resolveTicketTierKey(level, index, allLevels = []) {
   return paletteKeyFromPriceRank(priceRank, sorted.length || 1) || fallbackKeys[index % fallbackKeys.length];
 }
 
-function chartColorForTierKey(key) {
-  return CHART_COLORS[key] || CHART_COLORS.other;
+function chartColorForTierKey(key, hex) {
+  const custom = normalizeHex(hex);
+  if ((key === "custom" || !CHART_COLORS[key]) && custom) {
+    return custom;
+  }
+  return CHART_COLORS[key] || custom || CHART_COLORS.other;
 }
 
 function parseTicketItemsJson(raw) {

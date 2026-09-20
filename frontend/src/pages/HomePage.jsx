@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import InfluencerCard from "../components/InfluencerCard";
@@ -14,8 +14,8 @@ import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
 import LandingCarouselSlot from "../components/LandingCarouselSlot";
 import HeroSlideshow from "../components/HeroSlideshow";
 import HeroEventBadge from "../components/HeroEventBadge";
-import LandingSplash from "../components/LandingSplash";
 import LazyMount from "../components/LazyMount";
+import { useHomeEntry } from "../context/HomeEntryContext";
 import { fetchFeaturedEvents } from "../services/eventService";
 import { fetchDeals, fetchInfluencers, trackInfluencerClick } from "../services/listingService";
 import useFavorites from "../hooks/useFavorites";
@@ -23,19 +23,23 @@ import useCityFilter from "../hooks/useCityFilter";
 import { formatDateUS } from "../utils/format";
 import { getEventSortDate } from "../utils/eventSchedule";
 import { trackEventClick } from "../services/eventService";
-import { pickHomeCarouselFromSorted, pickHomeCarouselSix, pickLandingSectionCards, pickLandingSectionFromSorted } from "../utils/homeCarouselCuration";
+import { pickHomeCarouselSix, pickLandingSectionCards } from "../utils/homeCarouselCuration";
 import {
   enrichEventWithCountdown,
   isUpcomingEvent,
   sortEventsByDate
 } from "../utils/eventPopularity";
+import { pickSpotlightThenFill, sortEventsWithHomeFeaturedFirst, isHomeFeaturedEvent } from "../utils/eventHomeFeatured";
 import { DEFAULT_HERO_NARRATIVE } from "../utils/heroSlideCopy";
-import { markHomeSplashConsumed, shouldShowHomeSplash } from "../utils/homeSplashPolicy";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
 function HomePage() {
   const navigate = useNavigate();
-  const { setBrandLogoPhase, headerLogoRef, startLogoFlight, onSplashExitComplete } = useOutletContext() || {};
+  const {
+    landingRevealed,
+    setHomeChunkReady,
+    setHomeDataBusy
+  } = useHomeEntry();
   const { selectedCity, selectedCityLabel, setSelectedCity } = useCityFilter();
   const [trendingEvents, setTrendingEvents] = useState([]);
   const [landingEvents, setLandingEvents] = useState([]);
@@ -48,56 +52,19 @@ function HomePage() {
   const { isFavorite, toggleFavorite } = useFavorites();
   const [heroNarrative, setHeroNarrative] = useState(DEFAULT_HERO_NARRATIVE);
   const [heroCopyStaggerDone, setHeroCopyStaggerDone] = useState(false);
-  const [showEntranceSplash] = useState(() => shouldShowHomeSplash());
-  const [landingRevealed, setLandingRevealed] = useState(() => !showEntranceSplash);
   const onHeroNarrativeChange = useCallback((next) => {
     setHeroNarrative(next);
   }, []);
   const dataLoading = loadingEvents || loadingDeals || loadingInfluencers;
-  const [homeLayoutPainted, setHomeLayoutPainted] = useState(false);
   useRouteContentReady(dataLoading);
 
   useEffect(() => {
-    if (!showEntranceSplash) {
-      setHomeLayoutPainted(true);
-      return undefined;
-    }
-    if (dataLoading) {
-      setHomeLayoutPainted(false);
-      return undefined;
-    }
-    let cancelled = false;
-    const r1 = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!cancelled) {
-          setHomeLayoutPainted(true);
-        }
-      });
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(r1);
-    };
-  }, [showEntranceSplash, dataLoading]);
-
-  const splashBusy = showEntranceSplash && (dataLoading || !homeLayoutPainted);
-  const onLandingRevealed = useCallback(() => {
-    markHomeSplashConsumed();
-    setLandingRevealed(true);
-    setBrandLogoPhase?.("exit");
-  }, [setBrandLogoPhase]);
+    setHomeChunkReady(true);
+  }, [setHomeChunkReady]);
 
   useEffect(() => {
-    if (!setBrandLogoPhase) {
-      return undefined;
-    }
-    if (showEntranceSplash) {
-      setBrandLogoPhase("splash");
-    } else {
-      setBrandLogoPhase("ready");
-    }
-    return () => setBrandLogoPhase("ready");
-  }, [showEntranceSplash, setBrandLogoPhase]);
+    setHomeDataBusy(loadingEvents);
+  }, [loadingEvents, setHomeDataBusy]);
 
   useEffect(() => {
     let active = true;
@@ -119,14 +86,16 @@ function HomePage() {
         if (active) {
           const rawRows = response?.data || [];
 
-          const enriched = sortEventsByDate(
-            rawRows
-              .filter(isUpcomingEvent)
-              .map(enrichEventWithCountdown)
+          const enriched = sortEventsWithHomeFeaturedFirst(
+            sortEventsByDate(
+              rawRows
+                .filter((event) => isHomeFeaturedEvent(event) || isUpcomingEvent(event))
+                .map(enrichEventWithCountdown)
+            )
           );
 
-          setTrendingEvents(pickHomeCarouselFromSorted(enriched, 6));
-          setLandingEvents(pickLandingSectionFromSorted(enriched, { limit: 6 }));
+          setTrendingEvents(pickSpotlightThenFill(enriched, 6));
+          setLandingEvents(pickSpotlightThenFill(enriched, 6));
         }
       } catch (_err) {
         if (active) {
@@ -223,15 +192,6 @@ function HomePage() {
 
   return (
     <>
-      {showEntranceSplash ? (
-        <LandingSplash
-          busy={splashBusy}
-          onRevealed={onLandingRevealed}
-          onExitComplete={onSplashExitComplete}
-          headerLogoRef={headerLogoRef}
-          startLogoFlight={startLogoFlight}
-        />
-      ) : null}
       <motion.div
         className="space-y-10 pb-8"
         initial={false}
@@ -370,11 +330,11 @@ function HomePage() {
               </LandingCarouselSlot>
             ))
           : landingEvents.length > 0
-            ? landingEvents.map((item) => (
-                <LandingCarouselSlot key={item.id} grid>
-                  <LazyMount>
+            ? landingEvents.map((item, idx) => {
+                const card = (
                   <EventCard
                     variant="landing"
+                    priority={idx === 0}
                     item={{
                       ...item,
                       id: item.id,
@@ -406,9 +366,13 @@ function HomePage() {
                       })
                     }
                   />
-                  </LazyMount>
-                </LandingCarouselSlot>
-              ))
+                );
+                return (
+                  <LandingCarouselSlot key={item.id} grid>
+                    {idx === 0 ? card : <LazyMount>{card}</LazyMount>}
+                  </LandingCarouselSlot>
+                );
+              })
             : (
               <p className="min-w-full text-sm text-slate-500">No events available right now.</p>
             )}

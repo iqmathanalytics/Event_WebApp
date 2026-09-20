@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CheckCircle2, ScanLine, Ticket } from "lucide-react";
-import { Html5Qrcode } from "html5-qrcode";
 import { checkInTicket, lookupCheckInTicket } from "../services/checkInService";
 import { formatCurrency, formatDateUS } from "../utils/format";
 import { normalizeCheckInCodeInput } from "../utils/bookingCheckIn";
@@ -78,7 +77,7 @@ export default function CheckInPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [scanning, setScanning] = useState(false);
-  const [cameraHint, setCameraHint] = useState("Starting camera…");
+  const [cameraHint, setCameraHint] = useState("Tap Start camera to scan a ticket QR.");
   const scannerRef = useRef(null);
   const requestIdRef = useRef(0);
   const lastHandledCodeRef = useRef("");
@@ -195,6 +194,7 @@ export default function CheckInPage() {
     setError("");
     setCameraHint("Starting camera…");
     try {
+      const { Html5Qrcode } = await import("html5-qrcode");
       const cameras = await Html5Qrcode.getCameras();
       const preferred =
         cameras.find((c) => /back|rear|environment/i.test(String(c.label || ""))) || cameras[0];
@@ -242,13 +242,10 @@ export default function CheckInPage() {
   }, [stopScanner]);
 
   useEffect(() => {
-    void startScanner();
     return () => {
       void stopScanner();
     };
-    // Mount once — camera should not restart on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [stopScanner]);
 
   useEffect(() => {
     if (mountedCodeHandledRef.current) {
@@ -277,7 +274,7 @@ export default function CheckInPage() {
             </p>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Venue check-in</h1>
             <p className="mt-0.5 text-sm text-slate-600">
-              Point the camera at the guest QR — check-in happens automatically.
+              Tap Start camera, then point it at the guest QR — check-in happens automatically.
             </p>
           </div>
         </header>

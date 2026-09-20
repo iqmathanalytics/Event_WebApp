@@ -81,6 +81,15 @@ function normalizeTicketLevel(row, index) {
   const id = String(row?.id || "").trim() || slugifyId(name);
   const seats = parseLevelSeats(row?.seats);
   const valid_upto = parseValidUpto(row?.valid_upto);
+  const colorKey = String(row?.color_key || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 32);
+  const colorMatch = String(row?.color || "")
+    .trim()
+    .match(/^#?([0-9a-f]{6})$/i);
+  const color = colorMatch ? `#${colorMatch[1].toUpperCase()}` : "";
   return {
     id: id.slice(0, 80),
     name: name.slice(0, MAX_LEVEL_NAME),
@@ -90,7 +99,9 @@ function normalizeTicketLevel(row, index) {
     price: Number.isFinite(price) && price >= 0 ? Number(price.toFixed(2)) : 0,
     sort_order: Number.isFinite(Number(row?.sort_order)) ? Number(row.sort_order) : index,
     seats,
-    valid_upto
+    valid_upto,
+    ...(colorKey ? { color_key: colorKey } : {}),
+    ...(color ? { color } : {})
   };
 }
 
