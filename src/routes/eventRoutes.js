@@ -1,6 +1,7 @@
 const express = require("express");
 const eventController = require("../controllers/eventController");
 const eventAnalyticsController = require("../controllers/eventAnalyticsController");
+const eventVendorShareController = require("../controllers/eventVendorShareController");
 const seatingController = require("../controllers/seatingController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
@@ -24,6 +25,14 @@ const {
   revokeAnalyticsShareSchema,
   acceptAnalyticsInviteSchema
 } = require("../validators/eventAnalyticsValidator");
+const {
+  createVendorShareSchema,
+  revokeVendorShareSchema,
+  acceptVendorInviteSchema,
+  vendorInsightsSchema,
+  vendorHitSchema,
+  eventIdParamsSchema: vendorEventIdParamsSchema
+} = require("../validators/eventVendorShareValidator");
 const { publicCacheMiddleware } = require("../middleware/publicCacheMiddleware");
 
 const router = express.Router();
@@ -118,6 +127,66 @@ router.delete(
   validateRequest(revokeAnalyticsShareSchema),
   eventAnalyticsController.revokeEventAnalyticsShare
 );
+
+router.get(
+  "/vendor/shared",
+  authMiddleware,
+  organizerAccessMiddleware,
+  eventVendorShareController.listSharedVendor
+);
+router.get(
+  "/vendor/owned",
+  authMiddleware,
+  organizerAccessMiddleware,
+  eventVendorShareController.listOwnedVendorEvents
+);
+router.post(
+  "/vendor-invites/accept",
+  authMiddleware,
+  validateRequest(acceptVendorInviteSchema),
+  eventVendorShareController.acceptVendorInvite
+);
+router.get(
+  "/vendor/insights/:eventId",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(vendorInsightsSchema),
+  eventVendorShareController.getVendorInsights
+);
+router.get(
+  "/vendor/bookings/:eventId",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(vendorInsightsSchema),
+  eventVendorShareController.getVendorBookings
+);
+router.get(
+  "/:eventId/vendor-shares",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(vendorEventIdParamsSchema),
+  eventVendorShareController.listEventVendorShares
+);
+router.post(
+  "/:eventId/vendor-shares",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(createVendorShareSchema),
+  eventVendorShareController.createEventVendorShare
+);
+router.delete(
+  "/:eventId/vendor-shares/:shareId",
+  authMiddleware,
+  organizerAccessMiddleware,
+  validateRequest(revokeVendorShareSchema),
+  eventVendorShareController.revokeEventVendorShare
+);
+router.post(
+  "/:eventId/vendor-hits",
+  validateRequest(vendorHitSchema),
+  eventVendorShareController.recordVendorHit
+);
+
 router.get(
   "/my-events",
   authMiddleware,

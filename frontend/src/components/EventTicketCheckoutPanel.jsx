@@ -67,6 +67,7 @@ import {
 import { applyCheckoutFees, toBoolFlag } from "../utils/transactionFee";
 import { releaseSeatsioHold } from "../services/seatingService";
 import { isReservedSeating } from "../utils/seatingMode";
+import { resolveVendorCodeForEvent } from "../utils/vendorAttribution";
 import {
   SEATSIO_HOLD_MINUTES,
   buildCartFromSelectedSeats,
@@ -385,6 +386,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const [error, setError] = useState("");
   const [couponCodeInput, setCouponCodeInput] = useState("");
   const [vendorCodeInput, setVendorCodeInput] = useState("");
+  const [vendorCodeLocked, setVendorCodeLocked] = useState(false);
   const [couponHold, setCouponHold] = useState(null);
   const [couponApplying, setCouponApplying] = useState(false);
   const [couponMessage, setCouponMessage] = useState("");
@@ -571,6 +573,19 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     setEmail(String(user?.email || "").trim());
     setPhone(profileMobileOrEmpty(user?.mobile_number));
   }, [user, guestMode]);
+
+  useEffect(() => {
+    if (!eventId) {
+      return;
+    }
+    const fromLink = resolveVendorCodeForEvent(eventId);
+    if (!fromLink) {
+      setVendorCodeLocked(false);
+      return;
+    }
+    setVendorCodeInput(fromLink);
+    setVendorCodeLocked(true);
+  }, [eventId]);
 
   useEffect(() => {
     if (reservedSeating) {
@@ -1836,14 +1851,24 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Vendor code</p>
           <p className="mt-1 text-xs text-slate-500">
-            Optional — enter a partner/vendor code for tracking only. No discount is applied.
+            {vendorCodeLocked
+              ? "Applied from your partner link — tracking only, no discount."
+              : "Optional — enter a partner/vendor code for tracking only. No discount is applied."}
           </p>
           <input
             value={vendorCodeInput}
-            onChange={(e) => setVendorCodeInput(e.target.value.toUpperCase())}
+            onChange={(e) => {
+              if (vendorCodeLocked) {
+                return;
+              }
+              setVendorCodeInput(e.target.value.toUpperCase());
+            }}
+            readOnly={vendorCodeLocked}
             maxLength={40}
             placeholder="VENDOR123"
-            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase"
+            className={`mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase ${
+              vendorCodeLocked ? "bg-slate-100 text-slate-700" : ""
+            }`}
           />
         </div>
       ) : null}

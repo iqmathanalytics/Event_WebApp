@@ -31,6 +31,8 @@ import OrganizerVendorCodesPanel from "../components/OrganizerVendorCodesPanel";
 import OrganizerCheckInPanel from "../components/OrganizerCheckInPanel";
 import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
 import SharedAnalyticsList from "../components/SharedAnalyticsList";
+import VendorSharedList from "../components/VendorSharedList";
+import VendorInsightsPanel from "../components/VendorInsightsPanel";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
 import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
 import SeatingSideToast from "../components/seating/SeatingSideToast";
@@ -392,6 +394,9 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [inviteNotice, setInviteNotice] = useState("");
   const [inviteError, setInviteError] = useState("");
   const [sharedListKey, setSharedListKey] = useState(0);
+  const [vendorSharedEventId, setVendorSharedEventId] = useState("");
+  const [vendorSharedMeta, setVendorSharedMeta] = useState(null);
+  const [vendorSharedListKey, setVendorSharedListKey] = useState(0);
   const inviteHandledRef = useRef("");
   const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
   const [rows, setRows] = useState([]);
@@ -1290,7 +1295,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               }`}
             >
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Vendor</p>
-              <p className="mt-1 text-sm font-semibold">Codes</p>
+              <p className="mt-1 text-sm font-semibold">Links</p>
             </button>
             <button
               type="button"
@@ -1484,7 +1489,45 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             <OrganizerCouponsPanel />
           </HostSectionSlot>
 
-          <HostSectionSlot id="vendor-codes" activeId={displaySection}>
+          <HostSectionSlot id="vendor-codes" activeId={displaySection} className="space-y-4">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+              <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Vendor links organizers shared with you. Only visits and bookings from your link appear here.
+              </p>
+              <div className="mt-4">
+                <VendorSharedList
+                  selectedEventId={vendorSharedEventId}
+                  reloadKey={vendorSharedListKey}
+                  onOpenEvent={(row) => {
+                    setVendorSharedEventId(String(row.event_id));
+                    setVendorSharedMeta({
+                      shareId: row.share_id,
+                      vendorCode: row.vendor_code,
+                      ownerLabel: row.owner?.name || row.owner?.email || "organizer"
+                    });
+                  }}
+                />
+              </div>
+            </div>
+            {vendorSharedEventId ? (
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+                <VendorInsightsPanel
+                  eventId={vendorSharedEventId}
+                  shareId={vendorSharedMeta?.shareId}
+                  vendorCode={vendorSharedMeta?.vendorCode}
+                  banner={
+                    vendorSharedMeta?.ownerLabel
+                      ? `Shared by ${vendorSharedMeta.ownerLabel} · your link only`
+                      : "Your vendor link · view only"
+                  }
+                  onBack={() => {
+                    setVendorSharedEventId("");
+                    setVendorSharedMeta(null);
+                  }}
+                />
+              </div>
+            ) : null}
             <OrganizerVendorCodesPanel />
           </HostSectionSlot>
 
@@ -1806,7 +1849,45 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             <OrganizerCouponsPanel />
           </HostSectionSlot>
 
-          <HostSectionSlot id="vendor-codes" activeId={displaySection}>
+          <HostSectionSlot id="vendor-codes" activeId={displaySection} className="space-y-4">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+              <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Vendor links organizers shared with you. Only visits and bookings from your link appear here.
+              </p>
+              <div className="mt-4">
+                <VendorSharedList
+                  selectedEventId={vendorSharedEventId}
+                  reloadKey={vendorSharedListKey}
+                  onOpenEvent={(row) => {
+                    setVendorSharedEventId(String(row.event_id));
+                    setVendorSharedMeta({
+                      shareId: row.share_id,
+                      vendorCode: row.vendor_code,
+                      ownerLabel: row.owner?.name || row.owner?.email || "organizer"
+                    });
+                  }}
+                />
+              </div>
+            </div>
+            {vendorSharedEventId ? (
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+                <VendorInsightsPanel
+                  eventId={vendorSharedEventId}
+                  shareId={vendorSharedMeta?.shareId}
+                  vendorCode={vendorSharedMeta?.vendorCode}
+                  banner={
+                    vendorSharedMeta?.ownerLabel
+                      ? `Shared by ${vendorSharedMeta.ownerLabel} · your link only`
+                      : "Your vendor link · view only"
+                  }
+                  onBack={() => {
+                    setVendorSharedEventId("");
+                    setVendorSharedMeta(null);
+                  }}
+                />
+              </div>
+            ) : null}
             <OrganizerVendorCodesPanel />
           </HostSectionSlot>
 

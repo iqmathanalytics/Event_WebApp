@@ -766,6 +766,60 @@ function buildAnalyticsShareInviteEmail({
   return { subject, text, html };
 }
 
+function buildVendorShareInviteEmail({
+  inviteeName,
+  ownerName,
+  eventTitle,
+  vendorCode,
+  acceptUrl,
+  shareUrl
+}) {
+  const name = String(inviteeName || "there").trim() || "there";
+  const owner = String(ownerName || "An organizer").trim() || "An organizer";
+  const title = String(eventTitle || "an event").trim() || "an event";
+  const code = String(vendorCode || "").trim().toUpperCase();
+  const url = String(acceptUrl || "").trim();
+  const link = String(shareUrl || "").trim();
+  const subject = `${owner} shared a vendor link for "${title}" on ${BRAND_NAME}`;
+  const text = [
+    `Hi ${name},`,
+    "",
+    `${owner} invited you to track results for "${title}" on ${BRAND_NAME}.`,
+    code ? `Your vendor code: ${code}` : null,
+    link ? `Share this event link with your audience: ${link}` : null,
+    "Accept the invitation to open your Vendor dashboard (visits, bookings, and revenue for your link only).",
+    url ? `Accept invitation: ${url}` : null,
+    "",
+    `If you did not expect this, you can ignore this email.`,
+    "",
+    `Questions? ${BRAND_SUPPORT_EMAIL}`
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const html = buildLayout({
+    preheader: `${owner} shared a vendor tracking link with you`,
+    eyebrow: "Vendor invite",
+    title: "You're invited to a vendor dashboard",
+    subtitle: `${owner} wants you to track results for ${title}. Accept to open Vendor in My Hub.`,
+    headerTone: "violet",
+    rows: [
+      { label: "Event", value: title },
+      { label: "Invited by", value: owner },
+      ...(code ? [{ label: "Vendor code", value: code }] : []),
+      { label: "Access", value: "Visits, bookings, and revenue for your link only" }
+    ],
+    highlights: [
+      "Share your link — only activity from that link appears on your dashboard.",
+      "You cannot edit the event or see other partners’ results.",
+      "Accepting unlocks the Vendor tab in My Hub."
+    ],
+    ctaLabel: "Accept invitation",
+    ctaUrl: url || dashboardUrl("/dashboard/user?host=vendor"),
+    footerNote: `If you did not expect this invite, ignore this email. Need help? ${BRAND_SUPPORT_EMAIL}`
+  });
+  return { subject, text, html };
+}
+
 function buildPasswordResetEmail({ firstName, email, resetUrl }) {
   const safeFirstName = String(firstName || "there").trim() || "there";
   const subject = `Reset your ${BRAND_NAME} password`;
@@ -1033,6 +1087,7 @@ module.exports = {
   buildPlatformTicketRequestAdminEmail,
   buildPlatformTicketRequestUserEmail,
   buildAnalyticsShareInviteEmail,
+  buildVendorShareInviteEmail,
   buildDailyOrganizerEventSummaryEmail,
   buildWeeklyOrganizerSummaryEmail,
   ticketBlocksFromCart,

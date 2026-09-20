@@ -25,6 +25,7 @@ import UserDashboardBookingsAndFavorites from "../components/UserDashboardBookin
 import PlatformTicketAccessRequestModal from "../components/PlatformTicketAccessRequestModal";
 import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
 import { acceptAnalyticsInvite } from "../services/organizerAnalyticsService";
+import { acceptVendorInvite } from "../services/vendorShareService";
 import { profileMobileOrEmpty } from "../utils/phone";
 import { useIsLgUp } from "../hooks/useMediaQuery";
 
@@ -49,6 +50,7 @@ const HOST_TAB_KEYS = new Set([
   "events",
   "coupons",
   "vendor-codes",
+  "vendor",
   "check-in",
   "offers"
 ]);
@@ -59,6 +61,7 @@ const ORGANIZER_SECTION_BY_TAB = {
   events: "my-events",
   coupons: "coupons",
   "vendor-codes": "vendor-codes",
+  vendor: "vendor-codes",
   "check-in": "check-in"
 };
 
@@ -67,18 +70,22 @@ const ORGANIZER_WORKSPACE_TABS = [
   { key: "shared", label: "Shared with me", shortLabel: "Shared" },
   { key: "events", label: "My Events" },
   { key: "coupons", label: "Coupons" },
-  { key: "vendor-codes", label: "Vendor codes", shortLabel: "Vendors" },
+  { key: "vendor", label: "Vendor", shortLabel: "Vendor" },
   { key: "check-in", label: "Check In", shortLabel: "Check In" },
   { key: "offers", label: "Offers & Creator Spotlights", shortLabel: "Offers & Spotlights" }
 ];
 
 const DEFAULT_WORKSPACE_TABS = [
+  { key: "vendor", label: "Vendor" },
   { key: "events", label: "Manage Events" },
   { key: "offers", label: "Offers & Creator Spotlights", shortLabel: "Offers & Spotlights" }
 ];
 
 function tabFromSearch(search) {
   const params = new URLSearchParams(search || "");
+  if (params.get("vendorInvite")) {
+    return "vendor";
+  }
   if (params.get("invite")) {
     return "shared";
   }
@@ -86,8 +93,11 @@ function tabFromSearch(search) {
   if (host === "my-events") {
     return "events";
   }
+  if (host === "vendor-codes") {
+    return "vendor";
+  }
   if (HOST_TAB_KEYS.has(host)) {
-    return host;
+    return host === "vendor-codes" ? "vendor" : host;
   }
   return "";
 }
@@ -834,6 +844,78 @@ function UserDashboardPage() {
         const next = new URLSearchParams(location.search);
         next.delete("invite");
         next.set("host", "shared");
+        navigate(
+          { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
+          { replace: true }
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.hash, location.pathname, location.search, login, navigate, refreshSession, user]);
+
+  useEffect(() => {
+    const token = String(new URLSearchParams(location.search).get("vendorInvite") || "").trim();
+    if (!token || inviteHandledRef.current === `vendor:${token}`) {
+      return undefined;
+    }
+    inviteHandledRef.current = `vendor:${token}`;
+    let cancelled = false;
+    (async () => {
+      setInviteError("");
+      setInviteNotice("Accepting vendor invitation…");
+      setDesktopWorkspaceTab("vendor");
+      setMobileWorkspaceTab("vendor");
+      try {
+        const res = await acceptVendorInvite(token);
+        if (cancelled) {
+          return;
+        }
+        const acceptedUser = res?.data?.user;
+        if (acceptedUser) {
+          const access = localStorage.getItem("accessToken");
+          const refreshTok = localStorage.getItem("refreshToken");
+          if (access && refreshTok && typeof login === "function") {
+            login({
+              accessToken: access,
+              refreshToken: refreshTok,
+              user: {
+                ...(user || {}),
+                ...acceptedUser,
+                organizer_enabled: 1
+              }
+            });
+          }
+        } else {
+          try {
+            await refreshSession();
+          } catch (_err) {
+            /* best-effort */
+          }
+        }
+        const eventId = String(res?.data?.event_id || "").trim();
+        setInviteNotice(res?.message || "Vendor invitation accepted.");
+        const next = new URLSearchParams(location.search);
+        next.delete("vendorInvite");
+        next.set("host", "vendor");
+        next.delete("section");
+        if (eventId) {
+          next.set("eventId", eventId);
+        }
+        navigate(
+          { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
+          { replace: true }
+        );
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        setInviteNotice("");
+        setInviteError(err?.response?.data?.message || "Could not accept this vendor invitation.");
+        const next = new URLSearchParams(location.search);
+        next.delete("vendorInvite");
+        next.set("host", "vendor");
         navigate(
           { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
           { replace: true }

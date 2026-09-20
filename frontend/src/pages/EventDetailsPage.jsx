@@ -12,6 +12,11 @@ import { FiCalendar, FiClock, FiMapPin, FiUser, FiYoutube } from "react-icons/fi
 import { CheckCircle, Clock, Globe, Mic, Users } from "lucide-react";
 import { fetchEventById, trackEventView } from "../services/eventService";
 import { trackEventPageView } from "../utils/googleAnalytics";
+import { recordVendorLinkHit } from "../services/vendorShareService";
+import {
+  getOrCreateVendorSessionKey,
+  resolveVendorCodeForEvent
+} from "../utils/vendorAttribution";
 import { formatCurrency, formatDateUS, formatEventDuration, formatTime12Hour } from "../utils/format";
 import { normalizeEventTicketSalesMode } from "../utils/eventTicketSalesMode";
 import { resolveEventListPrice } from "../utils/eventTicketLevels";
@@ -77,6 +82,7 @@ function EventDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [trackedView, setTrackedView] = useState(false);
+  const [trackedVendorHit, setTrackedVendorHit] = useState(false);
   const ownerPreview = Boolean(location.state?.ownerPreview);
 
   useCanonicalListingUrl(event, eventDetailPath);
@@ -126,6 +132,27 @@ function EventDetailsPage() {
     trackEventView(event.public_slug || event.id).catch(() => {});
     setTrackedView(true);
   }, [event?.id, event?.title, event?.ticket_sales_mode, event?.viewer_preview, trackedView]);
+
+  useEffect(() => {
+    if (!event?.id || trackedVendorHit || event.viewer_preview) {
+      return;
+    }
+    const code = resolveVendorCodeForEvent(event.id, location.search);
+    if (!code) {
+      return;
+    }
+    setTrackedVendorHit(true);
+    void recordVendorLinkHit(event.id, {
+      vendor_code: code,
+      session_key: getOrCreateVendorSessionKey(),
+      path: location.pathname || undefined
+    }).catch(() => {});
+  }, [event?.id, event?.viewer_preview, location.search, location.pathname, trackedVendorHit]);
+
+  useEffect(() => {
+    setTrackedView(false);
+    setTrackedVendorHit(false);
+  }, [slug]);
 
   useEffect(() => {
     if (!event?.title) {
