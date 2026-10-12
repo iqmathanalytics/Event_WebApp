@@ -102,10 +102,19 @@ function sanitizePublicEventForViewer(event, viewerUser) {
     next.sponsor_inquiry_enabled === true ||
     next.sponsor_inquiry_enabled === 1 ||
     String(next.sponsor_inquiry_enabled || "") === "1";
+  const influencerOn =
+    next.influencer_partner_enabled === true ||
+    next.influencer_partner_enabled === 1 ||
+    String(next.influencer_partner_enabled || "") === "1";
+  next.sponsor_inquiry_enabled = Boolean(sponsorOn);
+  next.influencer_partner_enabled = Boolean(influencerOn);
   if (!sponsorOn) {
     delete next.sponsor_contact_email;
     delete next.sponsor_contact_phone;
-    next.sponsor_inquiry_enabled = false;
+  }
+  if (!influencerOn) {
+    delete next.influencer_partner_contact_email;
+    delete next.influencer_partner_contact_phone;
   }
   next.sponsor_tickets_enabled = isSponsorTicketsEnabled(next);
   const authed = Boolean(viewerUser && viewerUser.id);
@@ -440,6 +449,7 @@ async function fetchEvents(query, viewerUser) {
   const status = query.status || "approved";
   const sort = query.sort || "event_date";
   const sortByPopularity = sort === "popularity";
+  const sortByPrice = sort === "price";
 
   const filters = {
     status,
@@ -461,7 +471,8 @@ async function fetchEvents(query, viewerUser) {
   const data = await listEvents({ filters, pagination });
   let rows = withStoredPopularityMetrics(data.rows || []);
 
-  if (pagination.page === 1 && status === "approved") {
+  // Spotlight pin is for discovery sorts — skip it when ordering by price.
+  if (pagination.page === 1 && status === "approved" && !sortByPrice) {
     const spotlightRows = withStoredPopularityMetrics(
       await listSpotlightEvents({
         categoryId: filters.categoryId,
@@ -487,7 +498,21 @@ async function fetchEvents(query, viewerUser) {
   if (sort === "event_date") {
     rows = sortRowsByEventDate(rows, filters.sortOrder);
   }
-  rows = sortRowsWithHomeFeaturedFirst(rows);
+  if (sortByPrice) {
+    const desc = String(filters.sortOrder).toLowerCase() === "desc";
+    rows = [...rows].sort((a, b) => {
+      const pa = Number(a?.price);
+      const pb = Number(b?.price);
+      const na = Number.isFinite(pa) ? pa : desc ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+      const nb = Number.isFinite(pb) ? pb : desc ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+      if (na !== nb) {
+        return desc ? nb - na : na - nb;
+      }
+      return String(a?.id ?? "").localeCompare(String(b?.id ?? ""), undefined, { numeric: true });
+    });
+  } else {
+    rows = sortRowsWithHomeFeaturedFirst(rows);
+  }
 
   return {
     ...data,
@@ -702,6 +727,12 @@ async function trackEventView(slugOrId) {
   return result;
 }
 
+async function touchEventPresence(slugOrId, { session_key: sessionKey } = {}) {
+  const eventId = resolveEventIdFromParam(slugOrId);
+  const { touchEventPagePresence } = require("../models/eventPagePresenceModel");
+  return touchEventPagePresence({ eventId, sessionKey });
+}
+
 module.exports = {
   submitEvent,
   approveEvent,
@@ -713,5 +744,6 @@ module.exports = {
   deleteOwnEvent,
   fetchFeaturedEvents,
   trackEventClick,
-  trackEventView
+  trackEventView,
+  touchEventPresence
 };

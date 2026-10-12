@@ -3,6 +3,7 @@ import { initGoogleAnalytics } from "./utils/googleAnalytics";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { MotionConfig } from "framer-motion";
 import App from "./App";
 import "./index.css";
 import { AuthProvider } from "./context/AuthContext";
@@ -14,15 +15,17 @@ initGoogleAnalytics();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <BrowserRouter>
-    <AuthProvider>
-      <FavoritesProvider>
-        <CityFilterProvider>
-          <RouteContentReadyProvider>
-            <App />
-          </RouteContentReadyProvider>
-        </CityFilterProvider>
-      </FavoritesProvider>
-    </AuthProvider>
+    <MotionConfig reducedMotion="user">
+      <AuthProvider>
+        <FavoritesProvider>
+          <CityFilterProvider>
+            <RouteContentReadyProvider>
+              <App />
+            </RouteContentReadyProvider>
+          </CityFilterProvider>
+        </FavoritesProvider>
+      </AuthProvider>
+    </MotionConfig>
   </BrowserRouter>
 );
 

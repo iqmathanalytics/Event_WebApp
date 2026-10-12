@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import DealCard from "../components/DealCard";
 import EventFilterBar from "../components/EventFilterBar";
+import ListingEmptyState from "../components/ListingEmptyState";
 import Pagination from "../components/Pagination";
 import { LISTING_PAGE_SIZE } from "../constants/listingPagination";
 import DealSubmissionModal, { emptyDealSubmitForm } from "../components/DealSubmissionModal";
@@ -14,6 +15,7 @@ import { FiBriefcase, FiCheckCircle, FiClock, FiRefreshCw } from "react-icons/fi
 import { BadgePercent, MousePointerClick, Sparkles, Store } from "lucide-react";
 import { fetchMyProfile } from "../services/userService";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
+import { toDealCardItem } from "../utils/dealCardItem";
 
 function DealerProfileProgressNote({ status }) {
   const s = String(status || "").toLowerCase();
@@ -139,7 +141,7 @@ function DealsPage() {
   const [dealerStatus, setDealerStatus] = useState(null);
   const [query, setQuery] = useState("");
   const [city, setCity] = useState(selectedCity || "");
-  const [sortBy, setSortBy] = useState("popularity");
+  const [sortBy, setSortBy] = useState("newest");
   const [category, setCategory] = useState("");
   const [date, setDate] = useState("");
   const [priceMin, setPriceMin] = useState("");
@@ -204,6 +206,17 @@ function DealsPage() {
     setSelectedCity(value);
   };
 
+  const clearFilters = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setCategory("");
+    setDate("");
+    setPriceMin("");
+    setPriceMax("");
+    setSortBy("newest");
+    setPage(1);
+  };
+
   useEffect(() => {
     setCity(selectedCity || "");
   }, [selectedCity]);
@@ -230,7 +243,7 @@ function DealsPage() {
           q: debouncedQuery || undefined,
           city: city || undefined,
           category: category || undefined,
-          sort: sortBy || "popularity"
+          sort: sortBy || "newest"
         });
 
         if (active) {
@@ -260,9 +273,11 @@ function DealsPage() {
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-5"
     >
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Deals</h1>
-        <p className="text-sm text-slate-600">Browse limited-time local offers from trusted partners across your city.</p>
+      <div className="space-y-1.5 lg:space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">Deals</h1>
+        <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+          Browse limited-time local offers from trusted partners across your city.
+        </p>
       </div>
       <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-indigo-50/15 to-emerald-50/25 p-3 shadow-soft ring-1 ring-indigo-500/[0.06] sm:p-3.5">
         <div className="pointer-events-none absolute -right-14 -top-14 h-52 w-52 rounded-full bg-gradient-to-br from-indigo-400/25 to-emerald-400/20 blur-3xl" />
@@ -279,13 +294,13 @@ function DealsPage() {
             <div className="flex shrink-0 items-center gap-2">
               <Link
                 to="/register"
-                className="inline-flex rounded-lg bg-gradient-to-r from-indigo-600 to-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-indigo-500 hover:to-emerald-500"
+                className="inline-flex min-h-11 items-center rounded-full bg-gradient-to-r from-indigo-600 to-emerald-600 px-4 text-xs font-bold text-white shadow-sm transition hover:from-indigo-500 hover:to-emerald-500 lg:min-h-0 lg:rounded-lg lg:px-3.5 lg:py-2"
               >
                 Join free
               </Link>
               <Link
                 to="/login"
-                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:border-indigo-300"
+                className="inline-flex min-h-11 items-center rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-800 transition hover:border-indigo-300 lg:min-h-0 lg:rounded-lg lg:px-3.5 lg:py-2"
               >
                 Sign in
               </Link>
@@ -308,21 +323,21 @@ function DealsPage() {
                     setSubmitMessage("");
                     setSubmitOpen(true);
                   }}
-                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                  className="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 lg:min-h-0"
                 >
                   Submit deal
                 </button>
               ) : !canPostDeals ? (
                 <Link
                   to="/dashboard/user"
-                  className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+                  className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 lg:min-h-0"
                 >
                   Open dashboard
                 </Link>
               ) : (
                 <Link
                   to="/dashboard/user"
-                  className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                  className="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 lg:min-h-0"
                 >
                   Complete profile
                 </Link>
@@ -347,6 +362,7 @@ function DealsPage() {
         setPriceMax={setPriceMax}
         sortBy={sortBy}
         setSortBy={setSortBy}
+        showSort={false}
         searchPlaceholder="Search deals"
         mobileTitle="Filter Deals"
       />
@@ -357,28 +373,14 @@ function DealsPage() {
             ))
           : null}
         {!loading && list.length === 0 ? (
-          <p className="col-span-full text-sm text-slate-500">No deals match your current filters.</p>
+          <ListingEmptyState message="No deals match your current filters." actionLabel="Clear filters" onAction={clearFilters} />
         ) : null}
         {!loading
           ? paginatedList.map((item, idx) => (
               <DealCard
                 key={item.id}
                 priority={idx === 0}
-                item={{
-                  id: item.id,
-                  title: item.title,
-                  city: item.city_name || "City",
-                  tags: item.tags || [],
-                  discount: item.original_price
-                    ? Math.max(0, Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100))
-                    : 0,
-                  originalPrice: item.original_price || item.discounted_price || 0,
-                  price: item.discounted_price || item.original_price || 0,
-                  image: item.image_url,
-                  dealInfo: item.terms_text || item.description || "",
-                  offerType: item.offer_type,
-                  offerMetaJson: item.offer_meta_json
-                }}
+                item={toDealCardItem(item)}
                 isFavorite={isFavorite("deal", item.id)}
                 tags={item.tags || []}
                 isPremium={item.is_premium === 1 || item.is_premium === true}

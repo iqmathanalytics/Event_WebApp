@@ -381,6 +381,18 @@ async function buildEventInsightsPayload(event, { hourlyDate } = {}) {
   }
   traffic.event_clicks = Math.max(Number(traffic.event_clicks) || 0, dbEventClicks);
 
+  // First-party presence (heartbeat) — accurate "Live now", not GA's sticky ~30m window.
+  try {
+    const { getLiveEventPagePresence } = require("../models/eventPagePresenceModel");
+    const live = await getLiveEventPagePresence(eventId);
+    traffic.live_sessions_30m = Number(live.live_sessions) || 0;
+    traffic.live_views_30m = Number(live.live_hits) || 0;
+    traffic.live_window_seconds = live.window_seconds || 90;
+    traffic.live_source = "first_party_presence";
+  } catch (_err) {
+    /* keep GA realtime fallback if presence table is unavailable */
+  }
+
   if (isPlatform) {
     bookings = await getBookingInsights(eventId, event);
     const dbBookingsDone = (bookings.paid_bookings || 0) + (bookings.free_bookings || 0);

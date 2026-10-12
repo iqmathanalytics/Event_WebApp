@@ -49,7 +49,7 @@ export default function StripePaymentModal({
 
   const modal = (
     <div
-      className="fixed inset-0 z-[380] flex items-end justify-center p-0 sm:items-start sm:p-4 sm:pt-[14vh]"
+      className="fixed inset-0 z-[380] flex items-end justify-center p-0 lg:items-start lg:p-4 lg:pt-[14vh]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="stripe-payment-title"
@@ -61,22 +61,27 @@ export default function StripePaymentModal({
         onClick={onClose}
       />
 
-      <div className="stripe-payment-modal relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-xl">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
-          <div>
-            <h2 id="stripe-payment-title" className="text-base font-bold text-slate-900">
-              Complete payment
-            </h2>
-            <p className="mt-0.5 text-lg font-bold tabular-nums text-[#E31C5F]">{totalLabel}</p>
+      <div className="stripe-payment-modal relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-[1.35rem] border border-slate-200 bg-white shadow-xl lg:rounded-xl">
+        <div className="flex shrink-0 flex-col border-b border-slate-100">
+          <div className="flex justify-center pt-2.5 lg:hidden" aria-hidden>
+            <span className="h-1 w-10 rounded-full bg-slate-300" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Close"
-          >
-            <X size={18} aria-hidden />
-          </button>
+          <div className="flex items-center justify-between gap-3 px-4 pb-3.5 pt-2 lg:py-3.5">
+            <div>
+              <h2 id="stripe-payment-title" className="text-base font-bold text-slate-900">
+                Complete payment
+              </h2>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[#E31C5F]">{totalLabel}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-11 w-11 shrink-0 place-content-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 lg:h-9 lg:w-9"
+              aria-label="Close"
+            >
+              <X size={18} aria-hidden />
+            </button>
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
@@ -103,13 +108,17 @@ export default function StripePaymentModal({
 
       <style>{`
         .stripe-payment-modal {
-          height: min(92vh, 640px);
-          max-height: min(92vh, 640px);
+          height: min(100dvh, 100%);
+          max-height: 96dvh;
+          margin-top: auto;
+          padding-bottom: env(safe-area-inset-bottom);
         }
-        @media (min-width: 640px) {
+        @media (min-width: 1024px) {
           .stripe-payment-modal {
             height: min(580px, calc(100vh - 3rem));
             max-height: min(580px, calc(100vh - 3rem));
+            margin-top: 0;
+            padding-bottom: 0;
           }
         }
         .stripe-payment-element {

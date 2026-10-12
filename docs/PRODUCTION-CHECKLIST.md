@@ -8,7 +8,7 @@ Use this with [MILESWEB-DEPLOY.md](./MILESWEB-DEPLOY.md).
 - [ ] Run `npm install`
 - [ ] Run `npm run verify:production` (or `node scripts/verify-production-env.js`)
 - [ ] Set `PRODUCTION_DB_*` in `.env` (TiDB Cloud production cluster)
-- [ ] Run `npm run db:migrate:production` (TiDB schema — includes `event_seatsio.sql` + repair migration)
+- [ ] Run `npm run db:migrate:production` (TiDB schema — includes vendor shares + presence tables + seats.io)
 - [ ] Run `npm run db:backfill-slugs` (if slugs missing)
 - [ ] Copy `frontend/.env.production.example` → `frontend/.env`
 - [ ] Set `VITE_API_BASE_URL=https://api.YOURDOMAIN.com/api` (match mPanel proxy)

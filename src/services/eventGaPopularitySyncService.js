@@ -2,7 +2,10 @@ const { pool } = require("../config/db");
 const googleAnalytics = require("./googleAnalyticsService");
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
-const GA_ID_BATCH = 200;
+/** Delay first sync so morning traffic is not fighting GA UPDATEs right after boot. */
+const DEFAULT_BOOT_DELAY_MS = 5 * 60 * 1000;
+const GA_ID_BATCH = 50;
+const PERSIST_PAUSE_MS = 50;
 
 function chunk(list, size) {
   const out = [];
@@ -36,6 +39,9 @@ async function persistPageViewMaps(ids, map7, map30) {
        WHERE id = ?`,
       [views7d, views30d, views30d, id]
     );
+    if (PERSIST_PAUSE_MS > 0) {
+      await new Promise((resolve) => setTimeout(resolve, PERSIST_PAUSE_MS));
+    }
   }
 }
 
@@ -72,8 +78,16 @@ function startEventGaPopularitySyncJob() {
 
   const intervalMs = Number(process.env.GA_EVENT_VIEWS_REFRESH_MS || DEFAULT_INTERVAL_MS);
   const delayMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : DEFAULT_INTERVAL_MS;
+  const bootDelayRaw = Number(process.env.GA_EVENT_VIEWS_BOOT_DELAY_MS || DEFAULT_BOOT_DELAY_MS);
+  const bootDelayMs =
+    Number.isFinite(bootDelayRaw) && bootDelayRaw >= 0 ? bootDelayRaw : DEFAULT_BOOT_DELAY_MS;
 
+  let running = false;
   const run = async () => {
+    if (running) {
+      return;
+    }
+    running = true;
     try {
       const result = await refreshStoredEventGaPageViews();
       if (result?.updated) {
@@ -83,6 +97,8 @@ function startEventGaPopularitySyncJob() {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[ga-popularity] sync failed:", err?.message || err);
+    } finally {
+      running = false;
     }
   };
 
@@ -91,7 +107,7 @@ function startEventGaPopularitySyncJob() {
     setInterval(() => {
       void run();
     }, delayMs);
-  }, 15 * 1000);
+  }, bootDelayMs);
 }
 
 module.exports = {

@@ -35,12 +35,12 @@ export default function SeatingModalShell({
 
   const widthClass =
     size === "fullscreen"
-      ? "h-screen w-screen rounded-none"
+      ? "h-[100dvh] w-screen lg:h-screen"
       : size === "full"
-      ? "h-[min(92vh,900px)] w-[min(96vw,1200px)]"
-      : "h-[min(80vh,720px)] w-[min(92vw,900px)]";
-  const overlayPadding = size === "fullscreen" ? "p-0" : "p-3 sm:p-4";
-  const shellRadius = size === "fullscreen" ? "" : "rounded-2xl";
+        ? "h-[100dvh] w-screen lg:h-[min(92vh,900px)] lg:w-[min(96vw,1200px)]"
+        : "h-[100dvh] w-screen lg:h-[min(80vh,720px)] lg:w-[min(92vw,900px)]";
+  const overlayPadding = size === "fullscreen" ? "p-0" : "p-0 lg:p-4";
+  const shellRadius = size === "fullscreen" ? "" : "max-lg:rounded-none lg:rounded-2xl";
   const bodyOverflow = size === "fullscreen" ? "overflow-hidden" : "overflow-auto";
   const headerPadding = size === "fullscreen" ? "px-3 py-1.5 sm:px-4" : "px-4 py-3 sm:px-5";
   const titleClass = size === "fullscreen" ? "text-sm font-bold sm:text-base" : "text-base font-bold sm:text-lg";
@@ -62,7 +62,7 @@ export default function SeatingModalShell({
           <button
             type="button"
             onClick={onClose}
-            className={`rounded-lg ${closePadding} text-slate-500 transition hover:bg-slate-100 hover:text-slate-800`}
+            className={`grid h-11 w-11 shrink-0 place-content-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 lg:h-9 lg:w-9 ${closePadding}`}
             aria-label="Close"
           >
             <X className="h-5 w-5" />

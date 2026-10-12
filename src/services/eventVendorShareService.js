@@ -162,15 +162,15 @@ async function resolveVendorAccess(eventId, userId, { shareId = null, vendorCode
     if (shareId) {
       share = await shareModel.findShareByIdForOwner(shareId, userId);
       if (!share || Number(share.event_id) !== Number(eventId)) {
-        throw new ApiError(404, "Vendor share not found");
+        throw new ApiError(404, "Partner share not found");
       }
     } else if (vendorCode) {
       share = await shareModel.findShareByCode(eventId, vendorCode);
       if (!share || Number(share.owner_user_id) !== Number(userId)) {
-        throw new ApiError(404, "Vendor share not found");
+        throw new ApiError(404, "Partner share not found");
       }
     } else {
-      throw new ApiError(400, "Choose a vendor partner to view.");
+      throw new ApiError(400, "Choose a partner to view.");
     }
     return {
       event,
@@ -183,7 +183,7 @@ async function resolveVendorAccess(eventId, userId, { shareId = null, vendorCode
 
   const share = await shareModel.findAcceptedShare(eventId, userId);
   if (!share) {
-    throw new ApiError(403, "Vendor dashboard access is not available for this event.");
+    throw new ApiError(403, "Partner dashboard access is not available for this event.");
   }
   return {
     event,
@@ -215,7 +215,6 @@ async function sendInviteEmail({ owner, invitee, event, inviteToken, vendorCode,
     inviteeName: invitee.name,
     ownerName,
     eventTitle,
-    vendorCode,
     acceptUrl,
     shareUrl
   });
@@ -446,13 +445,47 @@ async function getVendorInsights(userId, eventId, query = {}) {
     vendorCode: query.vendor_code || null
   });
 
+  const hourlyDate = query.hourly_date || query.hourlyDate || null;
   const [hits, bookingBase] = await Promise.all([
-    shareModel.getHitInsights(eventId, access.vendorCode),
+    shareModel.getHitInsights(eventId, access.vendorCode, { hourlyDate }),
     shareModel.getBookingInsightsForVendor(eventId, access.vendorCode)
   ]);
 
   const { tierRows, ...bookingInsights } = bookingBase;
   const tierInsights = buildTierInsightsFromBookings(access.event, tierRows);
+  const paidPlusFree =
+    (Number(bookingInsights.paid_bookings) || 0) + (Number(bookingInsights.free_bookings) || 0);
+
+  const traffic = {
+    total_views: hits.total_hits,
+    views_today: hits.hits_today,
+    views_yesterday: hits.hits_yesterday,
+    views_last_7_days: hits.hits_last_7_days,
+    views_last_30_days: hits.hits_last_30_days,
+    live_views_30m: hits.live_hits_30m,
+    live_sessions_30m: hits.live_sessions_30m,
+    today_date: hits.today_date,
+    yesterday_date: hits.yesterday_date,
+    reporting_timezone: hits.reporting_timezone,
+    reporting_timezone_label: hits.reporting_timezone_label,
+    event_clicks: hits.total_hits,
+    ticket_clicks: 0,
+    external_clicks: 0,
+    tier_cart_adds: Number(tierInsights.total_tier_tickets) || 0,
+    bookings_completed: paidPlusFree,
+    time_series: (hits.trend || []).map((row) => ({
+      day: row.day,
+      views: row.views ?? row.hits ?? 0
+    })),
+    sources: hits.total_hits
+      ? [{ source: "Partner link", views: hits.total_hits }]
+      : [],
+    cities: [],
+    countries: [],
+    devices: [],
+    hourly_today: hits.hourly_today,
+    hourly_chart: hits.hourly_chart
+  };
 
   return {
     access: access.access,
@@ -465,15 +498,22 @@ async function getVendorInsights(userId, eventId, query = {}) {
       email: access.share.shared_with_email,
       user_id: access.share.shared_with_user_id
     },
+    ga_configured: false,
+    analytics_note:
+      "Partner analytics count opens of this partner link and bookings attributed to it. They are separate from full event page analytics.",
     event: {
       id: access.event.id,
       title: access.event.title,
       public_slug: access.event.public_slug,
       image_url: access.event.image_url,
       event_date: access.event.event_date,
-      ticket_sales_mode: access.event.ticket_sales_mode
+      ticket_sales_mode: access.event.ticket_sales_mode,
+      city_name: access.event.city_name || null,
+      venue_name: access.event.venue_name || null,
+      ticket_levels: parseTicketLevelsFromEvent(access.event)
     },
     visits: hits,
+    traffic,
     bookings: {
       ...bookingInsights,
       ...tierInsights
@@ -516,7 +556,7 @@ async function getVendorBookings(userId, eventId, query = {}) {
   };
 }
 
-async function recordVendorHit(eventId, { vendor_code, session_key, path }, reqMeta = {}) {
+async function recordVendorHit(eventId, { vendor_code, session_key, path, heartbeat }, reqMeta = {}) {
   const event = await findEventById(eventId);
   if (!event) {
     throw new ApiError(404, "Event not found");
@@ -526,6 +566,18 @@ async function recordVendorHit(eventId, { vendor_code, session_key, path }, reqM
     throw new ApiError(400, "A valid vendor code is required.");
   }
   const share = await shareModel.findShareByCode(eventId, code);
+  const isHeartbeat = Boolean(heartbeat);
+
+  if (isHeartbeat) {
+    const presence = await shareModel.touchLinkPresence({
+      eventId,
+      vendorCode: code,
+      shareId: share?.id || null,
+      sessionKey: session_key
+    });
+    return { recorded: false, heartbeat: true, ...presence };
+  }
+
   const result = await shareModel.recordLinkHit({
     eventId,
     vendorCode: code,

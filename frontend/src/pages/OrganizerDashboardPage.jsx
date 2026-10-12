@@ -27,12 +27,10 @@ import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
 import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
 import ScrollableTableFrame from "../components/ScrollableTableFrame";
 import OrganizerCouponsPanel from "../components/OrganizerCouponsPanel";
-import OrganizerVendorCodesPanel from "../components/OrganizerVendorCodesPanel";
 import OrganizerCheckInPanel from "../components/OrganizerCheckInPanel";
 import EventAnalyticsSharePanel from "../components/EventAnalyticsSharePanel";
 import SharedAnalyticsList from "../components/SharedAnalyticsList";
-import VendorSharedList from "../components/VendorSharedList";
-import VendorInsightsPanel from "../components/VendorInsightsPanel";
+import VendorWorkspacePanel from "../components/VendorWorkspacePanel";
 import OrganizerSeatingChannelsModal from "../components/seating/OrganizerSeatingChannelsModal";
 import OrganizerSeatingDesignerModal from "../components/seating/OrganizerSeatingDesignerModal";
 import SeatingSideToast from "../components/seating/SeatingSideToast";
@@ -90,10 +88,14 @@ const initialForm = {
   vendor_discount_type: "percent",
   vendor_discount_value: "",
   sponsor_inquiry_enabled: false,
+  influencer_partner_enabled: false,
   sponsor_contact_email: "",
   sponsor_contact_phone: "",
+  influencer_partner_contact_email: "",
+  influencer_partner_contact_phone: "",
   sponsor_tickets_enabled: false,
   ticket_levels: [],
+  ticket_tiers_sort: "price_asc",
   seating_mode: SEATING_MODES.GENERAL,
   pending_seatsio_chart_key: ""
 };
@@ -202,7 +204,7 @@ const MY_EVENTS_LIFECYCLE_TABS = [
 
 function MyEventsLifecycleTabs({ active, onChange, counts, compact = false }) {
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
+    <div className="hide-scrollbar flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
       {MY_EVENTS_LIFECYCLE_TABS.map((tab) => {
         const selected = active === tab.key;
         const count = counts?.[tab.key] ?? 0;
@@ -211,7 +213,7 @@ function MyEventsLifecycleTabs({ active, onChange, counts, compact = false }) {
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${
+            className={`inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition lg:min-h-0 lg:py-2 lg:text-xs ${
               selected
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-600 hover:bg-white/70 hover:text-slate-800"
@@ -219,7 +221,7 @@ function MyEventsLifecycleTabs({ active, onChange, counts, compact = false }) {
           >
             <span>{compact && tab.key === "inactive" ? "Inactive" : compact && tab.key === "active" ? "Active" : compact && tab.key === "past" ? "Past" : tab.label}</span>
             <span
-              className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+              className={`rounded-md px-1.5 py-0.5 text-xs font-bold lg:text-[10px] ${
                 selected ? "bg-slate-100 text-slate-700" : "bg-slate-200/70 text-slate-600"
               }`}
             >
@@ -394,9 +396,6 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   const [inviteNotice, setInviteNotice] = useState("");
   const [inviteError, setInviteError] = useState("");
   const [sharedListKey, setSharedListKey] = useState(0);
-  const [vendorSharedEventId, setVendorSharedEventId] = useState("");
-  const [vendorSharedMeta, setVendorSharedMeta] = useState(null);
-  const [vendorSharedListKey, setVendorSharedListKey] = useState(0);
   const inviteHandledRef = useRef("");
   const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
   const [rows, setRows] = useState([]);
@@ -569,13 +568,21 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         event.sponsor_inquiry_enabled === 1 ||
         event.sponsor_inquiry_enabled === true ||
         String(event.sponsor_inquiry_enabled || "") === "1",
+      influencer_partner_enabled:
+        event.influencer_partner_enabled === 1 ||
+        event.influencer_partner_enabled === true ||
+        String(event.influencer_partner_enabled || "") === "1",
       sponsor_contact_email: event.sponsor_contact_email || "",
       sponsor_contact_phone: event.sponsor_contact_phone || "",
+      influencer_partner_contact_email: event.influencer_partner_contact_email || "",
+      influencer_partner_contact_phone: event.influencer_partner_contact_phone || "",
       sponsor_tickets_enabled:
         event.sponsor_tickets_enabled === 1 ||
         event.sponsor_tickets_enabled === true ||
         String(event.sponsor_tickets_enabled || "") === "1",
       ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(event)),
+      ticket_tiers_sort:
+        event.ticket_tiers_sort === "price_desc" ? "price_desc" : "price_asc",
       seating_mode: normalizeSeatingMode(event.seating_mode),
       pending_seatsio_chart_key: String(event.seatsio_chart_key || "").trim()
     });
@@ -919,6 +926,14 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
           throw new Error("Please enter a sponsor contact phone number.");
         }
       }
+      if (form.influencer_partner_enabled) {
+        if (!String(form.influencer_partner_contact_email || "").trim()) {
+          throw new Error("Please enter an influencer partner contact email.");
+        }
+        if (!String(form.influencer_partner_contact_phone || "").trim()) {
+          throw new Error("Please enter an influencer partner contact phone number.");
+        }
+      }
 
       const venueMapsUrl = normalizeOptionalUrl(form.google_maps_link, "Google Maps");
       const rawTicket = String(form.ticket_link || "").trim();
@@ -986,6 +1001,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         promo_video_urls: promoVideoUrls,
         ticket_levels:
           resolvedTicketMode === "platform" ? serializeTicketLevelsForApi(form.ticket_levels) : undefined,
+        ticket_tiers_sort:
+          resolvedTicketMode === "platform"
+            ? form.ticket_tiers_sort === "price_desc"
+              ? "price_desc"
+              : "price_asc"
+            : undefined,
         price:
           resolvedTicketMode === "platform"
             ? Math.min(...serializeTicketLevelsForApi(form.ticket_levels).map((l) => l.price))
@@ -1014,11 +1035,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
         coupon_codes_enabled: Boolean(form.coupon_codes_enabled),
         vendor_code_enabled: Boolean(form.vendor_code_enabled),
         sponsor_inquiry_enabled: Boolean(form.sponsor_inquiry_enabled),
+        influencer_partner_enabled: Boolean(form.influencer_partner_enabled),
         sponsor_contact_email: form.sponsor_inquiry_enabled
           ? String(form.sponsor_contact_email || "").trim()
           : null,
         sponsor_contact_phone: form.sponsor_inquiry_enabled
           ? String(form.sponsor_contact_phone || "").trim()
+          : null,
+        influencer_partner_contact_email: form.influencer_partner_enabled
+          ? String(form.influencer_partner_contact_email || "").trim()
+          : null,
+        influencer_partner_contact_phone: form.influencer_partner_enabled
+          ? String(form.influencer_partner_contact_phone || "").trim()
           : null,
         sponsor_tickets_enabled:
           resolvedTicketMode === "platform" ? Boolean(form.sponsor_tickets_enabled) : false
@@ -1295,7 +1323,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               }`}
             >
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Vendor</p>
-              <p className="mt-1 text-sm font-semibold">Links</p>
+              <p className="mt-1 text-sm font-semibold">Partners</p>
             </button>
             <button
               type="button"
@@ -1429,7 +1457,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     <article key={`m-org-event-card-${item.id}`} className="rounded-2xl border border-slate-200 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${getStatusBadgeClass(item.status)}`}>
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${getStatusBadgeClass(item.status)}`}>
                           {item.status}
                         </span>
                       </div>
@@ -1450,29 +1478,29 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           Active (visible on site)
                         </label>
                       ) : null}
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-3 grid grid-cols-2 gap-2">
                         <EventViewLink
                           item={item}
-                          className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-center text-xs font-semibold text-slate-700"
+                          className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-300 px-3 text-center text-sm font-semibold text-slate-700"
                         />
                         <button
                           type="button"
                           onClick={() => openEdit(item)}
-                          className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                          className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
                           onClick={() => openShareAnalytics(item)}
-                          className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                          className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700"
                         >
                           Share
                         </button>
                         <button
                           type="button"
                           onClick={() => openDelete(item)}
-                          className="flex-1 rounded-full bg-rose-600 px-3 py-2 text-xs font-semibold text-white"
+                          className="inline-flex min-h-11 items-center justify-center rounded-full bg-rose-600 px-3 text-sm font-semibold text-white"
                         >
                           Delete
                         </button>
@@ -1489,46 +1517,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             <OrganizerCouponsPanel />
           </HostSectionSlot>
 
-          <HostSectionSlot id="vendor-codes" activeId={displaySection} className="space-y-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-              <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Vendor links organizers shared with you. Only visits and bookings from your link appear here.
-              </p>
-              <div className="mt-4">
-                <VendorSharedList
-                  selectedEventId={vendorSharedEventId}
-                  reloadKey={vendorSharedListKey}
-                  onOpenEvent={(row) => {
-                    setVendorSharedEventId(String(row.event_id));
-                    setVendorSharedMeta({
-                      shareId: row.share_id,
-                      vendorCode: row.vendor_code,
-                      ownerLabel: row.owner?.name || row.owner?.email || "organizer"
-                    });
-                  }}
-                />
-              </div>
-            </div>
-            {vendorSharedEventId ? (
-              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-                <VendorInsightsPanel
-                  eventId={vendorSharedEventId}
-                  shareId={vendorSharedMeta?.shareId}
-                  vendorCode={vendorSharedMeta?.vendorCode}
-                  banner={
-                    vendorSharedMeta?.ownerLabel
-                      ? `Shared by ${vendorSharedMeta.ownerLabel} · your link only`
-                      : "Your vendor link · view only"
-                  }
-                  onBack={() => {
-                    setVendorSharedEventId("");
-                    setVendorSharedMeta(null);
-                  }}
-                />
-              </div>
-            ) : null}
-            <OrganizerVendorCodesPanel />
+          <HostSectionSlot id="vendor-codes" activeId={displaySection}>
+            <VendorWorkspacePanel />
           </HostSectionSlot>
 
           <HostSectionSlot id="check-in" activeId={displaySection}>
@@ -1849,46 +1839,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
             <OrganizerCouponsPanel />
           </HostSectionSlot>
 
-          <HostSectionSlot id="vendor-codes" activeId={displaySection} className="space-y-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-              <h2 className="text-lg font-bold text-slate-900">Shared with me</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Vendor links organizers shared with you. Only visits and bookings from your link appear here.
-              </p>
-              <div className="mt-4">
-                <VendorSharedList
-                  selectedEventId={vendorSharedEventId}
-                  reloadKey={vendorSharedListKey}
-                  onOpenEvent={(row) => {
-                    setVendorSharedEventId(String(row.event_id));
-                    setVendorSharedMeta({
-                      shareId: row.share_id,
-                      vendorCode: row.vendor_code,
-                      ownerLabel: row.owner?.name || row.owner?.email || "organizer"
-                    });
-                  }}
-                />
-              </div>
-            </div>
-            {vendorSharedEventId ? (
-              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
-                <VendorInsightsPanel
-                  eventId={vendorSharedEventId}
-                  shareId={vendorSharedMeta?.shareId}
-                  vendorCode={vendorSharedMeta?.vendorCode}
-                  banner={
-                    vendorSharedMeta?.ownerLabel
-                      ? `Shared by ${vendorSharedMeta.ownerLabel} · your link only`
-                      : "Your vendor link · view only"
-                  }
-                  onBack={() => {
-                    setVendorSharedEventId("");
-                    setVendorSharedMeta(null);
-                  }}
-                />
-              </div>
-            ) : null}
-            <OrganizerVendorCodesPanel />
+          <HostSectionSlot id="vendor-codes" activeId={displaySection}>
+            <VendorWorkspacePanel />
           </HostSectionSlot>
 
           <HostSectionSlot id="check-in" activeId={displaySection}>
@@ -2468,11 +2420,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           />
                           <span>
                             <span className="block text-sm font-medium text-slate-900">
-                              Vendor code tracking
+                              Vendor link tracking
                             </span>
                             <span className="block text-xs text-slate-500">
-                              When on, buyers can enter a vendor/partner code at checkout for tracking only — no
-                              discount is applied.
+                              Invite partners from the Vendor tab and share their unique event link. Bookings from that
+                              link are attributed automatically — guests never enter a code.
                             </span>
                           </span>
                         </label>
@@ -2508,67 +2460,138 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     </div>
                   ) : null}
 
-                  <div>
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(form.sponsor_inquiry_enabled)}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            sponsor_inquiry_enabled: e.target.checked
-                          }))
-                        }
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                      />
-                      <span>
-                        <span className="block text-sm font-medium text-slate-900">
-                          Become a Sponsor inquiries
+                  <div className="space-y-4">
+                    <div>
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.sponsor_inquiry_enabled)}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              sponsor_inquiry_enabled: e.target.checked
+                            }))
+                          }
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">
+                            Become a Sponsor inquiries
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            When on, a “Become a Sponsor” button appears on your event page with the contact details
+                            below.
+                          </span>
                         </span>
-                        <span className="block text-xs text-slate-500">
-                          When on, a “Become a Sponsor” button appears on your event page with the contact details
-                          below.
+                      </label>
+                      {form.sponsor_inquiry_enabled ? (
+                        <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-2">
+                          <FormField
+                            label="Sponsor contact email"
+                            hint="Shown to visitors who tap Become a Sponsor."
+                            example="sponsors@yourbrand.com"
+                          >
+                            <input
+                              type="email"
+                              value={form.sponsor_contact_email}
+                              onChange={(e) =>
+                                setForm((prev) => ({ ...prev, sponsor_contact_email: e.target.value }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                              placeholder="sponsors@yourbrand.com"
+                              autoComplete="email"
+                              required={Boolean(form.sponsor_inquiry_enabled)}
+                            />
+                          </FormField>
+                          <FormField
+                            label="Sponsor contact phone"
+                            hint="Include country code when possible."
+                            example="+1 214 555 0100"
+                          >
+                            <input
+                              type="tel"
+                              value={form.sponsor_contact_phone}
+                              onChange={(e) =>
+                                setForm((prev) => ({ ...prev, sponsor_contact_phone: e.target.value }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                              placeholder="+1 214 555 0100"
+                              autoComplete="tel"
+                              required={Boolean(form.sponsor_inquiry_enabled)}
+                            />
+                          </FormField>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div>
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.influencer_partner_enabled)}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              influencer_partner_enabled: e.target.checked
+                            }))
+                          }
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">
+                            Become an Influencer Partner
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            When on, an influencer partner button appears beside Sponsor. Use a separate email and phone
+                            if you want.
+                          </span>
                         </span>
-                      </span>
-                    </label>
-                    {form.sponsor_inquiry_enabled ? (
-                      <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-2">
-                        <FormField
-                          label="Sponsor contact email"
-                          hint="Shown to visitors who tap Become a Sponsor."
-                          example="sponsors@yourbrand.com"
-                        >
-                          <input
-                            type="email"
-                            value={form.sponsor_contact_email}
-                            onChange={(e) =>
-                              setForm((prev) => ({ ...prev, sponsor_contact_email: e.target.value }))
-                            }
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                            placeholder="sponsors@yourbrand.com"
-                            autoComplete="email"
-                            required={Boolean(form.sponsor_inquiry_enabled)}
-                          />
-                        </FormField>
-                        <FormField
-                          label="Sponsor contact phone"
-                          hint="Include country code when possible."
-                          example="+1 214 555 0100"
-                        >
-                          <input
-                            type="tel"
-                            value={form.sponsor_contact_phone}
-                            onChange={(e) =>
-                              setForm((prev) => ({ ...prev, sponsor_contact_phone: e.target.value }))
-                            }
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                            placeholder="+1 214 555 0100"
-                            autoComplete="tel"
-                            required={Boolean(form.sponsor_inquiry_enabled)}
-                          />
-                        </FormField>
-                      </div>
-                    ) : null}
+                      </label>
+                      {form.influencer_partner_enabled ? (
+                        <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-2">
+                          <FormField
+                            label="Influencer partner contact email"
+                            hint="Shown to visitors who tap Become an Influencer Partner."
+                            example="influencers@yourbrand.com"
+                          >
+                            <input
+                              type="email"
+                              value={form.influencer_partner_contact_email}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  influencer_partner_contact_email: e.target.value
+                                }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                              placeholder="influencers@yourbrand.com"
+                              autoComplete="email"
+                              required={Boolean(form.influencer_partner_enabled)}
+                            />
+                          </FormField>
+                          <FormField
+                            label="Influencer partner contact phone"
+                            hint="Include country code when possible."
+                            example="+1 214 555 0199"
+                          >
+                            <input
+                              type="tel"
+                              value={form.influencer_partner_contact_phone}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  influencer_partner_contact_phone: e.target.value
+                                }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                              placeholder="+1 214 555 0199"
+                              autoComplete="tel"
+                              required={Boolean(form.influencer_partner_enabled)}
+                            />
+                          </FormField>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2576,6 +2599,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                 <EventTicketLevelsEditor
                   levels={form.ticket_levels}
                   onChange={(ticket_levels) => setForm((prev) => ({ ...prev, ticket_levels }))}
+                  tiersSort={form.ticket_tiers_sort || "price_asc"}
+                  onTiersSortChange={(ticket_tiers_sort) =>
+                    setForm((prev) => ({ ...prev, ticket_tiers_sort }))
+                  }
                 />
               ) : (
                 <FormField label="Price (USD)" hint="Enter ticket price per person." example="29.99">
@@ -2630,12 +2657,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     </div>
                     {normalizeSeatingMode(form.seating_mode) === SEATING_MODES.RESERVED ? (
                       <div className="mt-3 space-y-3">
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
                           <button
                             type="button"
                             disabled={saving}
                             onClick={handleOpenSeatingDesigner}
-                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50 lg:min-h-0 lg:w-auto lg:py-2.5"
                           >
                             <LayoutGrid className="h-4 w-4" />
                             Design seating chart
@@ -2644,7 +2671,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                             type="button"
                             disabled={!editingEvent?.id || !editingEvent?.seatsio_event_key || saving}
                             onClick={() => setSeatingChannelsModalOpen(true)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:border-slate-400 disabled:opacity-50"
+                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 disabled:opacity-50 lg:min-h-0 lg:w-auto lg:py-2.5"
                           >
                             <GitBranch className="h-4 w-4" />
                             Manage channels
@@ -2979,11 +3006,27 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
       {shareTarget
         ? createPortal(
-            <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/45 p-4">
-              <div className="max-h-[min(90vh,40rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-                <div className="mb-3 flex items-start justify-between gap-3">
+            <div
+              className="fixed inset-0 z-[210] flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-[2px] lg:items-center lg:p-4"
+              onClick={closeShareAnalytics}
+              role="presentation"
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="share-analytics-title"
+                className="flex max-h-[min(92dvh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl lg:rounded-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-center pt-2 lg:hidden" aria-hidden="true">
+                  <span className="h-1 w-10 rounded-full bg-slate-300" />
+                </div>
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3 pt-2 lg:px-5 lg:pt-5">
                   <div className="min-w-0">
-                    <h3 className="text-lg font-semibold text-slate-900">Share analytics</h3>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-600">Analytics</p>
+                    <h3 id="share-analytics-title" className="mt-0.5 text-lg font-bold tracking-tight text-slate-900">
+                      Share analytics
+                    </h3>
                     <p className="mt-1 truncate text-sm text-slate-600" title={shareTarget.title || ""}>
                       {shareTarget.title || `Event #${shareTarget.id}`}
                     </p>
@@ -2991,16 +3034,18 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                   <button
                     type="button"
                     onClick={closeShareAnalytics}
-                    className="shrink-0 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.98] lg:min-h-0 lg:rounded-lg lg:px-2.5 lg:py-1 lg:text-xs"
                   >
                     Close
                   </button>
                 </div>
-                <EventAnalyticsSharePanel
-                  eventId={shareTarget.id}
-                  eventTitle={shareTarget.title}
-                  embedded
-                />
+                <div className="hide-scrollbar flex-1 overflow-y-auto px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:px-5 lg:pb-5">
+                  <EventAnalyticsSharePanel
+                    eventId={shareTarget.id}
+                    eventTitle={shareTarget.title}
+                    embedded
+                  />
+                </div>
               </div>
             </div>,
             document.body

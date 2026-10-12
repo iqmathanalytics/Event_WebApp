@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { absoluteListingUrl, influencerDetailPath } from "../utils/listingPaths";
 import ShareListingButton from "../components/ShareListingButton";
@@ -18,6 +18,7 @@ import {
   Youtube
 } from "lucide-react";
 import { FiArrowLeft, FiImage, FiInfo } from "react-icons/fi";
+import { LandingTagList } from "../components/ListingTagIcon";
 import { displayImageUrl, listingBannerImageUrl, listingCardImageUrl } from "../utils/displayImage";
 import { FaFacebookF } from "react-icons/fa";
 import useAuth from "../hooks/useAuth";
@@ -62,25 +63,13 @@ function toDisplayNumber(value) {
   }
 }
 
-function TagPill({ tag }) {
+function tagPillClass(tag) {
   const t = String(tag || "");
-  const styles =
-    t === "Trending"
-      ? "bg-amber-400/15 text-amber-100 border-amber-400/35"
-      : t === "Popular"
-        ? "bg-white/10 text-white border-white/20"
-        : t === "Rising"
-          ? "bg-emerald-400/15 text-emerald-100 border-emerald-400/35"
-          : t === "Top Creator"
-            ? "bg-brand-500/25 text-rose-50 border-brand-400/40"
-            : "bg-white/10 text-white/90 border-white/15";
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm lg:px-3 lg:py-1 lg:text-[11px] ${styles}`}
-    >
-      {t}
-    </span>
-  );
+  if (t === "Trending") return "bg-amber-400/15 text-amber-100 border-amber-400/35";
+  if (t === "Popular") return "bg-white/10 text-white border-white/20";
+  if (t === "Rising") return "bg-emerald-400/15 text-emerald-100 border-emerald-400/35";
+  if (t === "Top Creator") return "bg-brand-500/25 text-rose-50 border-brand-400/40";
+  return "bg-white/10 text-white/90 border-white/15";
 }
 
 const fadeUp = {
@@ -224,6 +213,8 @@ export default function InfluencerDetailsPage() {
   const [galleryError, setGalleryError] = useState("");
 
   const [lightboxIndex, setLightboxIndex] = useState(-1);
+  const [showSocialBar, setShowSocialBar] = useState(false);
+  const socialRef = useRef(null);
 
   const influencerId = influencer?.id != null ? Number(influencer.id) : null;
 
@@ -248,6 +239,36 @@ export default function InfluencerDetailsPage() {
   const hasFacebook = Boolean(facebookPageUrl);
   const hasAnySocialInput = Boolean(String(social?.instagram || "").trim() || String(social?.facebook || "").trim());
   const socialStatsCount = [hasInstagram, hasFacebook, hasYoutube].filter(Boolean).length;
+  const hasSocialSection = Boolean(instagramEmbedSrc || facebookEmbedSrc);
+
+  useEffect(() => {
+    const node = socialRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setShowSocialBar(false);
+      return undefined;
+    }
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowSocialBar(mediaQuery.matches && !entry.isIntersecting);
+      },
+      { threshold: 0.05 }
+    );
+    const watch = () => {
+      observer.disconnect();
+      if (!mediaQuery.matches) {
+        setShowSocialBar(false);
+        return;
+      }
+      observer.observe(node);
+    };
+    watch();
+    mediaQuery.addEventListener("change", watch);
+    return () => {
+      observer.disconnect();
+      mediaQuery.removeEventListener("change", watch);
+    };
+  }, [influencer?.id, hasSocialSection]);
 
   const isOwner = useMemo(() => {
     return mySubmissionId != null && mySubmissionId === influencerId;
@@ -353,7 +374,7 @@ export default function InfluencerDetailsPage() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800"
+          className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800 lg:min-h-0"
         >
           <FiArrowLeft className="h-4 w-4" />
           Go back
@@ -378,10 +399,10 @@ export default function InfluencerDetailsPage() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="absolute left-1 top-1 z-30 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/35 text-white shadow-sm backdrop-blur-md transition hover:bg-black/45 sm:left-2 sm:top-2 sm:h-9 sm:w-9 lg:left-2.5 lg:top-2.5 lg:h-7 lg:w-7 lg:border-white/25 lg:bg-black/30 lg:shadow-none"
+          className="absolute left-1 top-1 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/35 text-white shadow-sm backdrop-blur-md transition hover:bg-black/45 sm:left-2 sm:top-2 lg:left-2.5 lg:top-2.5 lg:h-7 lg:w-7 lg:border-white/25 lg:bg-black/30 lg:shadow-none"
           aria-label="Back"
         >
-          <FiArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 lg:h-3 lg:w-3" />
+          <FiArrowLeft className="h-4 w-4 lg:h-3 lg:w-3" />
         </button>
 
         <div className="relative px-3 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-4 lg:px-8 lg:pb-10 lg:pt-6">
@@ -403,7 +424,7 @@ export default function InfluencerDetailsPage() {
                 </div>
               )}
               {isOwner ? (
-                <span className="absolute -bottom-1 left-1/2 max-w-[calc(100%+0.5rem)] -translate-x-1/2 whitespace-nowrap rounded-full border border-emerald-400/50 bg-emerald-600/95 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white shadow-md backdrop-blur-sm">
+                <span className="absolute -bottom-1 left-1/2 max-w-[calc(100%+0.5rem)] -translate-x-1/2 whitespace-nowrap rounded-full border border-emerald-400/50 bg-emerald-600/95 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white shadow-md backdrop-blur-sm lg:text-[9px]">
                   Your profile
                 </span>
               ) : null}
@@ -416,9 +437,14 @@ export default function InfluencerDetailsPage() {
                 transition={{ delay: 0.05, duration: 0.35 }}
                 className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start"
               >
-                {tags.slice(0, 5).map((t, i) => (
-                  <TagPill key={`${t}-${i}`} tag={t} />
-                ))}
+                <LandingTagList
+                  tags={tags.slice(0, 5)}
+                  classFor={(tag) =>
+                    `inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold backdrop-blur-sm lg:px-3 lg:py-1 lg:text-[11px] ${tagPillClass(tag)}`
+                  }
+                  mobileClassName="flex w-full flex-wrap items-center justify-center gap-2 lg:hidden"
+                  desktopClassName="hidden w-full flex-wrap items-center justify-center gap-2 lg:flex lg:justify-start"
+                />
               </motion.div>
               <motion.h1
                 initial={{ opacity: 0, y: 12 }}
@@ -457,26 +483,26 @@ export default function InfluencerDetailsPage() {
             >
               {hasInstagram ? (
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
                     <Instagram className="h-3.5 w-3.5 shrink-0 text-pink-300 lg:h-4 lg:w-4" />
                     Instagram
                   </div>
                   <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
                     {toDisplayNumber(influencer.followers_count)}
                   </p>
-                  <p className="text-[10px] font-medium text-white/50 lg:text-xs">followers</p>
+                  <p className="text-xs font-medium text-white/50">followers</p>
                 </div>
               ) : null}
               {hasFacebook ? (
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md lg:rounded-2xl lg:p-4">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
                     <FaFacebookF className="h-3.5 w-3.5 shrink-0 text-blue-300 lg:h-4 lg:w-4" />
                     Facebook
                   </div>
                   <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
                     {toDisplayNumber(influencer.facebook_followers_count)}
                   </p>
-                  <p className="text-[10px] font-medium text-white/50 lg:text-xs">followers</p>
+                  <p className="text-xs font-medium text-white/50">followers</p>
                 </div>
               ) : null}
               {hasYoutube ? (
@@ -486,14 +512,14 @@ export default function InfluencerDetailsPage() {
                   rel="noreferrer"
                   className="block rounded-xl border border-white/10 bg-white/5 p-3 text-left backdrop-blur-md transition hover:bg-white/10 lg:rounded-2xl lg:p-4"
                 >
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/55 lg:gap-2 lg:text-[11px]">
                     <Youtube className="h-3.5 w-3.5 shrink-0 text-red-400 lg:h-4 lg:w-4" />
                     YouTube
                   </div>
                   <p className="mt-1.5 text-xl font-bold tabular-nums text-white lg:mt-2 lg:text-3xl">
                     {toDisplayNumber(influencer.youtube_subscribers_count)}
                   </p>
-                  <p className="text-[10px] font-medium text-white/50 lg:text-xs">subscribers</p>
+                  <p className="text-xs font-medium text-white/50">subscribers</p>
                 </a>
               ) : null}
             </motion.div>
@@ -544,9 +570,11 @@ export default function InfluencerDetailsPage() {
       {(instagramEmbedSrc || facebookEmbedSrc) ? (
         <motion.section
           {...fadeUp}
+          ref={socialRef}
+          id="creator-social"
           className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft sm:p-5 md:p-6 lg:rounded-3xl lg:p-8"
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900 lg:text-xl">Social Pages</h2>
               <p className="mt-0.5 text-xs text-slate-500 lg:mt-1 lg:text-sm">
@@ -567,7 +595,7 @@ export default function InfluencerDetailsPage() {
                     width="100%"
                     frameBorder="0"
                     scrolling="yes"
-                    className="block h-[420px] w-full max-w-[760px] rounded-lg border-0 sm:h-[clamp(680px,88vh,1100px)] sm:max-w-[820px] lg:max-w-none"
+                    className="block h-[420px] w-full max-w-[760px] rounded-lg border-0 lg:h-[clamp(680px,88vh,1100px)] lg:max-w-none"
                   />
                 </div>
               </div>
@@ -608,7 +636,7 @@ export default function InfluencerDetailsPage() {
         className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft lg:rounded-3xl"
       >
         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50/80 to-white px-4 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
             <div className="flex items-start gap-2.5 sm:gap-3">
               <div className="grid h-9 w-9 shrink-0 place-content-center rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-900/20 lg:h-11 lg:w-11 lg:rounded-2xl">
                 <Camera className="h-4 w-4 lg:h-5 lg:w-5" />
@@ -626,7 +654,7 @@ export default function InfluencerDetailsPage() {
                   setGalleryError("");
                   setGalleryOpen(true);
                 }}
-                className="inline-flex items-center justify-center gap-1.5 self-start rounded-full bg-gradient-to-r from-brand-600 to-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-brand-500/25 transition hover:brightness-105 lg:gap-2 lg:px-5 lg:py-2.5 lg:text-sm"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 self-start rounded-full bg-gradient-to-r from-brand-600 to-rose-600 px-4 text-sm font-semibold text-white shadow-lg shadow-brand-500/25 transition hover:brightness-105 lg:min-h-0 lg:gap-2 lg:px-5 lg:py-2.5 lg:text-sm"
               >
                 <ImagePlus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
                 Add photos
@@ -655,8 +683,8 @@ export default function InfluencerDetailsPage() {
                       loading="lazy"
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
-                    <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-900 opacity-0 shadow-sm transition group-hover:opacity-100 lg:bottom-3 lg:left-3 lg:px-2.5 lg:py-1 lg:text-[10px]">
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-transparent opacity-100 transition duration-300 lg:opacity-0 lg:group-hover:opacity-100" />
+                    <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-900 opacity-100 shadow-sm transition lg:bottom-3 lg:left-3 lg:px-2.5 lg:py-1 lg:text-[10px] lg:opacity-0 lg:group-hover:opacity-100">
                       View
                     </span>
                   </button>
@@ -677,6 +705,24 @@ export default function InfluencerDetailsPage() {
         </div>
       </motion.section>
       </div>
+
+      {showSocialBar ? (
+        <div
+          className="fixed inset-x-0 z-[46] px-3 lg:hidden"
+          style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="mx-auto flex w-full max-w-lg items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 shadow-soft backdrop-blur">
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">Social pages</p>
+            <button
+              type="button"
+              onClick={() => socialRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-brand-600 px-4 text-sm font-semibold text-white"
+            >
+              View
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <GalleryLightbox
         images={media}
@@ -761,7 +807,7 @@ export default function InfluencerDetailsPage() {
                   />
                   <label
                     htmlFor="influencer-gallery-files"
-                    className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 ${
+                    className={`inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 lg:min-h-0 lg:py-2.5 ${
                       galleryFileBusy || gallerySaving ? "pointer-events-none opacity-50" : ""
                     }`}
                   >
@@ -778,7 +824,7 @@ export default function InfluencerDetailsPage() {
                         <button
                           type="button"
                           onClick={() => setGalleryUrls((prev) => prev.filter((_, j) => j !== idx))}
-                          className="absolute right-1 top-1 rounded-lg border border-white/80 bg-white/95 px-2 py-1 text-[10px] font-bold uppercase text-slate-700 shadow-sm"
+                          className="absolute right-1 top-1 inline-flex min-h-11 items-center rounded-lg border border-white/80 bg-white/95 px-2 text-xs font-bold uppercase text-slate-700 shadow-sm lg:min-h-0 lg:py-1 lg:text-[10px]"
                         >
                           Remove
                         </button>
@@ -799,14 +845,14 @@ export default function InfluencerDetailsPage() {
                   <button
                     type="button"
                     onClick={() => setGalleryOpen(false)}
-                    className="rounded-full border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    className="inline-flex min-h-11 items-center rounded-full border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 lg:min-h-0 lg:py-2.5"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={gallerySaving || galleryFileBusy}
-                    className="rounded-full bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60"
+                    className="inline-flex min-h-11 items-center rounded-full bg-slate-900 px-6 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60 lg:min-h-0 lg:py-2.5"
                   >
                     {gallerySaving ? "Saving…" : "Add to gallery"}
                   </button>

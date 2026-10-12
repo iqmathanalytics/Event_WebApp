@@ -34,20 +34,31 @@ async function updateCheckoutStatus(
   conn
 ) {
   const runner = conn || pool;
+  const nextStatus = status;
+  // Succeeded payments clear prior failure markers (e.g. invalid_cvc then card succeeded).
+  const clearFailures = nextStatus === "succeeded";
   await runner.query(
     `UPDATE event_checkout_payments
      SET status = ?,
          booking_id = COALESCE(?, booking_id),
          stripe_charge_id = COALESCE(?, stripe_charge_id),
-         failure_code = COALESCE(?, failure_code),
-         failure_message = COALESCE(?, failure_message),
+         failure_code = CASE
+           WHEN ? THEN NULL
+           ELSE COALESCE(?, failure_code)
+         END,
+         failure_message = CASE
+           WHEN ? THEN NULL
+           ELSE COALESCE(?, failure_message)
+         END,
          updated_at = NOW()
      WHERE stripe_payment_intent_id = ?`,
     [
-      status,
+      nextStatus,
       booking_id ?? null,
       stripe_charge_id ?? null,
+      clearFailures ? 1 : 0,
       failure_code ?? null,
+      clearFailures ? 1 : 0,
       failure_message ?? null,
       paymentIntentId
     ]

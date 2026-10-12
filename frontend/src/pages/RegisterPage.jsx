@@ -74,7 +74,7 @@ function RegisterPage() {
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-2xl px-3 sm:px-4 lg:px-0">
+    <div className="relative mx-auto w-full max-w-2xl px-1 pb-2 sm:px-4 lg:px-0 lg:pb-0">
       <div
         className="pointer-events-none absolute -left-24 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-200/70 via-rose-100/40 to-transparent blur-2xl"
         aria-hidden
@@ -91,23 +91,23 @@ function RegisterPage() {
         className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-white/95 shadow-[0_24px_56px_-20px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/[0.04] backdrop-blur-sm"
       >
         <div className="h-1 w-full bg-gradient-to-r from-brand-500 via-fuchsia-500 to-cyan-500" aria-hidden />
-        <div className="p-6 sm:p-9 sm:pb-10">
-          <div className="mb-5 flex justify-center">
+        <div className="p-5 sm:p-9 sm:pb-10">
+          <div className="mb-4 flex justify-center sm:mb-5">
             <AuthBrandLogo compact />
           </div>
           <div className="text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">New member registration</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">
+            <h1 className="mt-2 text-[1.35rem] font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">
               Create your Book My Tickets account
             </h1>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-[0.9375rem]">
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-slate-600 sm:mt-3 sm:text-[0.9375rem]">
               Welcome to the side of the city that stays alive after dark—where the lights, the crowds, and the quiet
               corners all have a story. Curate your nights, lift up what you love, and make this place feel a little more
               yours.
             </p>
           </div>
 
-          <form onSubmit={onSubmit} className="mt-8 space-y-4">
+          <form onSubmit={onSubmit} className="mt-6 space-y-3.5 sm:mt-8 sm:space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <input
                 type="text"
@@ -115,7 +115,7 @@ function RegisterPage() {
                 placeholder="First name"
                 value={form.first_name}
                 onChange={(e) => setForm((s) => ({ ...s, first_name: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+                className="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none lg:min-h-0"
               />
               <input
                 type="text"
@@ -123,7 +123,7 @@ function RegisterPage() {
                 placeholder="Last name"
                 value={form.last_name}
                 onChange={(e) => setForm((s) => ({ ...s, last_name: e.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none sm:col-span-1"
+                className="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none sm:col-span-1 lg:min-h-0"
               />
             </div>
             <input
@@ -133,44 +133,45 @@ function RegisterPage() {
               placeholder="Email address"
               value={form.email}
               onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+              className="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none lg:min-h-0"
             />
             <input
-              type="text"
+              type="tel"
+              inputMode="tel"
               autoComplete="tel"
               placeholder="Mobile phone (optional)"
               value={form.mobile_number}
               onChange={(e) => setForm((s) => ({ ...s, mobile_number: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+              className="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none lg:min-h-0"
             />
 
-            <div className="rounded-2xl border border-slate-200/90 bg-slate-50/90 p-4 text-left sm:p-5">
+            <div className="rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3.5 text-left sm:p-5">
               <h2 className="text-sm font-bold text-slate-900">Acknowledgment &amp; terms</h2>
               <p className="mt-1 text-xs font-medium text-slate-500">
                 Please review the following before you register.
               </p>
-              <div className="mt-4 max-h-[min(14rem,38vh)] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-slate-600 sm:max-h-[min(16rem,32vh)]">
+              <div className="mt-3 max-h-[min(12rem,34vh)] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-slate-600 sm:mt-4 sm:max-h-[min(16rem,32vh)]">
                 {REGISTRATION_DISCLAIMER_PARAGRAPHS.map((para, i) => (
                   <p key={i}>{para}</p>
                 ))}
                 <p>
                   Read the full{" "}
-                  <Link to="/terms" className="font-semibold text-brand-700 underline">
+                  <Link to="/terms" className="inline-flex min-h-11 items-center font-semibold text-brand-700 underline lg:min-h-0">
                     Terms of Service
                   </Link>{" "}
                   and{" "}
-                  <Link to="/privacy" className="font-semibold text-brand-700 underline">
+                  <Link to="/privacy" className="inline-flex min-h-11 items-center font-semibold text-brand-700 underline lg:min-h-0">
                     Privacy Policy
                   </Link>
                   .
                 </p>
               </div>
-              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200/80 bg-white/80 p-3 sm:p-4">
+              <label className="mt-3 flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-slate-200/80 bg-white/80 p-3 sm:mt-4 sm:p-4">
                 <input
                   type="checkbox"
                   checked={agreedDisclaimer}
                   onChange={(e) => setAgreedDisclaimer(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  className="mt-0.5 h-6 w-6 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500 lg:h-4 lg:w-4"
                 />
                 <span className="text-sm font-semibold leading-snug text-slate-800">
                   I have read and agree to the acknowledgment above, and I understand that the Book My Tickets{" "}
@@ -193,12 +194,12 @@ function RegisterPage() {
               placeholder="Password (minimum 8 characters)"
               value={form.password}
               onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none"
+              className="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:outline-none lg:min-h-0"
             />
             <button
               type="submit"
               disabled={loading || googleLoading}
-              className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/20 transition hover:bg-brand-700 disabled:opacity-60"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/20 transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 lg:min-h-0 lg:rounded-xl"
             >
               {loading ? "Creating your account…" : "Register and open my hub"}
             </button>
@@ -242,7 +243,7 @@ function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-slate-600">
             Already registered?{" "}
-            <Link to="/login" className="font-semibold text-brand-600 underline-offset-2 hover:underline">
+            <Link to="/login" className="inline-flex min-h-11 items-center font-semibold text-brand-600 underline-offset-2 hover:underline lg:min-h-0">
               Sign in to your account
             </Link>
           </p>

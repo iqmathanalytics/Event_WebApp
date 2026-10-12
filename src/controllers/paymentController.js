@@ -74,6 +74,26 @@ const confirmGuestPayment = asyncHandler(async (req, res) => {
   });
 });
 
+const cancelPaymentIntent = asyncHandler(async (req, res) => {
+  const { payment_intent_id } = req.validated.body;
+  const data = await stripePaymentService.cancelAbandonedPaymentIntent({
+    paymentIntentId: payment_intent_id,
+    userId: req.user.id,
+    isGuest: false
+  });
+  res.status(200).json({ success: true, data });
+});
+
+const cancelGuestPaymentIntent = asyncHandler(async (req, res) => {
+  const { payment_intent_id } = getValidatedBody(req);
+  const data = await stripePaymentService.cancelAbandonedPaymentIntent({
+    paymentIntentId: payment_intent_id,
+    userId: null,
+    isGuest: true
+  });
+  res.status(200).json({ success: true, data });
+});
+
 const stripeWebhook = asyncHandler(async (req, res) => {
   const stripe = getStripe();
   if (!stripe || !webhookSecret) {
@@ -110,5 +130,7 @@ module.exports = {
   createGuestBookingCheckout,
   createGuestPaymentIntent,
   confirmGuestPayment,
+  cancelPaymentIntent,
+  cancelGuestPaymentIntent,
   stripeWebhook
 };

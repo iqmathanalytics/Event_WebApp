@@ -8,7 +8,8 @@ const { parseTotalSeats } = require("../utils/eventSeats");
 const {
   parseTicketLevelsFromEvent,
   normalizeTicketLevelsInput,
-  resolveEventListPrice
+  resolveEventListPrice,
+  normalizeTicketTiersSort
 } = require("../utils/eventTicketLevels");
 const { parsePromoVideoUrls, promoVideoUrlsDbValue } = require("../utils/youtubeVideo");
 const { sqlAssignFragment, toJsonDbString } = require("../utils/jsonDb");
@@ -200,12 +201,19 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
   const platformEnabled = toBoolFlag(payload.platform_fee_enabled, false);
   const vendorEnabled = toBoolFlag(payload.vendor_code_enabled, false);
   const sponsorEnabled = toBoolFlag(payload.sponsor_inquiry_enabled, false);
+  const influencerPartnerEnabled = toBoolFlag(payload.influencer_partner_enabled, false);
   const sponsorTicketsEnabled = toBoolFlag(payload.sponsor_tickets_enabled, false);
   const sponsorEmail = sponsorEnabled
     ? String(payload.sponsor_contact_email || "").trim().toLowerCase() || null
     : null;
   const sponsorPhone = sponsorEnabled
     ? String(payload.sponsor_contact_phone || "").trim() || null
+    : null;
+  const influencerEmail = influencerPartnerEnabled
+    ? String(payload.influencer_partner_contact_email || "").trim().toLowerCase() || null
+    : null;
+  const influencerPhone = influencerPartnerEnabled
+    ? String(payload.influencer_partner_contact_phone || "").trim() || null
     : null;
   return {
     service_fee_enabled: serviceEnabled ? 1 : 0,
@@ -221,8 +229,11 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
     vendor_discount_value: 0,
     coupon_codes_enabled: toBoolFlag(payload.coupon_codes_enabled, true) ? 1 : 0,
     sponsor_inquiry_enabled: sponsorEnabled ? 1 : 0,
+    influencer_partner_enabled: influencerPartnerEnabled ? 1 : 0,
     sponsor_contact_email: sponsorEmail,
     sponsor_contact_phone: sponsorPhone,
+    influencer_partner_contact_email: influencerEmail,
+    influencer_partner_contact_phone: influencerPhone,
     sponsor_tickets_enabled: sponsorTicketsEnabled ? 1 : 0,
     show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0,
     // Mirrors show_on_events_page so new events stay consistent with admin Active.
@@ -259,6 +270,7 @@ function normalizeEventRow(row) {
     ticket_sales_mode,
     seating_mode,
     ticket_levels,
+    ticket_tiers_sort: normalizeTicketTiersSort(row.ticket_tiers_sort),
     price: listPrice != null ? listPrice : row.price,
     service_fee_enabled: toBoolFlag(row.service_fee_enabled, false),
     service_fee_type: normalizeFeeType(row.service_fee_type),
@@ -275,8 +287,15 @@ function normalizeEventRow(row) {
     vendor_discount_value: Number(row.vendor_discount_value) || 0,
     coupon_codes_enabled: toBoolFlag(row.coupon_codes_enabled, true),
     sponsor_inquiry_enabled: toBoolFlag(row.sponsor_inquiry_enabled, false),
+    influencer_partner_enabled: toBoolFlag(row.influencer_partner_enabled, false),
     sponsor_contact_email: row.sponsor_contact_email ? String(row.sponsor_contact_email).trim() : null,
     sponsor_contact_phone: row.sponsor_contact_phone ? String(row.sponsor_contact_phone).trim() : null,
+    influencer_partner_contact_email: row.influencer_partner_contact_email
+      ? String(row.influencer_partner_contact_email).trim()
+      : null,
+    influencer_partner_contact_phone: row.influencer_partner_contact_phone
+      ? String(row.influencer_partner_contact_phone).trim()
+      : null,
     sponsor_tickets_enabled: toBoolFlag(row.sponsor_tickets_enabled, false),
     show_on_events_page: toBoolFlag(row.show_on_events_page, true),
     home_featured: toBoolFlag(row.home_featured, false),
@@ -378,6 +397,9 @@ async function createEvent(payload) {
       : null;
   const levelsNormalized = normalizeTicketLevelsInput(ticket_levels ?? ticket_levels_json);
   const levelsJson = levelsNormalized.length ? JSON.stringify(levelsNormalized) : null;
+  const ticketTiersSort = normalizeTicketTiersSort(
+    payload.ticket_tiers_sort ?? payload.ticketTiersSort
+  );
   const listPrice =
     levelsNormalized.length > 0
       ? Math.min(...levelsNormalized.map((l) => l.price))
@@ -389,16 +411,18 @@ async function createEvent(payload) {
     `INSERT INTO events
       (title, description, event_date, schedule_type, event_start_date, event_end_date, event_dates_json, event_time, venue, city_id, category_id,
        venue_name, venue_address, google_maps_link, organizer_id, ticket_link, ticket_sales_mode, seating_mode, total_seats,
-       image_url, gallery_image_urls, promo_video_urls, price, ticket_levels_json, duration_hours, duration_minutes, age_limit, languages, genres, event_highlights,
+       image_url, gallery_image_urls, promo_video_urls, price, ticket_levels_json, ticket_tiers_sort, duration_hours, duration_minutes, age_limit, languages, genres, event_highlights,
        is_yay_deal_event, deal_event_discount_code,
        service_fee_enabled, service_fee_type, service_fee_value,
        platform_fee_enabled, platform_fee_type, platform_fee_value,
        vendor_code_enabled, vendor_code, vendor_discount_type, vendor_discount_value,
-       coupon_codes_enabled, sponsor_inquiry_enabled, sponsor_contact_email, sponsor_contact_phone,
+       coupon_codes_enabled, sponsor_inquiry_enabled, influencer_partner_enabled,
+       sponsor_contact_email, sponsor_contact_phone,
+       influencer_partner_contact_email, influencer_partner_contact_phone,
        sponsor_tickets_enabled,
        show_on_events_page, is_listed,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -424,6 +448,7 @@ async function createEvent(payload) {
       promoForDb,
       listPrice,
       levelsJson,
+      ticketTiersSort,
       duration_hours ?? null,
       duration_minutes ?? null,
       age_limit || null,
@@ -444,8 +469,11 @@ async function createEvent(payload) {
       checkoutConfig.vendor_discount_value,
       checkoutConfig.coupon_codes_enabled,
       checkoutConfig.sponsor_inquiry_enabled,
+      checkoutConfig.influencer_partner_enabled,
       checkoutConfig.sponsor_contact_email,
       checkoutConfig.sponsor_contact_phone,
+      checkoutConfig.influencer_partner_contact_email,
+      checkoutConfig.influencer_partner_contact_phone,
       checkoutConfig.sponsor_tickets_enabled,
       checkoutConfig.show_on_events_page,
       checkoutConfig.is_listed,
@@ -714,13 +742,17 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "vendor_discount_value",
     "coupon_codes_enabled",
     "sponsor_inquiry_enabled",
+    "influencer_partner_enabled",
     "sponsor_contact_email",
     "sponsor_contact_phone",
+    "influencer_partner_contact_email",
+    "influencer_partner_contact_phone",
     "sponsor_tickets_enabled",
     "show_on_events_page",
     "is_listed",
     "ticket_levels",
     "ticket_levels_json",
+    "ticket_tiers_sort",
     "seating_mode"
   ];
 
@@ -770,6 +802,9 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         const json = levels.length ? JSON.stringify(levels) : null;
         return ["ticket_levels_json", json];
       }
+      if (key === "ticket_tiers_sort") {
+        return [key, normalizeTicketTiersSort(value)];
+      }
       if (key === "seating_mode") {
         return [key, normalizeSeatingMode(value)];
       }
@@ -779,6 +814,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         key === "vendor_code_enabled" ||
         key === "coupon_codes_enabled" ||
         key === "sponsor_inquiry_enabled" ||
+        key === "influencer_partner_enabled" ||
         key === "sponsor_tickets_enabled" ||
         key === "show_on_events_page" ||
         key === "is_listed"
@@ -787,13 +823,13 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
           key === "coupon_codes_enabled" || key === "show_on_events_page" || key === "is_listed";
         return [key, toBoolFlag(value, defaultOn) ? 1 : 0];
       }
-      if (key === "sponsor_contact_email") {
+      if (key === "sponsor_contact_email" || key === "influencer_partner_contact_email") {
         if (value == null || value === "") {
           return [key, null];
         }
         return [key, String(value).trim().toLowerCase()];
       }
-      if (key === "sponsor_contact_phone") {
+      if (key === "sponsor_contact_phone" || key === "influencer_partner_contact_phone") {
         if (value == null || value === "") {
           return [key, null];
         }
@@ -844,6 +880,17 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
       }
       if (!Object.prototype.hasOwnProperty.call(updates, "sponsor_contact_phone")) {
         entries.push(["sponsor_contact_phone", null]);
+      }
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, "influencer_partner_enabled")) {
+    const influencerOn = toBoolFlag(updates.influencer_partner_enabled, false);
+    if (!influencerOn) {
+      if (!Object.prototype.hasOwnProperty.call(updates, "influencer_partner_contact_email")) {
+        entries.push(["influencer_partner_contact_email", null]);
+      }
+      if (!Object.prototype.hasOwnProperty.call(updates, "influencer_partner_contact_phone")) {
+        entries.push(["influencer_partner_contact_phone", null]);
       }
     }
   }
@@ -982,7 +1029,9 @@ async function listEvents({ filters, pagination }) {
   } else if (filters.sortBy === "relevance" && filters.q) {
     orderBy = "relevance_score DESC, e.popularity_score DESC";
   }
-  orderBy = `e.home_featured DESC, e.home_featured_at DESC, ${orderBy}`;
+  if (filters.sortBy !== "price") {
+    orderBy = `e.home_featured DESC, e.home_featured_at DESC, ${orderBy}`;
+  }
 
   let relevanceSelect = "0 AS relevance_score";
   if (filters.q) {

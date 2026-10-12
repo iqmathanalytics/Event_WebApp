@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import EventCard from "../components/EventCard";
 import EventFilterBar from "../components/EventFilterBar";
+import ListingEmptyState from "../components/ListingEmptyState";
 import { fetchEvents } from "../services/eventService";
 import useFavorites from "../hooks/useFavorites";
 import useCityFilter from "../hooks/useCityFilter";
@@ -26,8 +27,7 @@ function EventsPage() {
     date: searchParams.get("date") || "",
     time: searchParams.get("time") || "",
     priceMin: searchParams.get("price_min") || "",
-    priceMax: searchParams.get("price_max") || "",
-    sortBy: searchParams.get("sort") || "event_date"
+    priceMax: searchParams.get("price_max") || ""
   };
   const [query, setQuery] = useState(initialFilters.query);
   const [city, setCity] = useState(initialFilters.city);
@@ -35,7 +35,6 @@ function EventsPage() {
   const [date, setDate] = useState(initialFilters.date);
   const [priceMin, setPriceMin] = useState(initialFilters.priceMin);
   const [priceMax, setPriceMax] = useState(initialFilters.priceMax);
-  const [sortBy, setSortBy] = useState(initialFilters.sortBy);
   const [debouncedQuery, setDebouncedQuery] = useState(initialFilters.query);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +44,15 @@ function EventsPage() {
   const setCityWithGlobal = (value) => {
     setCity(value);
     setSelectedCity(value);
+  };
+
+  const clearFilters = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setCategory("");
+    setDate("");
+    setPriceMin("");
+    setPriceMax("");
   };
 
   useEffect(() => {
@@ -66,7 +74,7 @@ function EventsPage() {
           q: debouncedQuery || undefined,
           city: city || undefined,
           category: category || undefined,
-          sort: sortBy || "event_date",
+          sort: "event_date",
           page: 1,
           limit: EVENTS_FEED_LIMIT
         };
@@ -90,10 +98,8 @@ function EventsPage() {
         }
 
         const rows = payload.rows || [];
-        const ordered =
-          (sortBy || "event_date") === "event_date" ? sortEventsByDate(rows, "asc") : rows;
-        setEvents(sortEventsWithHomeFeaturedFirst(ordered));
-      } catch (_err) {
+        setEvents(sortEventsWithHomeFeaturedFirst(sortEventsByDate(rows, "asc")));
+      } catch (_error) {
         if (active) {
           setEvents([]);
         }
@@ -108,18 +114,15 @@ function EventsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedQuery, city, category, sortBy, setSelectedCity]);
+  }, [debouncedQuery, city, category, setSelectedCity]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      className="space-y-5"
-    >
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Events</h1>
-        <p className="text-sm text-slate-600">Explore verified city events with smart filters, clear pricing, and real-time availability.</p>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5 lg:space-y-6">
+      <div className="space-y-1.5 lg:space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Events</h1>
+        <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+          Explore verified city events with smart filters, clear pricing, and real-time availability.
+        </p>
       </div>
 
       <EventFilterBar
@@ -136,8 +139,7 @@ function EventsPage() {
         setPriceMin={setPriceMin}
         priceMax={priceMax}
         setPriceMax={setPriceMax}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
+        showSort={false}
       />
 
       <div className="listing-cards-grid">
@@ -150,7 +152,7 @@ function EventsPage() {
             ))
           : null}
         {!loading && events.length === 0 ? (
-          <p className="col-span-full text-sm text-slate-500">No events match your current filters.</p>
+          <ListingEmptyState message="No events match your current filters." actionLabel="Clear filters" onAction={clearFilters} />
         ) : null}
         {!loading
           ? events.map((item, idx) => (

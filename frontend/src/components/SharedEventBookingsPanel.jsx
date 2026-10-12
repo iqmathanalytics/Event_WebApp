@@ -8,13 +8,15 @@ import FilterPopupField from "./FilterPopupField";
 import OrganizerBookingsTable from "./OrganizerBookingsTable";
 
 /**
- * Bookings for a single event (owner or shared viewer).
+ * Bookings for a single event (owner, shared viewer, or partner link).
  * Embedded under Event performance → Bookings & revenue.
  */
 export default function SharedEventBookingsPanel({
   eventId,
   embedded = false,
   allowResend = false,
+  allowExport = true,
+  fetchBookingsFn = null,
   title = "Event bookings",
   subtitle = "Reservations for this event."
 }) {
@@ -42,12 +44,34 @@ export default function SharedEventBookingsPanel({
       setLoading(true);
       setError("");
       try {
-        const response = await fetchOrganizerBookings({
-          event_id: String(eventId),
-          date: dateFilter || undefined
-        });
+        let nextRows = [];
+        if (typeof fetchBookingsFn === "function") {
+          const response = await fetchBookingsFn({
+            eventId: String(eventId),
+            date: dateFilter || undefined
+          });
+          nextRows = Array.isArray(response?.data)
+            ? response.data
+            : Array.isArray(response?.data?.rows)
+              ? response.data.rows
+              : Array.isArray(response)
+                ? response
+                : [];
+          if (dateFilter) {
+            nextRows = nextRows.filter((row) => {
+              const d = String(row.booking_date || "").slice(0, 10);
+              return d === dateFilter;
+            });
+          }
+        } else {
+          const response = await fetchOrganizerBookings({
+            event_id: String(eventId),
+            date: dateFilter || undefined
+          });
+          nextRows = response?.data || [];
+        }
         if (!cancelled) {
-          setRows(response?.data || []);
+          setRows(nextRows);
         }
       } catch (err) {
         if (!cancelled) {
@@ -63,7 +87,7 @@ export default function SharedEventBookingsPanel({
     return () => {
       cancelled = true;
     };
-  }, [eventId, dateFilter]);
+  }, [eventId, dateFilter, fetchBookingsFn]);
 
   useEffect(() => {
     if (!datePanelOpen) {
@@ -79,7 +103,7 @@ export default function SharedEventBookingsPanel({
   }, [datePanelOpen]);
 
   const download = async (format) => {
-    if (!eventId || exporting) {
+    if (!eventId || exporting || !allowExport || fetchBookingsFn) {
       return;
     }
     try {
@@ -117,24 +141,26 @@ export default function SharedEventBookingsPanel({
               {subtitle}
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={exporting || loading}
-              onClick={() => void download("csv")}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Download CSV
-            </button>
-            <button
-              type="button"
-              disabled={exporting || loading}
-              onClick={() => void download("excel")}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Download Excel
-            </button>
-          </div>
+          {allowExport && !fetchBookingsFn ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={exporting || loading}
+                onClick={() => void download("csv")}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Download CSV
+              </button>
+              <button
+                type="button"
+                disabled={exporting || loading}
+                onClick={() => void download("excel")}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Download Excel
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div

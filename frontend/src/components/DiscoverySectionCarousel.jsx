@@ -1,10 +1,11 @@
 import { useRef } from "react";
 import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router-dom";
 
 function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all", variant = "carousel", children }) {
   const sliderRef = useRef(null);
+  const reduceMotion = useReducedMotion();
 
   const scrollByAmount = (direction) => {
     const node = sliderRef.current;
@@ -27,17 +28,28 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
 
   return (
     <motion.section
-      initial={{ opacity: 0, y: 10 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className="space-y-4"
+      viewport={{ once: true, amount: "some" }}
+      transition={{ duration: reduceMotion ? 0 : 0.35, ease: "easeOut" }}
+      className="space-y-3.5 lg:space-y-4"
     >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="min-w-0 flex-1 truncate text-lg font-bold sm:text-xl lg:text-2xl">{title}</h2>
+      <div className="flex items-end justify-between gap-2 lg:items-center">
+        <h2
+          className={
+            isStaticGrid
+              ? "min-w-0 flex-1 text-[1.15rem] font-bold leading-tight tracking-tight lg:truncate lg:text-2xl lg:tracking-normal"
+              : "min-w-0 flex-1 truncate text-lg font-bold sm:text-xl lg:text-2xl"
+          }
+        >
+          {title}
+        </h2>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {actionHref ? (
-            <Link to={actionHref} className="whitespace-nowrap text-xs font-semibold text-brand-600 sm:text-sm">
+            <Link
+              to={actionHref}
+              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-2.5 text-sm font-semibold text-brand-600 transition active:scale-[0.98] lg:min-h-0 lg:rounded-none lg:px-0"
+            >
               {actionLabel}
             </Link>
           ) : null}
@@ -68,7 +80,7 @@ function DiscoverySectionCarousel({ title, actionHref, actionLabel = "View all",
         ref={isStaticGrid ? null : sliderRef}
         className={
           isStaticGrid
-            ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3"
+            ? "grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-4"
             : isLandingGrid
               ? "flex items-stretch snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               : "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

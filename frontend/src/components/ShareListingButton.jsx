@@ -105,7 +105,7 @@ export default function ShareListingButton({ url, title, listingType = "event", 
               <button
                 type="button"
                 onClick={close}
-                className="absolute right-3 top-3 grid h-8 w-8 place-content-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                className="absolute right-3 top-3 grid h-11 w-11 place-content-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 lg:h-8 lg:w-8"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -207,13 +207,14 @@ export default function ShareListingButton({ url, title, listingType = "event", 
         onClick={() => setOpen(true)}
         className={
           className ||
-          "absolute right-4 top-4 z-[1] inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-900/[0.03] backdrop-blur-sm transition hover:border-slate-300 hover:bg-white hover:text-slate-900 hover:shadow-md sm:right-5 sm:top-5 sm:gap-2 sm:px-3.5 lg:right-6 lg:top-6"
+          "absolute right-4 top-4 z-[1] inline-flex min-h-11 items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-900/[0.03] backdrop-blur-sm transition hover:border-slate-300 hover:bg-white hover:text-slate-900 hover:shadow-md sm:right-5 sm:top-5 sm:gap-2 sm:px-3.5 lg:right-6 lg:top-6 lg:min-h-0"
         }
+        aria-label="Share"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <Share2 className="h-3.5 w-3.5 text-brand-600" aria-hidden />
-        <span>Share</span>
+        <Share2 className="event-action-glyph h-3.5 w-3.5 text-brand-600" aria-hidden />
+        <span className="event-action-label">Share</span>
       </button>
       {typeof document !== "undefined" ? createPortal(modal, document.body) : null}
     </>

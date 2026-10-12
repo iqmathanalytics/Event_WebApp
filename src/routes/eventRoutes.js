@@ -16,7 +16,8 @@ const {
   fetchFeaturedEventsSchema,
   editOwnEventSchema,
   deleteOwnEventSchema,
-  trackEventAnalyticsSchema
+  trackEventAnalyticsSchema,
+  trackEventPresenceSchema
 } = require("../validators/eventValidator");
 const {
   organizerEventInsightsSchema,
@@ -60,6 +61,11 @@ router.post(
   "/:id/track-view",
   validateRequest(trackEventAnalyticsSchema),
   eventController.trackEventView
+);
+router.post(
+  "/:id/presence",
+  validateRequest(trackEventPresenceSchema),
+  eventController.touchEventPresence
 );
 router.post(
   "/",

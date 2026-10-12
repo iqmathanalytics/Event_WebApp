@@ -25,8 +25,8 @@ let client = null;
 
 /**
  * GA Realtime screenPageViews is a rolling ~30m window, not calendar-hour totals.
- * Keep per-hour peaks for today so the current hour does not drop to zero when
- * Realtime expires before standard dateHour data lands.
+ * Peak only within the *current* clock hour so the live bar does not flicker
+ * before standard dateHour data lands — never re-apply those peaks to past hours.
  */
 const hourlyViewsPeakByKey = new Map();
 
@@ -37,7 +37,8 @@ const CACHE_TTL_MS = 55_000;
 const REALTIME_CACHE_TTL_MS = 28_000;
 
 function hourlyPeakKey(eventId, dateStr, hour) {
-  return `${String(eventId)}|${dateStr}|${hour}`;
+  // v2: ignore pre-fix peaks that mixed Realtime 30m counts into hour buckets.
+  return `v2|${String(eventId)}|${dateStr}|${hour}`;
 }
 
 function pruneHourlyPeakCache() {
@@ -567,6 +568,7 @@ async function getEventTrafficMetrics(eventId, { eventTitle, realtime: realtimeS
   const liveViewsToday = Number(realtime.screenPageViews) || 0;
   const standard = reconcileStandardTotals({
     total_views: viewsAll,
+    // Today KPI: standard day total, or live ~30m window when it is ahead (until standard catches up).
     views_today: Math.max(viewsToday, liveViewsToday),
     views_today_standard: viewsToday,
     views_today_live: liveViewsToday,
@@ -673,8 +675,10 @@ async function getEventHourlyForDate(eventId, dateStr) {
 
 /**
  * Hourly page views for one calendar day.
- * Today: standard buckets + GA Realtime on the current hour (live, full-day tracking).
- * Past days: standard GA only.
+ * Today: standard dateHour buckets + GA Realtime on the *current* hour only
+ * (live bar until standard catches up). Past hours stay on standard — never
+ * carry Realtime peaks forward (that duplicated the same ~30m count into 1 PM and 2 PM).
+ * Past days: dateHour bars + day-level metricTotal for day_total_views (same source as Yesterday KPI).
  */
 async function getEventHourlyChart(eventId, { eventTitle, dateStr: requestedDate, realtime: realtimeSnapshot } = {}) {
   const tz = getGaReportingTimezone();
@@ -686,32 +690,39 @@ async function getEventHourlyChart(eventId, { eventTitle, dateStr: requestedDate
   const isToday = targetDate === todayDate;
   const currentHour = isToday ? getCurrentHour(tz) : null;
 
-  const fetches = [getEventHourlyForDate(eventId, targetDate)];
+  // Always fetch day-level total so past-day chart Total matches KPI cards (e.g. Yesterday).
+  const fetches = [
+    getEventHourlyForDate(eventId, targetDate),
+    metricTotal(eventId, { startDate: targetDate, endDate: targetDate })
+  ];
   if (isToday) {
     fetches.push(
       realtimeSnapshot
         ? Promise.resolve(realtimeSnapshot)
-        : getRealtimeEventMetrics(eventId, eventTitle),
-      metricTotal(eventId, { startDate: targetDate, endDate: targetDate })
+        : getRealtimeEventMetrics(eventId, eventTitle)
     );
   }
 
   const results = await Promise.all(fetches);
   const standardRows = results[0];
-  const realtime = isToday ? results[1] : { activeUsers: 0, screenPageViews: 0 };
-  const dayTotalViews = isToday ? results[2] : 0;
+  const dayTotalViews = Number(results[1]) || 0;
+  const realtime = isToday ? results[2] : { activeUsers: 0, screenPageViews: 0 };
+  const rtViews = Number(realtime.screenPageViews) || 0;
+  const rtUsers = Number(realtime.activeUsers) || 0;
 
   const hourlyToday = [];
   for (let hour = 0; hour < 24; hour += 1) {
     const match = standardRows.find((r) => Number(r.hour) === hour);
-    let views = match ? match.views : 0;
+    let views = match ? Number(match.views) || 0 : 0;
     let live_realtime = false;
     const is_future = isToday && currentHour != null && hour > currentHour;
     const is_current_hour = isToday && currentHour != null && hour === currentHour;
 
-    if (is_current_hour) {
-      const rtViews = Number(realtime.screenPageViews) || 0;
-      const rtUsers = Number(realtime.activeUsers) || 0;
+    if (is_future) {
+      views = 0;
+      live_realtime = false;
+    } else if (is_current_hour) {
+      // Live window only on the clock hour that is happening now.
       views = Math.max(views, rtViews);
       if (rtUsers > 0 && views < rtUsers) {
         views = rtUsers;
@@ -719,12 +730,22 @@ async function getEventHourlyChart(eventId, { eventTitle, dateStr: requestedDate
       live_realtime = rtViews > 0 || rtUsers > 0;
       const peaked = mergeHourlyPeak(eventId, targetDate, hour, views, { liveRealtime: live_realtime });
       views = peaked.views;
-      live_realtime = peaked.live_realtime;
-    } else if (isToday && currentHour != null && hour < currentHour) {
-      const peak = hourlyViewsPeakByKey.get(hourlyPeakKey(eventId, targetDate, hour));
-      if (peak) {
-        views = Math.max(views, peak.views);
-        live_realtime = peak.liveRealtime;
+      live_realtime = peaked.live_realtime || live_realtime;
+    } else if (isToday) {
+      // Past hours today: keep standard dateHour heights (no Realtime carry-forward).
+      // If an in-memory peak from when this hour was current is still above standard,
+      // mark live_realtime for pink styling only — do not raise views.
+      const peakKey = hourlyPeakKey(eventId, targetDate, hour);
+      const cached = hourlyViewsPeakByKey.get(peakKey);
+      const peakViews = Number(cached?.views) || 0;
+      if (cached && peakViews > views) {
+        live_realtime = true;
+      } else if (cached && peakViews > 0 && views >= peakViews) {
+        hourlyViewsPeakByKey.set(peakKey, {
+          views: Math.max(peakViews, views),
+          liveRealtime: false,
+          updatedAt: Date.now()
+        });
       }
     }
 
@@ -737,42 +758,24 @@ async function getEventHourlyChart(eventId, { eventTitle, dateStr: requestedDate
     });
   }
 
-  if (isToday && dayTotalViews > 0) {
+  // If the day-level standard total is ahead of sum(dateHour) (GA lag), put the gap on the current hour.
+  if (isToday && dayTotalViews > 0 && currentHour != null) {
     const sumSoFar = hourlyToday.reduce((s, row) => (row.is_future ? s : s + row.views), 0);
-    if (sumSoFar < dayTotalViews && currentHour != null) {
-      const gap = dayTotalViews - sumSoFar;
+    if (sumSoFar < dayTotalViews) {
       const current = hourlyToday.find((r) => r.hour === currentHour);
       if (current) {
-        current.views += gap;
+        current.views += dayTotalViews - sumSoFar;
         current.live_realtime = true;
+        mergeHourlyPeak(eventId, targetDate, currentHour, current.views, { liveRealtime: true });
       }
     }
   }
 
-  if (isToday && currentHour != null) {
-    for (const row of hourlyToday) {
-      if (row.is_future) {
-        continue;
-      }
-      const peaked = mergeHourlyPeak(eventId, targetDate, row.hour, row.views, {
-        liveRealtime: row.live_realtime
-      });
-      row.views = peaked.views;
-      row.live_realtime = peaked.live_realtime;
-    }
-  }
-
-  const standardDayTotal =
-    isToday && dayTotalViews > 0
-      ? dayTotalViews
-      : hourlyToday.reduce((s, row) => (row.is_future ? s : s + row.views), 0);
-  const liveDayViews = isToday ? Number(realtime.screenPageViews) || 0 : 0;
   const hourlySum = hourlyToday.reduce((s, row) => (row.is_future ? s : s + row.views), 0);
-  let dayTotal = isToday ? Math.max(standardDayTotal, hourlySum, liveDayViews) : hourlySum;
-  if (isToday) {
-    const dayPeak = mergeHourlyPeak(eventId, targetDate, "day", dayTotal, { liveRealtime: liveDayViews > 0 });
-    dayTotal = dayPeak.views;
-  }
+  // Prefer day-level GA total (same report family as Yesterday KPI). Fall back to hour sum if zero.
+  const standardDayTotal = dayTotalViews > 0 ? dayTotalViews : hourlySum;
+  // Today: track live bars (includes current-hour Realtime). Past days: day-level total only.
+  const dayTotal = isToday ? Math.max(standardDayTotal, hourlySum) : standardDayTotal;
 
   return {
     hourly_today: hourlyToday,
@@ -784,10 +787,10 @@ async function getEventHourlyChart(eventId, { eventTitle, dateStr: requestedDate
       timezone_label: getTimezoneShortLabel(tz),
       today_date: todayDate,
       current_hour: currentHour,
-      current_hour_realtime_views: isToday ? realtime.screenPageViews : 0,
-      current_hour_active_users: isToday ? realtime.activeUsers : 0,
+      current_hour_realtime_views: isToday ? rtViews : 0,
+      current_hour_active_users: isToday ? rtUsers : 0,
       day_total_standard: standardDayTotal,
-      day_total_live: liveDayViews,
+      day_total_live: rtViews,
       day_total_views: dayTotal,
       available_dates: listHourlyDateOptions(7, tz)
     }

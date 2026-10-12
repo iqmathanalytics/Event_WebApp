@@ -44,9 +44,11 @@ const FILES = [
   "user_can_sell_platform_tickets.sql",
   "platform_ticket_access_requests.sql",
   "event_ticket_levels.sql",
+  "event_ticket_tiers_sort.sql",
   "event_coupons.sql",
   "event_booking_coupon_backfill.sql",
   "event_booking_stripe.sql",
+  "event_booking_email_status.sql",
   "event_guest_bookings.sql",
   "booking_check_in_qr.sql",
   "user_password_set_tokens.sql",
@@ -69,9 +71,13 @@ const FILES = [
   "event_analytics_share_invites.sql",
   "event_sponsor_inquiry.sql",
   "event_sponsor_tickets.sql",
+  "event_influencer_partner.sql",
+  "event_influencer_partner_contacts.sql",
   "event_home_featured.sql",
   "event_discovery_perf.sql",
-  "event_vendor_shares.sql"
+  "event_vendor_shares.sql",
+  "event_vendor_link_presence.sql",
+  "event_page_presence.sql"
 ];
 
 function buildSsl() {

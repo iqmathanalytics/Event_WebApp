@@ -7,13 +7,6 @@ import LogoFlightOverlay from "../components/LogoFlightOverlay";
 import { shouldShowHomeSplash } from "../utils/homeSplashPolicy";
 
 function MainLayout() {
-  const [homeSearchSummary, setHomeSearchSummary] = useState({
-    cityLabel: "Anywhere",
-    dateLabel: "Any date",
-    categoryLabel: "Any category",
-    priceLabel: "Any price"
-  });
-  const [isHeroSearchVisible, setIsHeroSearchVisible] = useState(true);
   /** Increments when splash → header flight completes; navbar plays a one-shot landing celebration. */
   const [headerLogoCelebrateKey, setHeaderLogoCelebrateKey] = useState(0);
   /** `splash` = intro visible; `exit` = post-reveal until flight/ready; `ready` = normal header logo */
@@ -58,8 +51,6 @@ function MainLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-transparent">
       <Navbar
-        homeSearchSummary={homeSearchSummary}
-        isHeroSearchVisible={isHeroSearchVisible}
         brandLogoPhase={brandLogoPhase}
         headerLogoRef={headerLogoRef}
         logoFlightActive={Boolean(logoFlight)}
@@ -68,8 +59,6 @@ function MainLayout() {
       <main className="container-page mobile-safe-main flex-1 pt-20 pb-8 sm:pt-24 sm:pb-10">
         <Outlet
           context={{
-            setHomeSearchSummary,
-            setIsHeroSearchVisible,
             setBrandLogoPhase,
             headerLogoRef,
             startLogoFlight,

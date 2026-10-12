@@ -36,6 +36,16 @@ export async function confirmGuestBookingPayment(payment_intent_id) {
   return response.data;
 }
 
+export async function cancelBookingPayment(payment_intent_id) {
+  const response = await api.post("/bookings/cancel-payment", { payment_intent_id });
+  return response.data;
+}
+
+export async function cancelGuestBookingPayment(payment_intent_id) {
+  const response = await api.post("/bookings/guest/cancel-payment", { payment_intent_id });
+  return response.data;
+}
+
 export async function fetchMyBookings() {
   const response = await api.get("/users/my-bookings");
   return response.data;

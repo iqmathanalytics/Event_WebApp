@@ -24,7 +24,7 @@ function writeAll(data) {
 }
 
 export function hourlyPeakKey(eventId, dateStr, hour) {
-  return `${eventId}|${dateStr}|${hour}`;
+  return `v2|${eventId}|${dateStr}|${hour}`;
 }
 
 export function dayTotalPeakKey(eventId, dateStr) {

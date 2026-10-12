@@ -212,14 +212,14 @@ function PaymentForm({
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:min-h-0"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!stripe || submitting}
-            className="flex-1 rounded-lg bg-[#E31C5F] py-3 text-sm font-semibold text-white hover:bg-[#D70466] disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-lg bg-[#E31C5F] py-3 text-sm font-semibold text-white hover:bg-[#D70466] disabled:opacity-50 lg:min-h-0"
           >
             {submitting ? "Processing…" : `Pay ${totalLabel}`}
           </button>

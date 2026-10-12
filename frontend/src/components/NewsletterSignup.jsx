@@ -19,7 +19,7 @@ function InterestChips({ selectedLabels, onToggle, disabled }) {
             disabled={disabled}
             aria-pressed={on}
             onClick={() => onToggle(cat.label)}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60 sm:text-sm ${
+            className={`inline-flex min-h-11 items-center rounded-full border px-3 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60 lg:min-h-0 lg:py-1.5 sm:text-sm ${
               on
                 ? "border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20"
                 : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -181,7 +181,7 @@ function NewsletterSignup({ title, description, cityId, className = "" }) {
       {!subscribed ? (
         <form onSubmit={onSubmit} className="mt-6 flex w-full flex-col gap-4">
           {isAuthenticated ? (
-            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-stretch">
+            <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-stretch">
               <div className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 {user?.email || "Logged-in user"}
               </div>
@@ -190,7 +190,7 @@ function NewsletterSignup({ title, description, cityId, className = "" }) {
                 disabled={submitting || checking}
                 whileHover={{ scale: submitting ? 1 : 1.02 }}
                 whileTap={{ scale: submitting ? 1 : 0.98 }}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70 lg:min-h-0 lg:w-auto lg:py-3"
               >
                 {submitting ? (
                   <>
@@ -204,7 +204,7 @@ function NewsletterSignup({ title, description, cityId, className = "" }) {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 lg:grid-cols-2">
                 <label className="block min-w-0">
                   <span className={labelClass}>First name</span>
                   <input
@@ -277,7 +277,7 @@ function NewsletterSignup({ title, description, cityId, className = "" }) {
                 disabled={submitting}
                 whileHover={{ scale: submitting ? 1 : 1.02 }}
                 whileTap={{ scale: submitting ? 1 : 0.98 }}
-                className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:self-start"
+                className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70 lg:min-h-0 lg:w-auto lg:self-start lg:py-3"
               >
                 {submitting ? (
                   <>
@@ -302,11 +302,11 @@ function NewsletterSignup({ title, description, cityId, className = "" }) {
             className="mt-4 text-sm text-slate-600"
           >
             Prefer an account?{" "}
-            <Link to="/register" className="font-semibold text-brand-600">
+            <Link to="/register" className="inline-flex min-h-11 items-center font-semibold text-brand-600 lg:min-h-0">
               Register
             </Link>{" "}
             or{" "}
-            <Link to="/login" className="font-semibold text-brand-600">
+            <Link to="/login" className="inline-flex min-h-11 items-center font-semibold text-brand-600 lg:min-h-0">
               sign in
             </Link>
             .

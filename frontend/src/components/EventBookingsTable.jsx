@@ -35,7 +35,7 @@ export default function EventBookingsTable({
   const colSpan = showEventColumn ? 13 : 12;
 
   return (
-    <ScrollableTableFrame minWidthClass="min-w-[1280px]" className="hidden md:block">
+    <ScrollableTableFrame minWidthClass="min-w-[1280px]" className="hidden lg:block">
       <table className="w-full table-fixed text-left text-sm">
         <colgroup>
           <col className="w-[96px]" />

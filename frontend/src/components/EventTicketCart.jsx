@@ -88,7 +88,7 @@ function TicketTierCard({
           </span>
           {chartMode ? (
             soldOut ? (
-              <span className="shrink-0 rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+              <span className="shrink-0 rounded-full bg-slate-200 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 lg:text-[10px]">
                 Sold out
               </span>
             ) : active ? (
@@ -99,7 +99,7 @@ function TicketTierCard({
                 {qty} selected
               </span>
             ) : (
-              <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600 ring-1 ring-slate-200/80">
+              <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 ring-1 ring-slate-200/80 lg:text-[10px]">
                 Select on chart
               </span>
             )
@@ -112,7 +112,7 @@ function TicketTierCard({
             >
               {formatCurrency(level.price)}
               <span
-                className={`mt-0.5 block text-[10px] font-semibold tracking-wide ${
+                className={`mt-0.5 block text-xs font-semibold tracking-wide lg:text-[10px] ${
                   soldOut ? "text-slate-400" : palette.priceMuted
                 }`}
                 style={soldOut ? undefined : palette.styles?.priceMuted}
@@ -136,7 +136,7 @@ function TicketTierCard({
               <button
                 type="button"
                 onClick={() => setExpanded((open) => !open)}
-                className="mt-1.5 text-[11px] font-bold text-slate-700 underline-offset-2 hover:underline"
+                className="mt-1.5 inline-flex min-h-11 items-center text-xs font-bold text-slate-700 underline-offset-2 hover:underline lg:min-h-0 lg:text-[11px]"
               >
                 {expanded ? "Show less" : "Read more"}
               </button>
@@ -148,16 +148,16 @@ function TicketTierCard({
           <div className="min-w-0">
             {chartMode ? (
               meta && !soldOut ? (
-                <p className="text-[11px] font-semibold leading-snug text-slate-600">{meta}</p>
+                <p className="text-xs font-semibold leading-snug text-slate-600 lg:text-[11px]">{meta}</p>
               ) : null
             ) : soldOut ? (
-              <span className="inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase text-slate-600">
+              <span className="inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-xs font-bold uppercase text-slate-600 lg:text-[10px]">
                 Sold out
               </span>
             ) : meta ? (
-              <p className="text-[11px] font-semibold leading-snug text-slate-600">{meta}</p>
+              <p className="text-xs font-semibold leading-snug text-slate-600 lg:text-[11px]">{meta}</p>
             ) : (
-              <p className="text-[11px] font-medium text-slate-400">Ready to add</p>
+              <p className="text-xs font-medium text-slate-400 lg:text-[11px]">Ready to add</p>
             )}
             {active && !soldOut ? (
               <p
@@ -179,7 +179,7 @@ function TicketTierCard({
             >
               {formatCurrency(level.price)}
               <span
-                className={`mt-0.5 block text-[10px] font-semibold tracking-wide ${
+                className={`mt-0.5 block text-xs font-semibold tracking-wide lg:text-[10px] ${
                   soldOut ? "text-slate-400" : palette.priceMuted
                 }`}
                 style={soldOut ? undefined : palette.styles?.priceMuted}
@@ -195,7 +195,7 @@ function TicketTierCard({
                   disabled={disabled || soldOut || qty <= 0}
                   onClick={() => setQty(level.id, qty - 1)}
                   aria-label={`Remove one ${level.name}`}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 ${
+                  className={`flex h-11 w-11 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 lg:h-10 lg:w-10 ${
                     active && !soldOut ? palette.btnActive : palette.btn
                   }`}
                   style={
@@ -222,7 +222,7 @@ function TicketTierCard({
                   }
                   onClick={() => setQty(level.id, qty + 1)}
                   aria-label={`Add one ${level.name}`}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 ${
+                  className={`flex h-11 w-11 items-center justify-center rounded-full border-2 transition-all duration-200 disabled:opacity-35 lg:h-10 lg:w-10 ${
                     active && !soldOut ? palette.btnActive : palette.btn
                   }`}
                   style={
@@ -233,7 +233,7 @@ function TicketTierCard({
                 </button>
               </div>
               {!active && !soldOut ? (
-                <p className="text-[10px] font-medium text-slate-400">Tap + to add</p>
+                <p className="text-xs font-medium text-slate-400 lg:text-[10px]">Tap + to add</p>
               ) : null}
             </div>
           )}
@@ -296,7 +296,7 @@ export default function EventTicketCart({
     <div className="ticket-cart space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200/80 pb-3">
         <div>
-          <p className="ticket-cart-header-shimmer bg-gradient-to-r from-slate-800 via-amber-700 to-slate-800 bg-clip-text text-[10px] font-bold uppercase tracking-[0.2em] text-transparent">
+          <p className="ticket-cart-header-shimmer bg-gradient-to-r from-slate-800 via-amber-700 to-slate-800 bg-clip-text text-xs font-bold uppercase tracking-[0.2em] text-transparent lg:text-[10px]">
             {chartMode ? "Ticket tiers" : "Select tickets"}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">

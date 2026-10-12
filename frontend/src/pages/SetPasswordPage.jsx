@@ -104,21 +104,21 @@ export default function SetPasswordPage({ mode = "set" }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 py-10 sm:py-14">
+    <div className="mx-auto w-full max-w-md px-3 py-8 sm:px-4 sm:py-14 lg:px-4">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_28px_64px_-24px_rgba(15,23,42,0.18)]"
+        className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_28px_64px_-24px_rgba(15,23,42,0.18)] lg:rounded-[1.75rem]"
       >
-        <div className="h-1 w-full bg-gradient-to-r from-brand-500 via-fuchsia-500 to-cyan-500" aria-hidden />
-        <div className="px-6 pb-8 pt-7 sm:px-8">
+        <div className="h-1 w-full bg-gradient-to-r from-brand-500 via-rose-400 to-slate-800" aria-hidden />
+        <div className="px-5 pb-7 pt-6 sm:px-8 sm:pb-8 sm:pt-7">
           <div className="text-center">
             <AuthBrandLogo compact />
-            <div className="mx-auto mt-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 ring-1 ring-violet-100">
+            <div className="mx-auto mt-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-brand-700 ring-1 ring-rose-100">
               {done ? <CheckCircle2 className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
             </div>
-            <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="mt-4 text-[1.35rem] font-bold tracking-tight text-slate-900 sm:text-2xl">
               {done ? "You're all set" : isReset ? "Reset your password" : "Create your password"}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
@@ -140,11 +140,14 @@ export default function SetPasswordPage({ mode = "set" }) {
           {phase === "invalid" ? (
             <div className="mt-8 space-y-4">
               <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>
+              <Link
+                to="/login"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 lg:min-h-0 lg:py-2.5"
+              >
+                Sign in
+              </Link>
               <p className="text-center text-sm text-slate-600">
-                Already have a password?{" "}
-                <Link to="/login" className="font-semibold text-brand-700 hover:underline">
-                  Sign in
-                </Link>
+                Need a new link? Use Forgot password on the sign-in page.
               </p>
             </div>
           ) : null}
@@ -153,7 +156,7 @@ export default function SetPasswordPage({ mode = "set" }) {
             <form onSubmit={onSubmit} className="mt-8 space-y-4">
               {account.email ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">
                     {isReset ? "Account" : "My Hub account"}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{account.email}</p>
@@ -171,7 +174,7 @@ export default function SetPasswordPage({ mode = "set" }) {
                   autoComplete="new-password"
                   value={form.password}
                   onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm"
+                  className="min-h-11 w-full rounded-xl border border-slate-300 px-3.5 text-sm lg:min-h-0 lg:py-2.5"
                   placeholder="At least 8 characters"
                   required
                   minLength={8}
@@ -188,7 +191,7 @@ export default function SetPasswordPage({ mode = "set" }) {
                   autoComplete="new-password"
                   value={form.confirm}
                   onChange={(e) => setForm((prev) => ({ ...prev, confirm: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm"
+                  className="min-h-11 w-full rounded-xl border border-slate-300 px-3.5 text-sm lg:min-h-0 lg:py-2.5"
                   placeholder="Re-enter your password"
                   required
                   minLength={8}
@@ -202,7 +205,7 @@ export default function SetPasswordPage({ mode = "set" }) {
               <button
                 type="submit"
                 disabled={loading || !passwordsMatch}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isReset ? "Save new password" : "Save password & open My Hub"}

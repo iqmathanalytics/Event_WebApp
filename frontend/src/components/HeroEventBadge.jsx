@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Sparkles, Star } from "lucide-react";
 
 function homeSpotlightBadgeMeta() {
   return {
@@ -42,7 +43,7 @@ export default function HeroEventBadge({ variant = "featured", compact = false, 
       transition={{ duration: 0.35, ease: "easeOut" }}
       className={`group relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10 backdrop-blur ${
         actionRow
-          ? "h-9 px-3.5 sm:px-4 lg:h-9 lg:px-3.5"
+          ? "h-11 px-3.5 sm:px-4 lg:h-9 lg:px-3.5"
           : "px-3 py-1.5 sm:px-3.5 sm:py-2"
       }`}
     >
@@ -65,5 +66,21 @@ export default function HeroEventBadge({ variant = "featured", compact = false, 
         ) : null}
       </div>
     </motion.div>
+  );
+}
+
+export function HeroEventMark({ variant = "featured", className = "" }) {
+  const meta = heroBadgeMeta(variant);
+  const spotlight = variant === "home" || variant === "yay";
+  const Icon = spotlight ? Sparkles : Star;
+
+  return (
+    <span
+      role="img"
+      aria-label={meta.label}
+      className={`hero-event-mark ${spotlight ? "hero-event-mark--spotlight" : "hero-event-mark--featured"} ${className}`}
+    >
+      <Icon className="hero-event-mark__icon h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+    </span>
   );
 }

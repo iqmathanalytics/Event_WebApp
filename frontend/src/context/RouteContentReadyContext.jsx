@@ -12,7 +12,8 @@ const RouteContentReadyContext = createContext(null);
 export function RouteContentReadyProvider({ children }) {
   const location = useLocation();
   const routeKey = location.key;
-  const [readyKey, setReadyKey] = useState(() => routeKey);
+  // Start unset so hard reloads stay behind the loading overlay until the page signals ready.
+  const [readyKey, setReadyKey] = useState(null);
 
   const signalContentReady = useCallback(() => {
     setReadyKey(routeKey);

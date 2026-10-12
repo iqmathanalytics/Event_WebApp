@@ -95,5 +95,6 @@ export const sortOptions = [
   { value: "popularity", label: "Popularity" },
   { value: "relevance", label: "Relevance" },
   { value: "newest", label: "Newest" },
-  { value: "price", label: "Price" }
+  { value: "price", label: "Price: Low to High" },
+  { value: "price_desc", label: "Price: High to Low" }
 ];

@@ -20,13 +20,18 @@ import {
 } from "../services/organizerAnalyticsService";
 import { normalizeEventTicketSalesMode } from "../utils/eventTicketSalesMode";
 import { formatCurrency, formatDateUS } from "../utils/format";
-import { applyStoredHourlyPeak, hourlyPeakKey } from "../utils/hourlyViewsPeakStorage";
+import {
+  applyStoredHourlyPeak,
+  getStoredHourlyPeak,
+  hourlyPeakKey
+} from "../utils/hourlyViewsPeakStorage";
 import { resolveTicketLevelPalette, TIER_CHART_COLORS } from "../utils/ticketLevelPalettes";
 
 function formatSourceLabel(source) {
   const s = String(source || "direct");
   if (s === "direct") return "Direct / unknown";
   if (s === "bookmytickets") return "Book My Tickets";
+  if (s === "Partner link" || s === "partner link") return "Partner link";
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -77,7 +82,13 @@ export default function OrganizerInsightsPanel({
   fixedEventId = null,
   embedded = false,
   fetchEventInsightsFn = null,
-  sharedAccessBanner = null
+  sharedAccessBanner = null,
+  partnerMode = false,
+  fetchBookingsFn = null,
+  allowBookingExport = true,
+  heroTitle = null,
+  heroDescription = null,
+  onBack = null
 }) {
   const [events, setEvents] = useState(eventsProp);
   const [selectedEventId, setSelectedEventId] = useState("");
@@ -243,7 +254,12 @@ export default function OrganizerInsightsPanel({
   const hourlyData = useMemo(() => {
     const rows = traffic?.hourly_today || [];
     const dateKey = hourlyChartMeta.selected_date || hourlyChartMeta.today_date || "today";
-    const peakPrefix = `${selectedEventId || "event"}|${dateKey}|`;
+    const reportingCurrentHour = Number(hourlyChartMeta.current_hour);
+    const hasReportingHour =
+      Boolean(hourlyChartMeta.is_today) &&
+      Number.isFinite(reportingCurrentHour) &&
+      reportingCurrentHour >= 0 &&
+      reportingCurrentHour <= 23;
     const formatHour = (h) => {
       const n = Number(h);
       if (n === 0) return "12 AM";
@@ -253,24 +269,41 @@ export default function OrganizerInsightsPanel({
     };
     return Array.from({ length: 24 }, (_, hour) => {
       const match = rows.find((r) => Number(r.hour) === hour);
-      const peakKey = hourlyPeakKey(selectedEventId || "event", dateKey, hour);
-      const rawViews = match ? Number(match.views) || 0 : 0;
-      const views = applyStoredHourlyPeak(peakKey, rawViews);
+      const isFuture =
+        Boolean(match?.is_future) || (hasReportingHour && hour > reportingCurrentHour);
       const isCurrentHour =
-        Boolean(match?.is_current_hour) ||
-        (Boolean(hourlyChartMeta.is_today) &&
-          Number(hourlyChartMeta.current_hour) === hour);
-      const hadLive = views > rawViews || Boolean(match?.live_realtime);
+        !isFuture &&
+        (Boolean(match?.is_current_hour) || (hasReportingHour && reportingCurrentHour === hour));
+      const rawViews = isFuture ? 0 : match ? Number(match.views) || 0 : 0;
+      const peakKey = hourlyPeakKey(selectedEventId || "event", dateKey, hour);
+      // Partner links: never use organizer event peaks.
+      // Organizer: peak only today's current hour so Realtime does not flicker;
+      // past days / past hours stay on API/standard values (matches Yesterday KPI).
+      const allowClientPeak =
+        !partnerMode && Boolean(hourlyChartMeta.is_today) && isCurrentHour && !isFuture;
+      const views = allowClientPeak ? applyStoredHourlyPeak(peakKey, rawViews) : rawViews;
+      // Pink (liveRealtime) for today's past hours when a stored Realtime peak is still
+      // above standard — color only; do not raise bar height.
+      const provisionalPastHour =
+        !partnerMode &&
+        Boolean(hourlyChartMeta.is_today) &&
+        !isCurrentHour &&
+        !isFuture &&
+        getStoredHourlyPeak(peakKey) > rawViews;
+      const liveRealtime =
+        Boolean(match?.live_realtime) ||
+        (isCurrentHour && views > rawViews) ||
+        provisionalPastHour;
       return {
         hour: formatHour(hour),
         hourNum: hour,
-        views,
-        liveRealtime: hadLive || Boolean(match?.live_realtime),
-        isFuture: Boolean(match?.is_future),
+        views: isFuture ? 0 : views,
+        liveRealtime,
+        isFuture,
         isCurrentHour
       };
     });
-  }, [traffic?.hourly_today, hourlyChartMeta, selectedEventId]);
+  }, [traffic?.hourly_today, hourlyChartMeta, selectedEventId, partnerMode]);
 
   const hourlyDateOptions = hourlyChartMeta.available_dates || [];
   const hourlyIsLive = Boolean(hourlyChartMeta.is_today);
@@ -296,10 +329,16 @@ export default function OrganizerInsightsPanel({
   }, [loadedEventId, selectedEventId, activeTab, loadInsights]);
 
   const hourlySectionTitle = hourlyChartMeta.is_today
-    ? "Today by hour"
+    ? partnerMode
+      ? "Link visits by hour · Today"
+      : "Today by hour"
     : hourlyChartMeta.selected_date
-      ? `${formatDateUS(hourlyChartMeta.selected_date)} by hour`
-      : "Views by hour";
+      ? partnerMode
+        ? `Link visits by hour · ${formatDateUS(hourlyChartMeta.selected_date)}`
+        : `${formatDateUS(hourlyChartMeta.selected_date)} by hour`
+      : partnerMode
+        ? "Link visits by hour"
+        : "Views by hour";
 
   const sourceData = useMemo(
     () =>
@@ -375,19 +414,40 @@ export default function OrganizerInsightsPanel({
       (eventMeta?.ticket_levels?.length ?? 0) > 0 ||
       (bookings?.tiers?.length ?? 0) > 0);
 
-  const tabs = isPlatform
+  const tabs = partnerMode
     ? [
         { key: "traffic", label: "Traffic" },
-        { key: "bookings", label: "Bookings & revenue" },
-        ...(hasTicketTiers ? [{ key: "tiers", label: "Ticket tiers" }] : []),
-        { key: "audience", label: "Audience" },
-        { key: "geo", label: "Geography" }
+        ...(isPlatform ? [{ key: "bookings", label: "Bookings & revenue" }] : []),
+        ...(hasTicketTiers ? [{ key: "tiers", label: "Ticket tiers" }] : [])
       ]
-    : [
-        { key: "traffic", label: "Traffic" },
-        { key: "audience", label: "Audience" },
-        { key: "geo", label: "Geography" }
-      ];
+    : isPlatform
+      ? [
+          { key: "traffic", label: "Traffic" },
+          { key: "bookings", label: "Bookings & revenue" },
+          ...(hasTicketTiers ? [{ key: "tiers", label: "Ticket tiers" }] : []),
+          { key: "audience", label: "Audience" },
+          { key: "geo", label: "Geography" }
+        ]
+      : [
+          { key: "traffic", label: "Traffic" },
+          { key: "audience", label: "Audience" },
+          { key: "geo", label: "Geography" }
+        ];
+
+  const viewNoun = partnerMode ? "link visits" : "page views";
+  const viewNounCap = partnerMode ? "Link visits" : "Page views";
+  const resolvedHeroTitle = heroTitle || (partnerMode ? "Partner link analytics" : "Event performance analytics");
+  const resolvedHeroDescription =
+    heroDescription ||
+    (partnerMode
+      ? "See how people open this partner link, when they visit, and how tickets from this link perform."
+      : "See how people discover your event, when they visit, where they are from, and how tickets perform — all in one place.");
+
+  useEffect(() => {
+    if (partnerMode && (activeTab === "audience" || activeTab === "geo")) {
+      setActiveTab("traffic");
+    }
+  }, [partnerMode, activeTab]);
 
   const activeEventId = autoLoadInsights ? fixedEventId || selectedEventId : loadedEventId;
   const analyticsReady = Boolean(activeEventId && insights);
@@ -418,17 +478,23 @@ export default function OrganizerInsightsPanel({
         <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-soft sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
+              {onBack ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/70 hover:text-white"
+                >
+                  ← Back
+                </button>
+              ) : null}
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">Insights</p>
-              <h2 className="mt-1 text-xl font-bold sm:text-2xl">Event performance analytics</h2>
+              <h2 className="mt-1 text-xl font-bold sm:text-2xl">{resolvedHeroTitle}</h2>
               {sharedAccessBanner || insights?.shared_view ? (
                 <p className="mt-2 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90 ring-1 ring-white/20">
                   {sharedAccessBanner || "Shared access · view only"}
                 </p>
               ) : null}
-              <p className="mt-2 max-w-2xl text-sm text-white/75">
-                See how people discover your event, when they visit, where they are from, and how tickets perform — all
-                in one place.
-              </p>
+              <p className="mt-2 max-w-2xl text-sm text-white/75">{resolvedHeroDescription}</p>
             </div>
             <button
               type="button"
@@ -442,7 +508,20 @@ export default function OrganizerInsightsPanel({
         </div>
       ) : (
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-base font-bold text-slate-900">Sales &amp; analytics</h3>
+          <div>
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-800"
+              >
+                ← Back
+              </button>
+            ) : null}
+            <h3 className="text-base font-bold text-slate-900">
+              {partnerMode ? "Partner link analytics" : "Sales & analytics"}
+            </h3>
+          </div>
           <button
             type="button"
             onClick={() => void loadInsights()}
@@ -553,48 +632,56 @@ export default function OrganizerInsightsPanel({
               value={traffic?.views_today ?? 0}
               sub={
                 todayLiveViews > 0
-                  ? `Page views today (includes ${todayLiveViews} recent visit${todayLiveViews === 1 ? "" : "s"})`
-                  : "Page views today"
+                  ? `${viewNounCap} today (includes ${todayLiveViews} recent visit${todayLiveViews === 1 ? "" : "s"})`
+                  : `${viewNounCap} today`
               }
               accent="rose"
             />
             <KpiCard
               label="Yesterday"
               value={traffic?.views_yesterday ?? 0}
-              sub={traffic?.yesterday_date ? `Page views on ${formatDateUS(traffic.yesterday_date)}` : "Page views yesterday"}
+              sub={
+                traffic?.yesterday_date
+                  ? `${viewNounCap} on ${formatDateUS(traffic.yesterday_date)}`
+                  : `${viewNounCap} yesterday`
+              }
             />
             <KpiCard
               label="Last 7 days"
               value={traffic?.views_last_7_days ?? 0}
-              sub="Page views this week"
+              sub={`${viewNounCap} this week`}
               accent="violet"
             />
             <KpiCard
               label="Last 30 days"
               value={traffic?.views_last_30_days ?? 0}
-              sub="Page views this month"
+              sub={`${viewNounCap} this month`}
             />
             <KpiCard
-              label="All-time views"
+              label={partnerMode ? "All-time visits" : "All-time views"}
               value={traffic?.total_views ?? 0}
-              sub="Total page views"
+              sub={partnerMode ? "Total link visits" : "Total page views"}
               accent="emerald"
             />
             <KpiCard
               label="Live now"
               value={traffic?.live_sessions_30m ?? 0}
-              sub="People on your event page right now"
+              sub={
+                partnerMode
+                  ? "People on this partner link right now (updates while the page is open)"
+                  : "People on your event page right now (updates while the page is open)"
+              }
               accent="rose"
             />
           </div>
 
-          <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-1">
+          <div className="hide-scrollbar flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5 lg:flex-wrap lg:rounded-none lg:border-b lg:border-slate-200 lg:bg-transparent lg:p-0 lg:pb-1">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition lg:min-h-0 lg:rounded-full lg:py-2 ${
                   activeTab === tab.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
@@ -606,12 +693,20 @@ export default function OrganizerInsightsPanel({
           {activeTab === "traffic" ? (
             <div className="grid min-w-0 gap-5 lg:grid-cols-2">
               <SectionCard
-                title="Views over time"
-                hint="Daily page views for the last 30 days. Drag the slider under the chart to focus on a date range."
+                title={partnerMode ? "Visits over time" : "Views over time"}
+                hint={
+                  partnerMode
+                    ? "Daily opens of this partner link for the last 30 days. Drag the slider under the chart to focus on a date range."
+                    : "Daily page views for the last 30 days. Drag the slider under the chart to focus on a date range."
+                }
               >
                 <ViewsOverTimeChart
                   data={timeSeries}
-                  emptyMessage="No view data yet. Share your event link to start collecting insights."
+                  emptyMessage={
+                    partnerMode
+                      ? "No link visits yet. Share this partner link to start collecting insights."
+                      : "No view data yet. Share your event link to start collecting insights."
+                  }
                 />
               </SectionCard>
 
@@ -619,8 +714,8 @@ export default function OrganizerInsightsPanel({
                 title={hourlySectionTitle}
                 hint={
                   hourlyChartMeta.is_today
-                    ? `Views by hour today${hourlyChartMeta.timezone_label ? ` (${hourlyChartMeta.timezone_label})` : ""}. The highlighted bar is the current hour and refreshes automatically.`
-                    : `Views by hour on ${formatDateUS(hourlyChartMeta.selected_date)}${hourlyChartMeta.timezone_label ? ` (${hourlyChartMeta.timezone_label})` : ""}. Total: ${hourlyChartMeta.day_total_views ?? "—"} page views.`
+                    ? `${viewNounCap} by hour today${hourlyChartMeta.timezone_label ? ` (${hourlyChartMeta.timezone_label})` : ""}. Current hour includes live visits until standard data catches up. Total: ${hourlyChartMeta.day_total_views ?? hourlyData.reduce((s, r) => (r.isFuture ? s : s + (Number(r.views) || 0)), 0)} ${viewNoun}.`
+                    : `${viewNounCap} by hour on ${formatDateUS(hourlyChartMeta.selected_date)}${hourlyChartMeta.timezone_label ? ` (${hourlyChartMeta.timezone_label})` : ""}. Total: ${hourlyChartMeta.day_total_views ?? "—"} ${viewNoun}.`
                 }
               >
                 {hourlyDateOptions.length > 1 ? (
@@ -636,7 +731,7 @@ export default function OrganizerInsightsPanel({
                             setHourlyDate(opt.date);
                             void loadInsights({ hourlyDate: opt.date });
                           }}
-                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold transition lg:min-h-0 lg:py-1.5 ${
                             active
                               ? "bg-slate-900 text-white"
                               : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -663,11 +758,13 @@ export default function OrganizerInsightsPanel({
               <SectionCard
                 title="Engagement"
                 hint={
-                  isPlatform
-                    ? "Listing clicks count when someone opens your event from a card (image, title, or View Details). Bookings and cart totals come from your live sales."
-                    : realtimeProxy
-                      ? "Click counts will appear shortly after more people visit your event."
-                      : "Ticket and partner link clicks on your event page (last 30 days)."
+                  partnerMode
+                    ? "Link opens and bookings attributed to this partner link."
+                    : isPlatform
+                      ? "Listing clicks count when someone opens your event from a card (image, title, or View Details). Bookings and cart totals come from your live sales."
+                      : realtimeProxy
+                        ? "Click counts will appear shortly after more people visit your event."
+                        : "Ticket and partner link clicks on your event page (last 30 days)."
                 }
               >
                 <EngagementMetrics
@@ -683,17 +780,21 @@ export default function OrganizerInsightsPanel({
               <SectionCard
                 title="Traffic sources"
                 hint={
-                  realtimeProxy
-                    ? "Where visitors found your event. This chart appears once enough traffic has been recorded."
-                    : "Where visitors found your event — search, social, direct links, and more."
+                  partnerMode
+                    ? "Traffic attributed to this partner link."
+                    : realtimeProxy
+                      ? "Where visitors found your event. This chart appears once enough traffic has been recorded."
+                      : "Where visitors found your event — search, social, direct links, and more."
                 }
               >
                 <HorizontalBarChart
                   data={sourceData}
                   emptyMessage={
-                    realtimeProxy
-                      ? "Traffic sources will show up soon. Share your event link to get started."
-                      : "No source data yet. Share your event link to see where visitors come from."
+                    partnerMode
+                      ? "No partner-link traffic yet."
+                      : realtimeProxy
+                        ? "Traffic sources will show up soon. Share your event link to get started."
+                        : "No source data yet. Share your event link to see where visitors come from."
                   }
                 />
               </SectionCard>
@@ -737,8 +838,15 @@ export default function OrganizerInsightsPanel({
                 <SharedEventBookingsPanel
                   eventId={activeEventId}
                   embedded
-                  title="Event bookings"
-                  subtitle="Reservations for the selected event. Scroll sideways on smaller screens to see every column."
+                  allowResend={!partnerMode}
+                  allowExport={allowBookingExport}
+                  fetchBookingsFn={fetchBookingsFn}
+                  title={partnerMode ? "Partner link bookings" : "Event bookings"}
+                  subtitle={
+                    partnerMode
+                      ? "Bookings completed through this partner link."
+                      : "Reservations for the selected event. Scroll sideways on smaller screens to see every column."
+                  }
                 />
               </div>
             </div>
@@ -772,7 +880,7 @@ export default function OrganizerInsightsPanel({
               <div className="lg:col-span-2">
               <SectionCard
                 title="Live right now"
-                hint="People viewing your event page in the last 30 minutes."
+                hint="People viewing your event page right now (counts drop shortly after they leave)."
               >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.98 }}
@@ -790,7 +898,7 @@ export default function OrganizerInsightsPanel({
                     <p className="text-sm font-semibold text-emerald-800">active users</p>
                     <p className="mt-1.5 max-w-md text-xs leading-relaxed text-emerald-800/75">
                       {traffic?.live_views_30m > 0
-                        ? `${traffic.live_views_30m} page view${traffic.live_views_30m === 1 ? "" : "s"} in the last 30 minutes`
+                        ? `${traffic.live_views_30m} active viewer${traffic.live_views_30m === 1 ? "" : "s"} on this event page`
                         : "Updates automatically while visitors browse your event"}
                     </p>
                   </div>

@@ -1,5 +1,17 @@
 const crypto = require("crypto");
 const { pool } = require("../config/db");
+const {
+  getGaReportingTimezone,
+  getCalendarDateString,
+  getCurrentHour,
+  getTimezoneShortLabel,
+  isValidCalendarDateString,
+  listHourlyDateOptions,
+  getZonedDayMysqlBounds,
+  getCalendarDateForInstant,
+  getZonedParts,
+  parseMysqlUtcDatetime
+} = require("../utils/gaReportingTimezone");
 
 function newInviteToken() {
   return crypto.randomUUID();
@@ -296,7 +308,8 @@ async function revokeShare(shareId, ownerUserId, conn) {
 }
 
 /**
- * Record a link hit; skip if same session already hit today for this event+code.
+ * Record every partner-link open as a visit.
+ * Unique visitors are derived separately via DISTINCT session_key.
  */
 async function recordLinkHit(
   { eventId, vendorCode, shareId = null, sessionKey, path = null, userAgent = null },
@@ -307,20 +320,6 @@ async function recordLinkHit(
   const session = String(sessionKey || "").trim().slice(0, 64);
   if (!code || !session) {
     return { recorded: false, skipped: true };
-  }
-
-  const [existing] = await runner.query(
-    `SELECT id
-     FROM event_vendor_link_hits
-     WHERE event_id = ?
-       AND vendor_code = ?
-       AND session_key = ?
-       AND created_at >= CURDATE()
-     LIMIT 1`,
-    [eventId, code, session]
-  );
-  if (existing[0]) {
-    return { recorded: false, skipped: true, reason: "already_counted_today" };
   }
 
   await runner.query(
@@ -336,47 +335,234 @@ async function recordLinkHit(
       userAgent ? String(userAgent).slice(0, 255) : null
     ]
   );
+  await touchLinkPresence(
+    { eventId, vendorCode: code, shareId, sessionKey: session },
+    runner
+  );
   return { recorded: true };
 }
 
-async function getHitInsights(eventId, vendorCode, conn) {
+/** Upsert live presence for a partner-link session (does not count as a visit). */
+async function touchLinkPresence(
+  { eventId, vendorCode, shareId = null, sessionKey },
+  conn
+) {
   const runner = conn || pool;
   const code = normalizeVendorCode(vendorCode);
-  const [rows] = await runner.query(
+  const session = String(sessionKey || "").trim().slice(0, 64);
+  if (!code || !session) {
+    return { touched: false };
+  }
+  try {
+    await runner.query(
+      `INSERT INTO event_vendor_link_presence
+        (event_id, vendor_code, share_id, session_key, last_seen_at, created_at)
+       VALUES (?, ?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE
+         last_seen_at = NOW(),
+         share_id = COALESCE(VALUES(share_id), share_id)`,
+      [eventId, code, shareId || null, session]
+    );
+    return { touched: true };
+  } catch (err) {
+    // Table may not exist yet on a host that has not run the presence migration.
+    if (err?.code === "ER_NO_SUCH_TABLE") {
+      return { touched: false, missing_table: true };
+    }
+    throw err;
+  }
+}
+
+/** Sessions with a heartbeat in the last `windowSeconds` (default 90s). */
+async function getLivePresenceCounts(eventId, vendorCode, { windowSeconds = 90 } = {}, conn) {
+  const runner = conn || pool;
+  const code = normalizeVendorCode(vendorCode);
+  const window = Math.max(30, Math.min(Number(windowSeconds) || 90, 300));
+  try {
+    const [rows] = await runner.query(
+      `SELECT
+         COUNT(*) AS live_sessions,
+         COUNT(*) AS live_hits
+       FROM event_vendor_link_presence
+       WHERE event_id = ?
+         AND vendor_code = ?
+         AND last_seen_at >= DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+      [eventId, code, window]
+    );
+    const row = rows[0] || {};
+    return {
+      live_sessions: Number(row.live_sessions) || 0,
+      live_hits: Number(row.live_hits) || 0,
+      window_seconds: window
+    };
+  } catch (err) {
+    if (err?.code === "ER_NO_SUCH_TABLE") {
+      return { live_sessions: 0, live_hits: 0, window_seconds: window, missing_table: true };
+    }
+    throw err;
+  }
+}
+
+async function getHitInsights(eventId, vendorCode, { hourlyDate = null } = {}, conn) {
+  const runner = conn || pool;
+  const code = normalizeVendorCode(vendorCode);
+  const tz = getGaReportingTimezone();
+  const tzLabel = getTimezoneShortLabel(tz);
+  const todayStr = getCalendarDateString(0, tz);
+  const yesterdayStr = getCalendarDateString(-1, tz);
+  const rangeStartStr = getCalendarDateString(-29, tz);
+  const rangeStartBounds = getZonedDayMysqlBounds(rangeStartStr, tz);
+  const todayBounds = getZonedDayMysqlBounds(todayStr, tz);
+  const yesterdayBounds = getZonedDayMysqlBounds(yesterdayStr, tz);
+  const last7Bounds = getZonedDayMysqlBounds(getCalendarDateString(-6, tz), tz);
+  const last30Bounds = rangeStartBounds;
+
+  const [totals] = await runner.query(
     `SELECT
        COUNT(*) AS total_hits,
-       COUNT(DISTINCT session_key) AS unique_sessions,
-       SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS hits_last_7_days,
-       SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS hits_last_30_days,
-       SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END) AS hits_today
+       COUNT(DISTINCT session_key) AS unique_sessions
      FROM event_vendor_link_hits
      WHERE event_id = ? AND vendor_code = ?`,
     [eventId, code]
   );
-  const [trend] = await runner.query(
-    `SELECT DATE(created_at) AS day,
-            COUNT(*) AS hits,
-            COUNT(DISTINCT session_key) AS sessions
+
+  const [windowRows] = await runner.query(
+    `SELECT
+       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS hits_today,
+       SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS hits_yesterday,
+       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS hits_last_7_days,
+       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS hits_last_30_days
+     FROM event_vendor_link_hits
+     WHERE event_id = ? AND vendor_code = ?`,
+    [
+      todayBounds.fromMysql,
+      yesterdayBounds.fromMysql,
+      yesterdayBounds.toMysql,
+      last7Bounds.fromMysql,
+      last30Bounds.fromMysql,
+      eventId,
+      code
+    ]
+  );
+
+  const live = await getLivePresenceCounts(eventId, code, { windowSeconds: 90 }, runner);
+
+  const [recentHits] = await runner.query(
+    `SELECT created_at, session_key
      FROM event_vendor_link_hits
      WHERE event_id = ?
        AND vendor_code = ?
-       AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
-     GROUP BY DATE(created_at)
-     ORDER BY day ASC`,
-    [eventId, code]
+       AND created_at >= ?
+     ORDER BY created_at ASC`,
+    [eventId, code, rangeStartBounds.fromMysql]
   );
-  const row = rows[0] || {};
+
+  const trendMap = new Map();
+  for (const hit of recentHits || []) {
+    const instant = parseMysqlUtcDatetime(hit.created_at);
+    if (!instant) {
+      continue;
+    }
+    const day = getCalendarDateForInstant(instant, tz);
+    if (!trendMap.has(day)) {
+      trendMap.set(day, { hits: 0, sessions: new Set() });
+    }
+    const bucket = trendMap.get(day);
+    bucket.hits += 1;
+    if (hit.session_key) {
+      bucket.sessions.add(String(hit.session_key));
+    }
+  }
+
+  const trend = Array.from(trendMap.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([day, data]) => ({
+      day,
+      hits: data.hits,
+      sessions: data.sessions.size,
+      views: data.hits
+    }));
+
+  const availableDates = listHourlyDateOptions(7, tz);
+  let selectedDate = hourlyDate ? String(hourlyDate).slice(0, 10) : todayStr;
+  if (!isValidCalendarDateString(selectedDate)) {
+    selectedDate = todayStr;
+  }
+  if (!availableDates.some((opt) => opt.date === selectedDate)) {
+    selectedDate = todayStr;
+  }
+
+  const selectedBounds = getZonedDayMysqlBounds(selectedDate, tz);
+  const [dayHits] = await runner.query(
+    `SELECT created_at
+     FROM event_vendor_link_hits
+     WHERE event_id = ?
+       AND vendor_code = ?
+       AND created_at >= ?
+       AND created_at < ?`,
+    [eventId, code, selectedBounds.fromMysql, selectedBounds.toMysql]
+  );
+
+  const hourMap = new Map();
+  for (const hit of dayHits || []) {
+    const instant = parseMysqlUtcDatetime(hit.created_at);
+    if (!instant) {
+      continue;
+    }
+    const hour = getZonedParts(instant, tz).hour;
+    hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+  }
+
+  const currentHour = getCurrentHour(tz);
+  const isToday = selectedDate === todayStr;
+  const liveHits = Number(live.live_hits) || 0;
+  const hourly = Array.from({ length: 24 }, (_, hour) => {
+    const is_current_hour = isToday && hour === currentHour;
+    const is_future = isToday && hour > currentHour;
+    // Hits are written immediately — no GA-style lag. Do not mix presence
+    // (live_hits) into visit bars; only mark the current hour as live for styling.
+    const views = is_future ? 0 : hourMap.get(hour) || 0;
+    return {
+      hour,
+      views,
+      live_realtime: Boolean(is_current_hour && (views > 0 || liveHits > 0)),
+      is_current_hour,
+      is_future
+    };
+  });
+  const dayTotal = hourly.reduce(
+    (sum, row) => (row.is_future ? sum : sum + (Number(row.views) || 0)),
+    0
+  );
+
+  const totalRow = totals[0] || {};
+  const windowRow = windowRows[0] || {};
   return {
-    total_hits: Number(row.total_hits) || 0,
-    unique_sessions: Number(row.unique_sessions) || 0,
-    hits_last_7_days: Number(row.hits_last_7_days) || 0,
-    hits_last_30_days: Number(row.hits_last_30_days) || 0,
-    hits_today: Number(row.hits_today) || 0,
-    trend: (trend || []).map((t) => ({
-      day: t.day,
-      hits: Number(t.hits) || 0,
-      sessions: Number(t.sessions) || 0
-    }))
+    total_hits: Number(totalRow.total_hits) || 0,
+    unique_sessions: Number(totalRow.unique_sessions) || 0,
+    hits_last_7_days: Number(windowRow.hits_last_7_days) || 0,
+    hits_last_30_days: Number(windowRow.hits_last_30_days) || 0,
+    hits_today: Number(windowRow.hits_today) || 0,
+    hits_yesterday: Number(windowRow.hits_yesterday) || 0,
+    live_sessions_30m: Number(live.live_sessions) || 0,
+    live_hits_30m: Number(live.live_hits) || 0,
+    live_window_seconds: live.window_seconds || 90,
+    today_date: todayStr,
+    yesterday_date: yesterdayStr,
+    reporting_timezone: tz,
+    reporting_timezone_label: tzLabel,
+    trend,
+    hourly_today: hourly,
+    hourly_chart: {
+      selected_date: selectedDate,
+      today_date: todayStr,
+      available_dates: availableDates,
+      timezone: tz,
+      timezone_label: tzLabel,
+      is_today: isToday,
+      current_hour: currentHour,
+      day_total_views: dayTotal
+    }
   };
 }
 
@@ -501,6 +687,8 @@ module.exports = {
   acceptShareByToken,
   revokeShare,
   recordLinkHit,
+  touchLinkPresence,
+  getLivePresenceCounts,
   getHitInsights,
   getBookingInsightsForVendor,
   listBookingsForVendor

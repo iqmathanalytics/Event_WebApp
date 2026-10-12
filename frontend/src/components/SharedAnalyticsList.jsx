@@ -27,7 +27,16 @@ export default function SharedAnalyticsList({ onOpenEvent, selectedEventId = nul
   }, [load, reloadKey]);
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Loading shared events…</p>;
+    return (
+      <div className="space-y-3" aria-busy="true">
+        {[0, 1].map((i) => (
+          <div
+            key={i}
+            className="h-[4.5rem] animate-pulse rounded-2xl border border-slate-100 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100"
+          />
+        ))}
+      </div>
+    );
   }
 
   if (error) {
@@ -42,7 +51,7 @@ export default function SharedAnalyticsList({ onOpenEvent, selectedEventId = nul
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
         <p className="text-sm font-semibold text-slate-900">Nothing shared with you yet</p>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
           When another organizer invites you and you accept the email invitation, the event will show up here.
         </p>
       </div>
@@ -58,8 +67,9 @@ export default function SharedAnalyticsList({ onOpenEvent, selectedEventId = nul
             key={row.share_id || row.event_id}
             type="button"
             whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.985 }}
             onClick={() => onOpenEvent?.(row)}
-            className={`w-full rounded-2xl border px-4 py-3.5 text-left transition ${
+            className={`w-full min-h-11 rounded-2xl border px-4 py-3.5 text-left transition ${
               active
                 ? "border-slate-900 bg-slate-900 text-white shadow-soft"
                 : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
@@ -70,17 +80,17 @@ export default function SharedAnalyticsList({ onOpenEvent, selectedEventId = nul
                 <p className={`truncate text-sm font-semibold ${active ? "text-white" : "text-slate-900"}`}>
                   {row.title || `Event #${row.event_id}`}
                 </p>
-                <p className={`mt-1 text-xs ${active ? "text-white/75" : "text-slate-500"}`}>
+                <p className={`mt-1 text-xs leading-relaxed ${active ? "text-white/75" : "text-slate-500"}`}>
                   Shared by {row.owner?.name || row.owner?.email || "organizer"}
                   {row.event_date ? ` · ${formatDateUS(row.event_date)}` : ""}
                 </p>
               </div>
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                  active ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
+                  active ? "bg-white/15 text-white" : "bg-emerald-100 text-emerald-800"
                 }`}
               >
-                {row.status || "event"}
+                View only
               </span>
             </div>
           </motion.button>

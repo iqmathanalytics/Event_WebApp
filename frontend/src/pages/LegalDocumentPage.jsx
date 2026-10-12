@@ -48,7 +48,7 @@ function PrivacyBody() {
         <h2 className={headingClass}>Contact</h2>
         <p>
           Questions about privacy:{" "}
-          <a className="font-semibold text-brand-700 underline" href={`mailto:${BRAND_SUPPORT_EMAIL}`}>
+          <a className="inline-flex min-h-11 items-center font-semibold text-brand-700 underline lg:min-h-0" href={`mailto:${BRAND_SUPPORT_EMAIL}`}>
             {BRAND_SUPPORT_EMAIL}
           </a>
           .
@@ -99,7 +99,7 @@ function TermsBody() {
         <h2 className={headingClass}>Contact</h2>
         <p>
           Questions about these terms:{" "}
-          <a className="font-semibold text-brand-700 underline" href={`mailto:${BRAND_SUPPORT_EMAIL}`}>
+          <a className="inline-flex min-h-11 items-center font-semibold text-brand-700 underline lg:min-h-0" href={`mailto:${BRAND_SUPPORT_EMAIL}`}>
             {BRAND_SUPPORT_EMAIL}
           </a>
           .
@@ -128,27 +128,27 @@ function LegalDocumentPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="mx-auto max-w-3xl px-4 py-10 sm:py-14"
+      className="mx-auto max-w-3xl px-1 py-8 sm:px-4 sm:py-14 lg:px-4"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500">{BRAND_NAME}</p>
-      <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{title}</h1>
+      <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500 lg:text-[11px]">{BRAND_NAME}</p>
+      <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">{title}</h1>
       <p className="mt-2 text-sm text-slate-500">Last updated September 16, 2026</p>
-      <div className="mt-8 space-y-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+      <div className="mt-6 space-y-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-soft sm:mt-8 sm:p-8">
         {isPrivacy ? <PrivacyBody /> : <TermsBody />}
       </div>
       <p className="mt-6 text-sm text-slate-500">
         Also see our{" "}
         {isPrivacy ? (
-          <Link className="font-semibold text-brand-700 underline" to="/terms">
+          <Link className="inline-flex min-h-11 items-center font-semibold text-brand-700 underline lg:min-h-0" to="/terms">
             Terms of Service
           </Link>
         ) : (
-          <Link className="font-semibold text-brand-700 underline" to="/privacy">
+          <Link className="inline-flex min-h-11 items-center font-semibold text-brand-700 underline lg:min-h-0" to="/privacy">
             Privacy Policy
           </Link>
         )}{" "}
         and{" "}
-        <Link className="font-semibold text-brand-700 underline" to="/contact">
+        <Link className="inline-flex min-h-11 items-center font-semibold text-brand-700 underline lg:min-h-0" to="/contact">
           contact support
         </Link>
         .

@@ -11,9 +11,10 @@ import {
 } from "../utils/influencerSocial";
 import DealCard from "../components/DealCard";
 import DiscoverySectionCarousel from "../components/DiscoverySectionCarousel";
+import ListingEmptyState from "../components/ListingEmptyState";
 import LandingCarouselSlot from "../components/LandingCarouselSlot";
 import HeroSlideshow from "../components/HeroSlideshow";
-import HeroEventBadge from "../components/HeroEventBadge";
+import HeroEventBadge, { HeroEventMark } from "../components/HeroEventBadge";
 import LazyMount from "../components/LazyMount";
 import { useHomeEntry } from "../context/HomeEntryContext";
 import { fetchFeaturedEvents } from "../services/eventService";
@@ -23,6 +24,7 @@ import useCityFilter from "../hooks/useCityFilter";
 import { formatDateUS } from "../utils/format";
 import { getEventSortDate } from "../utils/eventSchedule";
 import { trackEventClick } from "../services/eventService";
+import { toDealCardItem } from "../utils/dealCardItem";
 import { pickHomeCarouselSix, pickLandingSectionCards } from "../utils/homeCarouselCuration";
 import {
   enrichEventWithCountdown,
@@ -134,14 +136,21 @@ function HomePage() {
             only_active: "true"
           })
         ]);
+        // Deals are sparse by city — if the selected city has none, still show
+        // active deals from other cities so the home section is not empty.
+        let dealRows = Array.isArray(dealsResponse?.data) ? dealsResponse.data : [];
+        if (selectedCity && dealRows.length === 0) {
+          dealsResponse = await fetchDeals({ sort: "popularity", only_active: "true" });
+          dealRows = Array.isArray(dealsResponse?.data) ? dealsResponse.data : [];
+        }
         if (selectedCity) {
           const inflRows = influencerResponse?.data || [];
-          const dealRows = dealsResponse?.data || [];
           if (inflRows.length === 0 && dealRows.length === 0) {
             [influencerResponse, dealsResponse] = await Promise.all([
               fetchInfluencers({ sort: "popularity" }),
               fetchDeals({ sort: "popularity", only_active: "true" })
             ]);
+            dealRows = Array.isArray(dealsResponse?.data) ? dealsResponse.data : [];
             if (active) {
               setSelectedCity("");
             }
@@ -154,7 +163,7 @@ function HomePage() {
         setLiveInfluencers(influencerRows.slice(0, 12));
 
         try {
-          const dealPool = (dealsResponse?.data || []).slice(0, 120);
+          const dealPool = dealRows.slice(0, 120);
           setLiveDeals(pickHomeCarouselSix(dealPool));
           setLandingDeals(pickLandingSectionCards(dealPool, { limit: 6 }));
         } catch (_dealErr) {
@@ -186,14 +195,14 @@ function HomePage() {
   const landingHandoffEase = [0.19, 1, 0.22, 1];
 
   const heroActionPill =
-    "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3.5 text-xs font-semibold leading-none transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:px-4 lg:h-9 lg:px-3.5 lg:text-xs";
+    "inline-flex h-11 w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3.5 text-sm font-semibold leading-none transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:px-4 lg:h-9 lg:w-auto lg:px-3.5 lg:text-xs";
   const heroActionGhost = `${heroActionPill} border border-white/30 bg-white/10 text-white backdrop-blur hover:bg-white/20`;
   const heroActionPrimary = `${heroActionPill} border border-white/20 bg-brand-600 text-white shadow-sm hover:bg-brand-700 lg:bg-gradient-to-r lg:from-rose-500 lg:via-fuchsia-500 lg:to-indigo-500 lg:shadow-[0_12px_28px_rgba(244,63,94,0.18)] lg:ring-1 lg:ring-white/15 lg:hover:-translate-y-0.5`;
 
   return (
     <>
       <motion.div
-        className="space-y-10 pb-8"
+        className="space-y-5 pb-8 lg:space-y-10"
         initial={false}
         animate={landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
         transition={{
@@ -203,9 +212,9 @@ function HomePage() {
         aria-hidden={!landingRevealed}
         style={{ pointerEvents: landingRevealed ? "auto" : "none" }}
       >
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-700 px-4 py-6 text-white sm:px-8 sm:py-7 lg:px-10 lg:py-7">
-        <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-stretch lg:gap-8">
-          <div className="flex min-h-0 flex-col lg:h-full lg:pr-2">
+      <section className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-700 px-3.5 py-3.5 text-white max-lg:-mx-3 sm:rounded-3xl sm:px-8 sm:py-7 lg:mx-0 lg:rounded-3xl lg:px-10 lg:py-7">
+        <div className="grid grid-cols-1 items-center gap-3.5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-stretch lg:gap-8">
+          <div className="order-2 flex min-h-0 flex-col lg:order-1 lg:h-full lg:pr-2">
             <div className="shrink-0 overflow-hidden">
               <AnimatePresence mode="wait">
                 <motion.h1
@@ -226,7 +235,7 @@ function HomePage() {
                       setHeroCopyStaggerDone(true);
                     }
                   }}
-                  className="max-w-2xl bg-gradient-to-br from-white via-white to-slate-200/90 bg-clip-text text-xl font-bold leading-snug text-transparent sm:text-3xl lg:text-4xl"
+                  className="max-w-2xl text-xl font-bold leading-snug text-white sm:text-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-slate-200/90 lg:bg-clip-text lg:text-4xl lg:text-transparent"
                 >
                   {heroNarrative.headline}
                 </motion.h1>
@@ -243,8 +252,8 @@ function HomePage() {
               ) : null}
             </div>
 
-            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3 sm:mt-4 lg:mt-4">
-              <div className="relative min-h-0 flex-1 overflow-hidden overscroll-none">
+            <div className="mt-3 flex min-h-0 flex-col gap-3 sm:mt-4 lg:mt-4 lg:flex-1">
+              <div className="relative min-h-0 lg:flex-1 lg:overflow-hidden lg:overscroll-none">
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={heroNarrative.subline}
@@ -268,7 +277,7 @@ function HomePage() {
                       ease: sleek
                     }}
                     style={{ willChange: "opacity" }}
-                    className="line-clamp-4 max-w-xl text-xs leading-relaxed text-slate-200/95 sm:text-sm lg:text-[14px] lg:leading-[1.65]"
+                    className="line-clamp-3 max-w-xl text-sm leading-relaxed text-slate-200/95 lg:line-clamp-4 lg:text-[14px] lg:leading-[1.65]"
                   >
                     {heroNarrative.subline}
                   </motion.p>
@@ -282,10 +291,12 @@ function HomePage() {
                 landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }
               }
               transition={{ duration: 0.65, delay: landingRevealed ? 0.48 : 0, ease: sleek }}
-              className="mt-6 flex shrink-0 flex-wrap items-center gap-2 sm:mt-8 lg:mt-4 lg:flex-nowrap lg:gap-2"
+              className="mt-4 grid w-full grid-cols-2 items-center gap-2 sm:mt-8 lg:mt-4 lg:flex lg:w-auto lg:flex-nowrap lg:gap-2"
             >
               {heroNarrative.detailPath && heroNarrative.variant ? (
-                <HeroEventBadge variant={heroNarrative.variant} alignActions />
+                <div className="hidden lg:contents">
+                  <HeroEventBadge variant={heroNarrative.variant} alignActions />
+                </div>
               ) : null}
               {heroNarrative.detailPath ? (
                 <button
@@ -294,18 +305,21 @@ function HomePage() {
                     trackEventClick(heroNarrative.detailPath.replace(/^\/events\//, "")).catch(() => {});
                     navigate(heroNarrative.detailPath);
                   }}
-                  className={heroActionGhost}
+                  className={`order-3 lg:order-none ${heroActionGhost}`}
                 >
                   View details
                 </button>
               ) : null}
-              <Link to="/events" className={`group relative overflow-hidden ${heroActionPrimary}`}>
+              <Link to="/events" className={`group relative order-2 col-span-2 overflow-hidden lg:order-none lg:col-auto ${heroActionPrimary}`}>
                 <span className="pointer-events-none absolute inset-0 hidden opacity-0 transition duration-300 group-hover:opacity-100 lg:block">
                   <span className="absolute -left-1/4 top-0 h-full w-1/2 -skew-x-12 bg-white/20 blur-sm" />
                 </span>
                 <span className="relative">Explore Events</span>
               </Link>
-              <Link to="/deals" className={`group relative overflow-hidden ${heroActionGhost}`}>
+              <Link
+                to="/deals"
+                className={`group relative overflow-hidden lg:order-none ${heroNarrative.detailPath ? "order-4" : "order-3 col-span-2 lg:col-auto"} ${heroActionGhost}`}
+              >
                 <span className="pointer-events-none absolute inset-0 hidden opacity-0 transition duration-300 group-hover:opacity-100 lg:block">
                   <span className="absolute inset-0 bg-gradient-to-r from-amber-400/20 via-rose-400/15 to-indigo-400/20" />
                 </span>
@@ -313,12 +327,20 @@ function HomePage() {
               </Link>
             </motion.div>
           </div>
-          <HeroSlideshow
-            featuredEvents={trendingEvents}
-            onHeroNarrativeChange={onHeroNarrativeChange}
-            gateReady={landingRevealed}
-            narrativeHoldMs={900}
-          />
+          <div className="relative order-1 lg:order-2">
+            {heroNarrative.detailPath && heroNarrative.variant ? (
+              <HeroEventMark
+                variant={heroNarrative.variant}
+                className="absolute left-3 top-3 z-20 lg:hidden"
+              />
+            ) : null}
+            <HeroSlideshow
+              featuredEvents={trendingEvents}
+              onHeroNarrativeChange={onHeroNarrativeChange}
+              gateReady={landingRevealed}
+              narrativeHoldMs={900}
+            />
+          </div>
         </div>
       </section>
 
@@ -374,7 +396,7 @@ function HomePage() {
                 );
               })
             : (
-              <p className="min-w-full text-sm text-slate-500">No events available right now.</p>
+              <ListingEmptyState message="No events available right now." actionLabel="Browse events" href="/events" />
             )}
       </DiscoverySectionCarousel>
 
@@ -421,7 +443,7 @@ function HomePage() {
                 );
               })
             : (
-              <p className="min-w-full text-sm text-slate-500">No influencers available right now.</p>
+              <ListingEmptyState message="No influencers available right now." actionLabel="Browse influencers" href="/influencers" />
             )}
       </DiscoverySectionCarousel>
 
@@ -438,21 +460,7 @@ function HomePage() {
                   <LazyMount>
                   <DealCard
                     variant="landing"
-                    item={{
-                      id: item.id,
-                      title: item.title,
-                      city: item.city_name || "City",
-                      tags: item.tags || [],
-                      discount: item.original_price
-                        ? Math.max(0, Math.round(((item.original_price - item.discounted_price) / item.original_price) * 100))
-                        : 0,
-                      originalPrice: item.original_price || item.discounted_price || 0,
-                      price: item.discounted_price || item.original_price || 0,
-                      image: item.image_url,
-                      dealInfo: item.terms_text || item.description || "",
-                      offerType: item.offer_type,
-                      offerMetaJson: item.offer_meta_json
-                    }}
+                    item={toDealCardItem(item)}
                     tags={item.tags || []}
                     isPremium={item.is_premium === 1 || item.is_premium === true}
                     showPremiumBadge
@@ -468,7 +476,7 @@ function HomePage() {
                 </LandingCarouselSlot>
               ))
             : (
-              <p className="min-w-full text-sm text-slate-500">No deals available right now.</p>
+              <ListingEmptyState message="No deals available right now." actionLabel="Browse deals" href="/deals" />
             )}
       </DiscoverySectionCarousel>
 

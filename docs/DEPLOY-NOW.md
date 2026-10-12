@@ -5,10 +5,22 @@ Database is already migrated on **production TiDB**. MilesWeb only runs the API 
 ## 1. On your PC (one command)
 
 ```bash
-npm run deploy:milesweb:build
+npm run deploy:milesweb
 ```
 
-This writes `deploy/milesweb-api.env` and builds `frontend/dist/`.
+This writes production env helpers, builds `frontend/dist/`, and creates:
+
+- `deploy/milesweb-api.zip`
+- `deploy/milesweb-frontend.zip`
+- `deploy/milesweb-api.env` (upload as API `.env` — do not put in the public zip)
+
+Or build only: `npm run deploy:milesweb:build`
+
+**Also run against production TiDB** (new tables for vendor + live presence):
+
+```bash
+npm run db:migrate:production
+```
 
 ## 2. MilesWeb — Node.js API (`api.bookmytickets.us`)
 

@@ -2,23 +2,19 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import { useRouteContentReadyContext } from "../context/RouteContentReadyContext";
+import { shouldShowHomeSplash } from "../utils/homeSplashPolicy";
 import AppLoadingOverlay from "./AppLoadingOverlay";
 
 const MIN_OVERLAY_AFTER_READY_MS = 280;
 const MIN_OVERLAY_AFTER_READY_MS_REDUCED = 180;
 const OVERLAY_SAFETY_MS = 12000;
 
-function pathIsHome(p) {
-  return p === "/" || p === "";
-}
-
 /**
- * Full-page route transition overlay.
- * - Shown for any navigation whose destination is NOT the landing page (/).
- * - Hidden when navigating *to* home (any page → /), so returning to the landing page stays instant.
- * - Dismisses after the destination route signals readiness (data + paint), plus a short minimum hold.
- * - z-index above dashboard modals so it is visible when leaving popups (e.g. hosting workspace).
- * - Query/hash-only updates on the same pathname (e.g. dashboard host tabs) do NOT show the overlay.
+ * Full-page route transition overlay (AppLoadingOverlay).
+ * - Client navigations between pages (including → home)
+ * - Hard reload / cold load on any page (home keeps its dedicated boot splash)
+ * - Dismisses after the destination signals readiness (+ short minimum hold)
+ * - Query/hash-only updates on the same pathname do NOT show the overlay
  */
 function NavigationProgress() {
   const location = useLocation();
@@ -33,6 +29,10 @@ function NavigationProgress() {
     if (firstPaint.current) {
       firstPaint.current = false;
       prevPathnameRef.current = location.pathname;
+      // Hard reload / direct open on any route. Home already has #bmt-boot-splash.
+      if (!shouldShowHomeSplash()) {
+        setOverlay({ key: location.key, startedAt: Date.now() });
+      }
       return undefined;
     }
 
@@ -42,11 +42,6 @@ function NavigationProgress() {
 
     // Same page, different ?host= / filters — keep tab switches instant (no reload overlay).
     if (!pathChanged) {
-      return undefined;
-    }
-
-    if (pathIsHome(to)) {
-      setOverlay(null);
       return undefined;
     }
 

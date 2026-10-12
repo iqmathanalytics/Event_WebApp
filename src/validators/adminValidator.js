@@ -104,6 +104,7 @@ const editListingSchema = z.object({
     deal_event_discount_code: z.union([z.string().max(80), z.null()]).optional(),
     ticket_levels: z.array(ticketLevelSchema).max(12).optional(),
     ticket_levels_json: z.union([z.array(ticketLevelSchema).max(12), z.string().max(50000)]).optional(),
+    ticket_tiers_sort: z.enum(["price_asc", "price_desc"]).optional(),
     expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     website_or_social_link: z.string().url().max(500).optional(),
     profile_image_url: z.string().url().max(500).optional()

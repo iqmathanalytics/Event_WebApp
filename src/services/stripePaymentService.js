@@ -10,7 +10,8 @@ const { findEventById } = require("../models/eventModel");
 const {
   resolveEventBookingPricing,
   resolveGuestEventBookingPricing,
-  dispatchBookingEmails
+  dispatchBookingEmails,
+  retryUnsentBookingEmailsForPaymentIntent
 } = require("./bookingService");
 const seatsioService = require("./seatsioService");
 const { ensureGuestUserAccount } = require("./guestAccountService");
@@ -252,8 +253,13 @@ async function createPaymentIntentForGuestBooking({ payload }) {
 async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChargeId = null }) {
   const existingBooking = await findBookingByPaymentIntentId(paymentIntentId);
   if (existingBooking) {
-    const checkout = await checkoutPaymentModel.findByPaymentIntentId(paymentIntentId);
-    const payload = checkout ? parsePayloadJson(checkout.payload_json) : null;
+    await retryUnsentBookingEmailsForPaymentIntent(paymentIntentId).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[stripe] retry unsent booking emails failed:",
+        err?.message || err
+      );
+    });
     return {
       alreadyFulfilled: true,
       bookingId: existingBooking.id,
@@ -274,9 +280,9 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
     throw new ApiError(403, "This guest payment cannot be confirmed with a signed-in account.");
   }
 
-  if (checkout.status === "failed" || checkout.status === "canceled") {
-    throw new ApiError(400, "This payment did not complete. Please start checkout again.");
-  }
+  // Stripe success is authoritative. payment_intent.payment_failed may have marked this
+  // checkout failed (or canceled) before the same PaymentIntent later succeeded.
+  // Do not block fulfillment in that case — booking creation is still idempotent by PI id.
 
   const payload = parsePayloadJson(checkout.payload_json);
   if (!payload) {
@@ -355,13 +361,35 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
         ? payload.selected_seats
         : [];
     const seatsHoldToken = pricing.seatsioHoldToken || payload.seatsio_hold_token || null;
-    if (seatsHoldToken && seatsToBook.length) {
-      await seatsioService.bookSeatsForCheckout({
-        event: pricing.event,
-        holdToken: seatsHoldToken,
-        selectedSeats: seatsToBook,
-        bookingId
-      });
+    if (seatsToBook.length && pricing.event) {
+      if (seatsHoldToken) {
+        try {
+          await seatsioService.bookSeatsForCheckout({
+            event: pricing.event,
+            holdToken: seatsHoldToken,
+            selectedSeats: seatsToBook,
+            bookingId
+          });
+        } catch (seatErr) {
+          // Hold often expires while the guest retries the card; payment already succeeded.
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[stripe] seat hold book failed; booking without hold:",
+            seatErr?.message || seatErr
+          );
+          await seatsioService.bookSoldSeatsWithoutHold({
+            event: pricing.event,
+            selectedSeats: seatsToBook,
+            bookingId
+          });
+        }
+      } else {
+        await seatsioService.bookSoldSeatsWithoutHold({
+          event: pricing.event,
+          selectedSeats: seatsToBook,
+          bookingId
+        });
+      }
     }
 
     if (holdToken && pricing.couponId && checkout.user_id) {
@@ -424,6 +452,77 @@ async function markCheckoutCanceled(paymentIntentId) {
   await checkoutPaymentModel.updateCheckoutStatus(paymentIntentId, {
     status: "canceled"
   });
+}
+
+/**
+ * Guest closed the card form without paying — cancel the open PaymentIntent in Stripe
+ * so it does not linger as "Incomplete" in the dashboard.
+ */
+async function cancelAbandonedPaymentIntent({ paymentIntentId, userId = null, isGuest = false }) {
+  const stripe = assertStripeConfigured();
+  const id = String(paymentIntentId || "").trim();
+  if (!id) {
+    throw new ApiError(400, "Payment session is missing.");
+  }
+
+  const checkout = await checkoutPaymentModel.findByPaymentIntentId(id);
+  if (!checkout) {
+    throw new ApiError(404, "Checkout session not found for this payment.");
+  }
+  if (checkout.status === "succeeded" || checkout.booking_id) {
+    return { canceled: false, reason: "already_succeeded", status: checkout.status };
+  }
+
+  const checkoutIsGuest = checkout.user_id == null;
+  if (isGuest || checkoutIsGuest) {
+    if (!checkoutIsGuest) {
+      throw new ApiError(403, "This payment is not a guest checkout session.");
+    }
+  } else if (userId != null && Number(checkout.user_id) !== Number(userId)) {
+    throw new ApiError(403, "This payment belongs to another account.");
+  }
+
+  let pi;
+  try {
+    pi = await stripe.paymentIntents.retrieve(id);
+  } catch (err) {
+    throw new ApiError(502, err?.message || "Could not load payment from Stripe.");
+  }
+
+  if (pi.status === "succeeded") {
+    return { canceled: false, reason: "stripe_succeeded", status: pi.status };
+  }
+  if (pi.status === "canceled") {
+    await markCheckoutCanceled(id);
+    return { canceled: true, reason: "already_canceled", status: pi.status };
+  }
+
+  const cancelable = new Set([
+    "requires_payment_method",
+    "requires_confirmation",
+    "requires_action",
+    "requires_capture",
+    "processing"
+  ]);
+  if (!cancelable.has(pi.status)) {
+    return { canceled: false, reason: "not_cancelable", status: pi.status };
+  }
+
+  try {
+    pi = await stripe.paymentIntents.cancel(id, {
+      cancellation_reason: "abandoned"
+    });
+  } catch (err) {
+    // Race: payment may have succeeded between retrieve and cancel.
+    const latest = await stripe.paymentIntents.retrieve(id).catch(() => null);
+    if (latest?.status === "succeeded") {
+      return { canceled: false, reason: "stripe_succeeded", status: "succeeded" };
+    }
+    throw new ApiError(502, err?.message || "Could not cancel payment.");
+  }
+
+  await markCheckoutCanceled(id);
+  return { canceled: true, reason: "canceled", status: pi.status };
 }
 
 async function handleStripeWebhookEvent(event) {
@@ -537,6 +636,7 @@ module.exports = {
   fulfillPaymentIntent,
   confirmPaymentForUser,
   confirmPaymentForGuest,
+  cancelAbandonedPaymentIntent,
   handleStripeWebhookEvent,
   markCheckoutFailed,
   markCheckoutCanceled

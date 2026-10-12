@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useReducedMotion } from "framer-motion";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, EffectFade, Navigation, Pagination } from "swiper/modules";
 import { buildHeroNarrativeFromSlide } from "../utils/heroSlideCopy";
@@ -110,6 +111,7 @@ function HeroSlideshow({
   narrativeHoldMs = DEFAULT_NARRATIVE_HOLD_MS
 }) {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const introHoldTimerRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -223,26 +225,28 @@ function HeroSlideshow({
     </>
   );
 
+  const autoplayOpts =
+    gateReady && !reduceMotion
+      ? {
+          delay: isDesktop ? 4200 : 4000,
+          disableOnInteraction: false,
+          pauseOnMouseEnter: false,
+          waitForTransition: true
+        }
+      : false;
+
   const mobileSwiper = (
     <Swiper
-      key={`hero-m-${swiperRemountKey}`}
-      modules={[Autoplay, EffectFade]}
+      key={`hero-m-${swiperRemountKey}-${reduceMotion ? "rm" : "m"}`}
+      modules={[Autoplay, EffectFade, Pagination]}
       effect="fade"
       fadeEffect={{ crossFade: true }}
-      loop={canLoop}
-      speed={850}
-      autoplay={
-        gateReady
-          ? {
-              delay: 4000,
-              disableOnInteraction: false,
-              pauseOnMouseEnter: false,
-              waitForTransition: true
-            }
-          : false
-      }
+      loop={canLoop && !reduceMotion}
+      speed={reduceMotion ? 0 : 850}
+      pagination={{ clickable: true }}
+      autoplay={autoplayOpts}
       watchSlidesProgress
-      className="block h-full w-full lg:hidden"
+      className="hero-swiper-mobile block h-full w-full lg:hidden"
       onSlideChange={emitSlide}
     >
       {effectiveSlides.map((slide, idx) => (
@@ -257,20 +261,11 @@ function HeroSlideshow({
 
   const desktopSwiper = (
     <Swiper
-      key={`hero-d-${swiperRemountKey}`}
+      key={`hero-d-${swiperRemountKey}-${reduceMotion ? "rm" : "m"}`}
       modules={[Autoplay, Navigation, Pagination]}
-      loop={canLoop}
-      speed={850}
-      autoplay={
-        gateReady
-          ? {
-              delay: 4200,
-              disableOnInteraction: false,
-              pauseOnMouseEnter: false,
-              waitForTransition: true
-            }
-          : false
-      }
+      loop={canLoop && !reduceMotion}
+      speed={reduceMotion ? 0 : 850}
+      autoplay={autoplayOpts}
       pagination={{ clickable: true, dynamicBullets: true }}
       navigation
       watchSlidesProgress

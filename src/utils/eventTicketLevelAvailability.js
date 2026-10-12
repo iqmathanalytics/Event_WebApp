@@ -1,7 +1,8 @@
 const {
   parseTicketLevelsFromEvent,
   filterActiveTicketLevelsForCheckout,
-  enrichTicketLevelAvailability
+  enrichTicketLevelAvailability,
+  sortTicketLevelsForDisplay
 } = require("./eventTicketLevels");
 const { countBookedTicketsByLevelForEvent } = require("../models/bookingModel");
 
@@ -16,8 +17,9 @@ async function attachTicketLevelAvailability(event, options = {}) {
 
   const activeLevels = filterActiveTicketLevelsForCheckout(allLevels);
   const bookedByLevel = await countBookedTicketsByLevelForEvent(event.id, options);
-  const enriched = activeLevels.map((level) =>
-    enrichTicketLevelAvailability(level, bookedByLevel.get(level.id) || 0)
+  const enriched = sortTicketLevelsForDisplay(
+    activeLevels.map((level) => enrichTicketLevelAvailability(level, bookedByLevel.get(level.id) || 0)),
+    event.ticket_tiers_sort
   );
 
   return {

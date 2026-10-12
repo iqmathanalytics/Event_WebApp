@@ -67,12 +67,21 @@ const checkoutConfigFields = {
   vendor_discount_value: z.coerce.number().min(0).max(100000).optional(),
   coupon_codes_enabled: boolish,
   sponsor_inquiry_enabled: boolish,
+  influencer_partner_enabled: boolish,
   sponsor_tickets_enabled: boolish,
   sponsor_contact_email: z.preprocess(
     (v) => (v === null || v === "" ? undefined : v),
     z.string().trim().email().max(190).optional()
   ),
   sponsor_contact_phone: z.preprocess(
+    (v) => (v === null || v === "" ? undefined : String(v).trim()),
+    z.string().min(7).max(40).optional()
+  ),
+  influencer_partner_contact_email: z.preprocess(
+    (v) => (v === null || v === "" ? undefined : v),
+    z.string().trim().email().max(190).optional()
+  ),
+  influencer_partner_contact_phone: z.preprocess(
     (v) => (v === null || v === "" ? undefined : String(v).trim()),
     z.string().min(7).max(40).optional()
   ),
@@ -110,6 +119,24 @@ function refineCheckoutConfigFields(data, ctx) {
         code: z.ZodIssueCode.custom,
         path: ["sponsor_contact_phone"],
         message: "Sponsor contact phone is required when sponsor inquiries are enabled"
+      });
+    }
+  }
+  if (data.influencer_partner_enabled === true) {
+    const email = String(data.influencer_partner_contact_email || "").trim();
+    const phone = String(data.influencer_partner_contact_phone || "").trim();
+    if (!email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["influencer_partner_contact_email"],
+        message: "Influencer partner contact email is required when influencer partner is enabled"
+      });
+    }
+    if (!phone) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["influencer_partner_contact_phone"],
+        message: "Influencer partner contact phone is required when influencer partner is enabled"
       });
     }
   }
@@ -163,6 +190,7 @@ const submitEventBodySchema = z
     deal_event_discount_code: z.string().max(80).optional(),
     ticket_levels: ticketLevelsField,
     ticket_levels_json: ticketLevelsField,
+    ticket_tiers_sort: z.enum(["price_asc", "price_desc"]).optional(),
     ...checkoutConfigFields
   })
   .superRefine((data, ctx) => {
@@ -288,6 +316,16 @@ const trackEventAnalyticsSchema = z.object({
   })
 });
 
+const trackEventPresenceSchema = z.object({
+  body: z.object({
+    session_key: z.string().trim().min(8).max(64)
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: publicListingParamSchema
+  })
+});
+
 const editOwnEventBodySchema = z
   .object({
     title: z.string().min(3).max(220).optional(),
@@ -327,6 +365,7 @@ const editOwnEventBodySchema = z
     deal_event_discount_code: z.string().max(80).optional(),
     ticket_levels: ticketLevelsField,
     ticket_levels_json: ticketLevelsField,
+    ticket_tiers_sort: z.enum(["price_asc", "price_desc"]).optional(),
     ...checkoutConfigFields
   })
   .superRefine((data, ctx) => {
@@ -410,5 +449,6 @@ module.exports = {
   editOwnEventSchema,
   deleteOwnEventSchema,
   trackEventAnalyticsSchema,
+  trackEventPresenceSchema,
   ticketLevelSchema
 };

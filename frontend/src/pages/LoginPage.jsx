@@ -82,7 +82,7 @@ function LoginPage() {
 
   return (
     <div className="w-full">
-      <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-6 sm:gap-7 lg:grid lg:min-h-[min(54rem,calc(100svh-6rem))] lg:grid-cols-[min(100%,26.5rem)_minmax(0,1fr)] lg:grid-rows-1 lg:items-stretch lg:gap-7 xl:min-h-[min(56rem,calc(100svh-5.5rem))] xl:grid-cols-[27.5rem_minmax(0,1fr)] xl:gap-8">
+      <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-5 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:gap-7 lg:grid lg:min-h-[min(54rem,calc(100svh-6rem))] lg:grid-cols-[min(100%,26.5rem)_minmax(0,1fr)] lg:grid-rows-1 lg:items-stretch lg:gap-7 lg:pb-0 xl:min-h-[min(56rem,calc(100svh-5.5rem))] xl:grid-cols-[27.5rem_minmax(0,1fr)] xl:gap-8">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -127,7 +127,7 @@ function LoginPage() {
                   <button
                     type="submit"
                     disabled={forgotLoading}
-                    className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:opacity-60"
+                    className="min-h-11 w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:opacity-60 lg:min-h-0"
                   >
                     {forgotLoading ? "Sending..." : "Send reset link"}
                   </button>
@@ -138,7 +138,7 @@ function LoginPage() {
                       setForgotError("");
                       setForgotMessage("");
                     }}
-                    className="w-full text-center text-sm font-semibold text-slate-600 transition hover:text-slate-900"
+                    className="inline-flex min-h-11 w-full items-center justify-center text-sm font-semibold text-slate-600 transition hover:text-slate-900 lg:min-h-0"
                   >
                     Back to sign in
                   </button>
@@ -196,7 +196,7 @@ function LoginPage() {
                       setForgotMessage("");
                       setError("");
                     }}
-                    className="text-xs font-semibold text-brand-600 underline-offset-2 hover:underline"
+                    className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-600 underline-offset-2 hover:underline lg:min-h-0 lg:text-xs"
                   >
                     Forgot password?
                   </button>
@@ -204,7 +204,7 @@ function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading || googleLoading}
-                  className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:opacity-60"
+                  className="min-h-11 w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:bg-brand-700 disabled:opacity-60 lg:min-h-0"
                 >
                   {loading ? "Signing in..." : "Sign in"}
                 </button>
@@ -261,11 +261,11 @@ function LoginPage() {
             <div className="relative z-[1] shrink-0 border-t border-slate-200/70 bg-white px-5 py-4 text-center sm:px-7 sm:py-4 lg:px-6 xl:px-7">
               <p className="text-sm leading-normal text-slate-600">
                 New here?{" "}
-                <Link to="/register" className="font-semibold text-brand-600 underline-offset-2 hover:underline">
+                <Link to="/register" className="inline-flex min-h-11 items-center font-semibold text-brand-600 underline-offset-2 hover:underline lg:min-h-0">
                   Create an account
                 </Link>
               </p>
-              <Link to="/" className="mt-2 inline-block text-xs font-medium text-slate-500 transition hover:text-slate-800">
+              <Link to="/" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-slate-500 transition hover:text-slate-800 lg:min-h-0 lg:text-xs">
                 ← Back to home
               </Link>
             </div>
@@ -276,7 +276,7 @@ function LoginPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.32, ease: "easeOut", delay: 0.05 }}
-          className="flex min-h-[min(58vh,420px)] w-full min-w-0 flex-col sm:min-h-[min(60vh,460px)] lg:h-full lg:min-h-0"
+          className="flex min-h-[min(40vh,300px)] w-full min-w-0 flex-col overflow-hidden rounded-3xl sm:min-h-[min(48vh,360px)] lg:mb-0 lg:h-full lg:min-h-0 lg:rounded-none"
         >
           <LoginDiscoverGallery />
         </motion.div>

@@ -36,7 +36,7 @@ function StatusBadge({ status, desktopPop = false }) {
         : "bg-amber-100 text-amber-800 ring-1 ring-amber-200/80";
   return (
     <span
-      className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide sm:text-xs ${base} ${
+      className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${base} ${
         desktopPop ? "lg:px-3.5 lg:py-1.5 lg:text-[11px] lg:tracking-wider lg:shadow-sm" : ""
       }`}
     >
@@ -60,7 +60,7 @@ function ModalShell({ title, children, onClose, footer, onSubmit }) {
         className="fixed inset-0 z-[220] bg-slate-950/65 backdrop-blur-[1px]"
         onClick={onClose}
       />
-      <div className="fixed inset-0 z-[221] flex items-center justify-center p-3 sm:p-5">
+      <div className="fixed inset-0 z-[221] flex items-stretch justify-center p-0 lg:items-center lg:p-5">
         <motion.form
           key="modal-content"
           onSubmit={onSubmit}
@@ -68,7 +68,7 @@ function ModalShell({ title, children, onClose, footer, onSubmit }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           onClick={(e) => e.stopPropagation()}
-          className="popup-modal flex h-[min(90vh,820px)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+          className="popup-modal flex h-[100dvh] max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl lg:h-[min(90vh,820px)] lg:max-h-none lg:rounded-3xl"
         >
           <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
             <div className="flex items-center justify-between gap-3">
@@ -76,7 +76,7 @@ function ModalShell({ title, children, onClose, footer, onSubmit }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                className="inline-flex min-h-11 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:min-h-0 lg:py-1 lg:text-xs"
               >
                 Close
               </button>
@@ -95,7 +95,7 @@ function FormField({ label, hint, example, className = "", children }) {
   return (
     <div className={`block ${className}`}>
       <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
-      <span className="mb-1 inline-flex items-center gap-1 text-[11px] text-slate-500">
+      <span className="mb-1 inline-flex items-center gap-1 text-xs text-slate-500 lg:text-[11px]">
         <FiInfo className="text-slate-400" />
         {hint}
         {example ? <span className="text-slate-400">Example: {example}</span> : null}
@@ -213,7 +213,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
     </div>
   ) : (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 lg:items-end lg:gap-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
         <div className="min-w-0 lg:max-w-3xl">
           <p className="hidden text-[11px] font-bold uppercase tracking-[0.22em] text-brand-600 lg:block">Submission center</p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl lg:tracking-tight">
@@ -226,7 +226,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
         {showBackToHub ? (
           <Link
             to="/dashboard/user"
-            className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 lg:rounded-2xl lg:px-5 lg:py-2.5 lg:shadow-md lg:shadow-slate-900/5"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 lg:min-h-0 lg:rounded-2xl lg:px-5 lg:py-2.5 lg:shadow-md lg:shadow-slate-900/5"
           >
             <ArrowLeft className="hidden h-4 w-4 lg:inline" aria-hidden />
             Back to My Hub
@@ -287,32 +287,32 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
 
       {!loadingSubmissions && (myInfluencerSubmissions.length > 0 || myDealSubmissions.length > 0) ? (
         <div className="lg:hidden">
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2">
+          <div className="hide-scrollbar flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
             <button
               type="button"
               onClick={() => setActiveSubmissionsTab("influencers")}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+              className={`inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition ${
                 activeSubmissionsTab === "influencers"
                   ? "bg-slate-900 text-white"
                   : "bg-slate-50 text-slate-700 hover:bg-slate-100"
               }`}
             >
               Creator profiles
-              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+              <span className="rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold">
                 {myInfluencerSubmissions.length}
               </span>
             </button>
             <button
               type="button"
               onClick={() => setActiveSubmissionsTab("deals")}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+              className={`inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition ${
                 activeSubmissionsTab === "deals"
                   ? "bg-slate-900 text-white"
                   : "bg-slate-50 text-slate-700 hover:bg-slate-100"
               }`}
             >
               Offers
-              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+              <span className="rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold">
                 {myDealSubmissions.length}
               </span>
             </button>
@@ -352,7 +352,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
             {myInfluencerSubmissions.map((item) => (
               <div
                 key={`influencer-submission-${item.id}`}
-                className={`relative flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3.5 shadow-sm sm:flex-row sm:items-start sm:justify-between ${
+                className={`relative flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3.5 shadow-sm lg:flex-row lg:items-start lg:justify-between ${
                   embedded
                     ? ""
                     : "lg:group lg:border-slate-200/90 lg:bg-white/80 lg:p-4 lg:shadow-sm lg:transition-all lg:hover:border-fuchsia-200/80 lg:hover:shadow-md"
@@ -393,10 +393,10 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                       {item.name}
                     </p>
                     <div className={`mt-2 flex flex-col gap-2 ${!embedded ? "lg:hidden" : ""}`}>
-                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 lg:text-[11px]">
                         {item.city_name || "City"} • {item.category_name || "Category"}
                       </span>
-                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 lg:text-[11px]">
                         Submitted {formatReadableDate(item.created_at)}
                       </span>
                     </div>
@@ -422,8 +422,8 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                     ) : null}
                     {item.status === "rejected" && item.review_note ? (
                       <p
-                        className={`mt-2 break-words rounded-xl bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 ${
-                          embedded ? "" : "lg:mt-3 lg:border lg:border-rose-100 lg:bg-rose-50/90 lg:px-3 lg:py-2 lg:text-xs lg:leading-relaxed"
+                        className={`mt-2 break-words rounded-xl bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 ${
+                          embedded ? "lg:text-[11px]" : "lg:mt-3 lg:border lg:border-rose-100 lg:bg-rose-50/90 lg:px-3 lg:py-2 lg:text-xs lg:leading-relaxed"
                         }`}
                       >
                         <span className={embedded ? "" : "lg:font-bold"}>Feedback</span>
@@ -434,7 +434,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                   </div>
                 </div>
 
-                <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end lg:gap-3">
+                <div className="flex w-full shrink-0 items-center justify-between gap-2 lg:w-auto lg:flex-col lg:items-end lg:gap-3">
                   <StatusBadge status={item.status} desktopPop={!embedded} />
                   {["approved", "rejected"].includes(String(item.status || "").toLowerCase()) ? (
                     <button
@@ -452,7 +452,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                           profile_image_url: item.profile_image_url || ""
                         });
                       }}
-                      className={`rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 ${
+                      className={`inline-flex min-h-11 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:min-h-0 lg:text-xs ${
                         embedded ? "" : "lg:px-4 lg:py-1.5 lg:shadow-sm"
                       }`}
                     >
@@ -494,7 +494,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
               return (
               <div
                 key={`deal-submission-${item.id}`}
-                className={`relative flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3.5 shadow-sm sm:flex-row sm:items-start sm:justify-between ${
+                className={`relative flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3.5 shadow-sm lg:flex-row lg:items-start lg:justify-between ${
                   embedded
                     ? ""
                     : "lg:group lg:border-slate-200/90 lg:bg-white/80 lg:p-4 lg:shadow-sm lg:transition-all lg:hover:border-brand-200/70 lg:hover:shadow-md"
@@ -544,16 +544,16 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                     ) : null}
 
                     <div className={`mt-2 flex w-full flex-col items-start gap-2 ${!embedded ? "lg:hidden" : ""}`}>
-                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 lg:text-[11px]">
                         {item.city_name || "City"} • {item.category_name || "Category"}
                       </span>
 
-                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                      <span className="block w-full truncate whitespace-nowrap rounded-full bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 lg:text-[11px]">
                         Submitted {formatReadableDate(item.created_at)}
                       </span>
 
                       {item.expiry_date ? (
-                        <p className="mt-2 w-full rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                        <p className="mt-2 w-full rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 lg:text-[11px]">
                           <span className="flex min-w-0 items-center gap-2">
                             <FiClock className="h-3.5 w-3.5 text-slate-500" aria-hidden />
                             <span className="truncate">
@@ -564,7 +564,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                       ) : null}
 
                       {item.status === "rejected" && item.review_note ? (
-                        <p className="w-full break-words rounded-xl bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
+                        <p className="w-full break-words rounded-xl bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 lg:text-[11px]">
                           Reason: {item.review_note}
                         </p>
                       ) : null}
@@ -614,7 +614,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                     ) : null}
                   </div>
                 </div>
-                <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end lg:gap-3">
+                <div className="flex w-full shrink-0 items-center justify-between gap-2 lg:w-auto lg:flex-col lg:items-end lg:gap-3">
                   <StatusBadge status={item.status} desktopPop={!embedded} />
                   {["approved", "rejected"].includes(dealStatus) ? (
                     <button
@@ -638,7 +638,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                           deal_info: item.terms_text || ""
                         });
                       }}
-                      className={`rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 ${
+                      className={`inline-flex min-h-11 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:min-h-0 lg:text-xs ${
                         embedded ? "" : "lg:px-4 lg:py-1.5 lg:shadow-sm"
                       }`}
                     >
@@ -685,29 +685,29 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
             }
           }}
           footer={
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col gap-2 lg:flex-row lg:justify-end">
               <button
                 type="button"
                 onClick={() => setEditInfluencerItem(null)}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:min-h-0 lg:w-auto lg:py-2"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submissionActionLoading}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-60 lg:min-h-0 lg:w-auto lg:py-2"
               >
                 {submissionActionLoading ? "Saving..." : "Save & Resubmit"}
               </button>
             </div>
           }
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="Profile Name" hint="Enter your public creator or brand name." example="Ava Luxe" className="sm:col-span-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <FormField label="Profile Name" hint="Enter your public creator or brand name." example="Ava Luxe" className="lg:col-span-2">
               <input required value={editInfluencerForm.name || ""} onChange={(e) => setEditInfluencerForm((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Bio" hint="Describe your audience, niche, and content style." example="Lifestyle creator covering food and travel." className="sm:col-span-2">
+            <FormField label="Bio" hint="Describe your audience, niche, and content style." example="Lifestyle creator covering food and travel." className="lg:col-span-2">
               <textarea required rows={4} value={editInfluencerForm.bio || ""} onChange={(e) => setEditInfluencerForm((p) => ({ ...p, bio: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
             <FormField label="City" hint="Choose your primary content city.">
@@ -789,29 +789,29 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
             }
           }}
           footer={
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col gap-2 lg:flex-row lg:justify-end">
               <button
                 type="button"
                 onClick={() => setEditDealItem(null)}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:min-h-0 lg:w-auto lg:py-2"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submissionActionLoading}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-60 lg:min-h-0 lg:w-auto lg:py-2"
               >
                 {submissionActionLoading ? "Saving..." : "Save & Resubmit"}
               </button>
             </div>
           }
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="Deal Title" hint="Write a concise title customers can quickly scan." example="Buy 1 Get 2 Burger Combo" className="sm:col-span-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <FormField label="Deal Title" hint="Write a concise title customers can quickly scan." example="Buy 1 Get 2 Burger Combo" className="lg:col-span-2">
               <input required value={editDealForm.title || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, title: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
-            <FormField label="Description" hint="Explain eligibility, exclusions, and redemption details." className="sm:col-span-2">
+            <FormField label="Description" hint="Explain eligibility, exclusions, and redemption details." className="lg:col-span-2">
               <textarea rows={4} value={editDealForm.description || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, description: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
             <FormField label="City" hint="Choose where this deal can be redeemed.">
@@ -868,7 +868,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
                 }
               />
             </FormField>
-            <FormField label="Deal Info" hint="Describe offer details, conditions, and important notes." className="sm:col-span-2">
+            <FormField label="Deal Info" hint="Describe offer details, conditions, and important notes." className="lg:col-span-2">
               <textarea rows={4} value={editDealForm.deal_info || ""} onChange={(e) => setEditDealForm((p) => ({ ...p, deal_info: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
             </FormField>
             <FormField label="Promo Code (Optional)" hint="Optional code users enter at checkout." example="SAVE20">
@@ -880,7 +880,7 @@ export default function UserSubmissionsPanel({ variant = "standalone", showBackT
             <FormField
               label="Deal image"
               hint={`Optional visual for better click-through. ${LISTING_BANNER_IMAGE_HINT}`}
-              className="sm:col-span-2"
+              className="lg:col-span-2"
             >
               <CloudinaryImageInput
                 value={editDealForm.image_url || ""}

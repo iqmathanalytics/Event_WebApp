@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { CheckCircle2, Ticket, Sparkles, MapPin } from "lucide-react";
 import useAuth from "../hooks/useAuth";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import { formatCurrency, formatDateUS } from "../utils/format";
 
 export const BOOKING_CONFIRMED_STORAGE_KEY = "bmt_booking_confirmed_v1";
@@ -51,6 +52,7 @@ export default function BookingConfirmedPage() {
   const reduceMotion = useReducedMotion();
   const { isAuthenticated } = useAuth();
   const [stored, setStored] = useState(() => loadStoredSummary());
+  useRouteContentReady(false);
 
   const summary = useMemo(() => {
     if (state && typeof state === "object") return state;
@@ -125,7 +127,7 @@ export default function BookingConfirmedPage() {
             <Sparkles className="h-3.5 w-3.5" aria-hidden />
             Booking confirmed
           </p>
-          <h1 className="text-balance font-['Sora'] text-3xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-5xl">
+          <h1 className="text-balance font-['Sora'] text-[1.75rem] font-extrabold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-5xl">
             {hasSummary ? `You're going!` : "Booking confirmed"}
           </h1>
           <p className="mx-auto max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
@@ -163,11 +165,11 @@ export default function BookingConfirmedPage() {
                 <p className="text-sm font-semibold text-slate-900">Your ticket stub</p>
               </div>
               {summary?.paidWithCard ? (
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 lg:text-[11px]">
                   Paid
                 </span>
               ) : (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600 lg:text-[11px]">
                   Confirmed
                 </span>
               )}
@@ -186,23 +188,23 @@ export default function BookingConfirmedPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Booking ID</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">Booking ID</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">
                     {summary?.bookingId || "Sent to your email"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">Amount</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">{formatMoney(summary?.totalAmount)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">Email</p>
                   <p className="mt-1 truncate text-sm font-medium text-slate-900">
                     {summary?.email || "On your account"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tickets / days</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">Tickets / days</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">
                     {`${summary?.attendeeCount || 1} ${(summary?.attendeeCount || 1) === 1 ? "ticket" : "tickets"} · ${
                       summary?.totalDays || dates.length || 1
@@ -213,7 +215,7 @@ export default function BookingConfirmedPage() {
 
               {dates.length ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Show dates</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">Show dates</p>
                   <ul className="mt-2 space-y-1 text-sm text-slate-700">
                     {dates.map((d) => (
                       <li key={d} className="flex items-center gap-2">
@@ -248,7 +250,7 @@ export default function BookingConfirmedPage() {
         >
           <Link
             to={primaryHref}
-            className="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-rose-500/20 transition hover:bg-brand-700"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-rose-500/20 transition hover:bg-brand-700"
           >
             {primaryLabel}
           </Link>
@@ -258,7 +260,7 @@ export default function BookingConfirmedPage() {
               dashboard.
             </p>
           ) : (
-            <Link to="/events" className="text-sm font-medium text-slate-700 underline-offset-4 hover:underline">
+            <Link to="/events" className="inline-flex min-h-11 items-center justify-center text-sm font-medium text-slate-700 underline-offset-4 hover:underline lg:min-h-0">
               Continue browsing events
             </Link>
           )}

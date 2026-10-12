@@ -18,14 +18,14 @@ const createEventVendorShare = asyncHandler(async (req, res) => {
 
   let message = "Invitation sent. Access is granted after they accept.";
   if (result.alreadyAccepted) {
-    message = "This partner already has vendor dashboard access";
+    message = "This partner already has dashboard access.";
   } else if (result.resent) {
     message = result.emailSent
       ? "Invitation resent. Access is granted after they accept."
       : "Invitation is still pending, but the email could not be sent.";
   } else if (!result.emailSent) {
     message = result.emailSkipped
-      ? "Invite created, but email is not configured on this server."
+      ? "Invite created, but email could not be sent from this server."
       : `Invite created, but email failed${result.emailError ? `: ${result.emailError}` : "."}`;
   }
 
@@ -47,7 +47,7 @@ const revokeEventVendorShare = asyncHandler(async (req, res) => {
     Number(req.params.eventId),
     Number(req.params.shareId)
   );
-  res.status(200).json({ success: true, message: "Vendor access revoked" });
+  res.status(200).json({ success: true, message: "Partner access revoked." });
 });
 
 const acceptVendorInvite = asyncHandler(async (req, res) => {
@@ -58,8 +58,8 @@ const acceptVendorInvite = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: data.alreadyAccepted
-      ? "Invitation already accepted"
-      : "Invitation accepted. Open Vendor to see your link performance.",
+      ? "Invitation already accepted."
+      : "Invitation accepted. Open Vendor to see results from your link.",
     data
   });
 });

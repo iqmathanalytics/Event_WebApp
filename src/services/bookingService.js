@@ -13,7 +13,9 @@ const {
   findBookingById,
   listBookingsForAdmin,
   listBookingsByUser,
-  countReservedSeatsForEvent
+  countReservedSeatsForEvent,
+  markBookingEmailStatus,
+  findBookingByPaymentIntentId
 } = require("../models/bookingModel");
 const { assertSeatsAvailableForBooking } = require("../utils/eventSeats");
 const { attachTicketLevelAvailability } = require("../utils/eventTicketLevelAvailability");
@@ -416,9 +418,14 @@ async function resolveEventBookingPricingCore({ event, payload, userId, user, is
     const rawVendor = String(payload.vendor_code || "").trim().toUpperCase();
     if (rawVendor) {
       if (!/^[A-Za-z0-9]{3,40}$/.test(rawVendor)) {
-        throw new ApiError(400, "Vendor code must be 3–40 letters or numbers.");
+        throw new ApiError(400, "Vendor referral code is invalid.");
       }
-      vendorCode = rawVendor;
+      // Link-based attribution only — ignore free-typed codes that are not a partner share.
+      const vendorShareModel = require("../models/eventVendorShareModel");
+      const share = await vendorShareModel.findShareByCode(payload.event_id, rawVendor);
+      if (share && !share.revoked_at) {
+        vendorCode = vendorShareModel.normalizeVendorCode(rawVendor);
+      }
     }
   }
 
@@ -516,7 +523,7 @@ async function dispatchBookingConfirmationEmail(ctx) {
   const { event, guestName, guestEmail, qrImageUrl, ticketBlocks, paymentStatus, selectedSeatsLabel } =
     ctx;
   if (!guestEmail || !ctx.bookingId || !event) {
-    return;
+    return { sent: false, skipped: true };
   }
 
   const mail = buildBookingConfirmationEmail({
@@ -538,17 +545,30 @@ async function dispatchBookingConfirmationEmail(ctx) {
     isGuestBooking: Boolean(ctx.pricing.isGuest)
   });
 
-  await sendTransactionalEmail({
-    to: guestEmail,
-    subject: mail.subject,
-    text: mail.text,
-    html: mail.html
-  }).catch(() => {});
+  try {
+    const result = await sendTransactionalEmail({
+      to: guestEmail,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html
+    });
+    if (result?.sent) {
+      await markBookingEmailStatus(ctx.bookingId, { guestSent: true });
+    } else if (result?.error) {
+      await markBookingEmailStatus(ctx.bookingId, { error: result.error });
+    }
+    return result || { sent: false };
+  } catch (err) {
+    await markBookingEmailStatus(ctx.bookingId, {
+      error: err?.message || "Guest confirmation email failed"
+    });
+    return { sent: false, error: err?.message || "Guest confirmation email failed" };
+  }
 }
 
 async function dispatchGuestWelcomeEmail({ guestAccount, guestName }) {
   if (!guestAccount?.created || !guestAccount.email || !guestAccount.temporaryPassword) {
-    return;
+    return { sent: false, skipped: true };
   }
   const firstName = String(guestName || "there").trim().split(/\s+/)[0] || "there";
   const mail = buildWelcomeEmail({
@@ -557,12 +577,16 @@ async function dispatchGuestWelcomeEmail({ guestAccount, guestName }) {
     loginEmail: guestAccount.email,
     temporaryPassword: guestAccount.temporaryPassword
   });
-  await sendTransactionalEmail({
-    to: guestAccount.email,
-    subject: mail.subject,
-    text: mail.text,
-    html: mail.html
-  }).catch(() => {});
+  try {
+    return await sendTransactionalEmail({
+      to: guestAccount.email,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html
+    });
+  } catch (err) {
+    return { sent: false, error: err?.message || "Welcome email failed" };
+  }
 }
 
 async function dispatchOrganizerBookingNotificationEmail(ctx) {
@@ -570,12 +594,12 @@ async function dispatchOrganizerBookingNotificationEmail(ctx) {
     ctx;
   const organizerId = ctx.pricing.organizerId;
   if (!organizerId || !ctx.bookingId || !event) {
-    return;
+    return { sent: false, skipped: true };
   }
   const organizer = await findUserById(organizerId);
   const organizerEmail = String(organizer?.email || "").trim();
   if (!organizerEmail) {
-    return;
+    return { sent: false, skipped: true };
   }
 
   const mail = buildOrganizerBookingNotificationEmail({
@@ -606,13 +630,26 @@ async function dispatchOrganizerBookingNotificationEmail(ctx) {
     cc = [];
   }
 
-  await sendTransactionalEmail({
-    to: organizerEmail,
-    cc,
-    subject: mail.subject,
-    text: mail.text,
-    html: mail.html
-  }).catch(() => {});
+  try {
+    const result = await sendTransactionalEmail({
+      to: organizerEmail,
+      cc,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html
+    });
+    if (result?.sent) {
+      await markBookingEmailStatus(ctx.bookingId, { organizerSent: true });
+    } else if (result?.error) {
+      await markBookingEmailStatus(ctx.bookingId, { error: result.error });
+    }
+    return result || { sent: false };
+  } catch (err) {
+    await markBookingEmailStatus(ctx.bookingId, {
+      error: err?.message || "Organizer notification email failed"
+    });
+    return { sent: false, error: err?.message || "Organizer notification email failed" };
+  }
 }
 
 async function dispatchBookingEmails({
@@ -621,7 +658,8 @@ async function dispatchBookingEmails({
   payload,
   pricing,
   paymentStatus,
-  guestAccount = null
+  guestAccount = null,
+  force = false
 }) {
   const ctx = {
     bookingId,
@@ -631,12 +669,84 @@ async function dispatchBookingEmails({
     ...bookingEmailContext({ bookingId, checkInCode, payload, pricing, paymentStatus })
   };
 
-  await dispatchBookingConfirmationEmail(ctx);
+  const existing = force ? null : await findBookingById(bookingId).catch(() => null);
+  const guestAlreadySent = Boolean(existing?.guest_confirmation_email_sent_at);
+  const organizerAlreadySent = Boolean(existing?.organizer_notification_email_sent_at);
+
+  if (!guestAlreadySent) {
+    await dispatchBookingConfirmationEmail(ctx);
+  }
   await dispatchGuestWelcomeEmail({
     guestAccount,
     guestName: ctx.guestName
   });
-  await dispatchOrganizerBookingNotificationEmail(ctx);
+  if (!organizerAlreadySent) {
+    await dispatchOrganizerBookingNotificationEmail(ctx);
+  }
+}
+
+/**
+ * After an idempotent Stripe confirm/webhook, resend any booking emails that were never accepted.
+ */
+async function retryUnsentBookingEmailsForPaymentIntent(paymentIntentId) {
+  const row = await findBookingByPaymentIntentId(paymentIntentId);
+  if (!row?.id) {
+    return { retried: false, reason: "no_booking" };
+  }
+  const guestMissing = !row.guest_confirmation_email_sent_at;
+  const organizerMissing = !row.organizer_notification_email_sent_at;
+  if (!guestMissing && !organizerMissing) {
+    return { retried: false, reason: "already_sent", bookingId: row.id };
+  }
+
+  const event = await findEventById(row.event_id);
+  if (!event) {
+    return { retried: false, reason: "no_event", bookingId: row.id };
+  }
+
+  const mapped = typeof mapBookingRow === "function" ? mapBookingRow(row) : row;
+  const selectedDates = mapped.selected_dates || [];
+  const selectedSeats = mapped.selected_seats || [];
+  const ticketCart = mapped.ticket_items || [];
+  const totalDays = Number(row.total_days) || Math.max(1, selectedDates.length || 1);
+  const paymentStatus = String(row.payment_status || "paid");
+
+  await dispatchBookingEmails({
+    bookingId: row.id,
+    checkInCode: row.check_in_code,
+    payload: {
+      name: row.name,
+      email: row.email,
+      phone: row.phone,
+      event_id: row.event_id
+    },
+    pricing: {
+      event,
+      organizerId: row.organizer_id,
+      userName: row.name,
+      userEmail: row.email,
+      userPhone: row.phone,
+      selectedDates,
+      totalDays,
+      attendeeCount: Number(row.attendee_count) || 0,
+      ticketCart,
+      selectedSeats,
+      subtotalAmount: row.subtotal_amount,
+      discountAmount: row.discount_amount,
+      totalAmount: row.total_amount,
+      couponCode: row.coupon_code,
+      isGuest: row.is_guest_booking === 1 || row.user_id == null
+    },
+    paymentStatus,
+    guestAccount: null
+  });
+
+  return {
+    retried: true,
+    bookingId: row.id,
+    guestMissing,
+    organizerMissing
+  };
 }
 
 async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta }) {
@@ -902,20 +1012,24 @@ async function resendUserBookingConfirmationEmail({ userId, userEmail, bookingId
     isGuest
   };
 
-  const ctx = bookingEmailContext({
+  const ctx = {
     bookingId: row.id,
     checkInCode: row.check_in_code,
-    payload: {
-      name: row.name,
-      email: row.email,
-      phone: row.phone,
-      event_id: row.event_id
-    },
     pricing,
-    paymentStatus
-  });
+    ...bookingEmailContext({
+      bookingId: row.id,
+      checkInCode: row.check_in_code,
+      payload: {
+        name: row.name,
+        email: row.email,
+        phone: row.phone,
+        event_id: row.event_id
+      },
+      pricing,
+      paymentStatus
+    })
+  };
   ctx.pricing = pricing;
-  ctx.bookingId = row.id;
 
   await dispatchBookingConfirmationEmail(ctx);
 
@@ -985,7 +1099,8 @@ async function resendOrganizerBookingEmails({ organizerId, bookingId }) {
     },
     pricing,
     paymentStatus,
-    guestAccount: null
+    guestAccount: null,
+    force: true
   });
 
   return {
@@ -1010,5 +1125,6 @@ module.exports = {
   getOrganizerBookingsExport,
   getAdminBookingsExport,
   resendUserBookingConfirmationEmail,
-  resendOrganizerBookingEmails
+  resendOrganizerBookingEmails,
+  retryUnsentBookingEmailsForPaymentIntent
 };

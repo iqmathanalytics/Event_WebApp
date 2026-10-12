@@ -190,14 +190,72 @@ async function markBookingCheckedIn({ bookingId, adminUserId }, conn) {
 
 async function findBookingByPaymentIntentId(paymentIntentId, conn) {
   const runner = conn || pool;
-  const [rows] = await runner.query(
-    `SELECT id, payment_status, stripe_payment_intent_id, total_amount, amount_paid_cents
-     FROM event_bookings
-     WHERE stripe_payment_intent_id = ?
-     LIMIT 1`,
-    [paymentIntentId]
-  );
-  return rows[0] || null;
+  try {
+    const [rows] = await runner.query(
+      `SELECT id, payment_status, stripe_payment_intent_id, total_amount, amount_paid_cents,
+              guest_confirmation_email_sent_at, organizer_notification_email_sent_at,
+              booking_email_last_error, check_in_code, event_id, organizer_id, user_id,
+              name, email, phone, attendee_count, ticket_items_json, selected_dates_json,
+              selected_seats_json, total_days, subtotal_amount, discount_amount, coupon_code,
+              is_guest_booking
+       FROM event_bookings
+       WHERE stripe_payment_intent_id = ?
+       LIMIT 1`,
+      [paymentIntentId]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    if (err?.code !== "ER_BAD_FIELD_ERROR") {
+      throw err;
+    }
+    const [rows] = await runner.query(
+      `SELECT id, payment_status, stripe_payment_intent_id, total_amount, amount_paid_cents,
+              check_in_code, event_id, organizer_id, user_id, name, email, phone,
+              attendee_count, ticket_items_json, selected_dates_json, selected_seats_json,
+              total_days, subtotal_amount, discount_amount, coupon_code, is_guest_booking
+       FROM event_bookings
+       WHERE stripe_payment_intent_id = ?
+       LIMIT 1`,
+      [paymentIntentId]
+    );
+    return rows[0] || null;
+  }
+}
+
+async function markBookingEmailStatus(
+  bookingId,
+  { guestSent = false, organizerSent = false, error = null },
+  conn
+) {
+  const runner = conn || pool;
+  const sets = [];
+  const values = [];
+  if (guestSent) {
+    sets.push("guest_confirmation_email_sent_at = COALESCE(guest_confirmation_email_sent_at, NOW())");
+  }
+  if (organizerSent) {
+    sets.push(
+      "organizer_notification_email_sent_at = COALESCE(organizer_notification_email_sent_at, NOW())"
+    );
+  }
+  if (error) {
+    sets.push("booking_email_last_error = ?");
+    values.push(String(error).slice(0, 500));
+  } else if (guestSent || organizerSent) {
+    sets.push("booking_email_last_error = NULL");
+  }
+  if (!sets.length) {
+    return;
+  }
+  values.push(bookingId);
+  try {
+    await runner.query(`UPDATE event_bookings SET ${sets.join(", ")} WHERE id = ?`, values);
+  } catch (err) {
+    if (err?.code === "ER_BAD_FIELD_ERROR") {
+      return;
+    }
+    throw err;
+  }
 }
 
 async function listBookingsByOrganizer({ organizerId, eventId, date }) {
@@ -464,6 +522,7 @@ module.exports = {
   findBookingByCheckInCode,
   markBookingCheckedIn,
   findBookingByPaymentIntentId,
+  markBookingEmailStatus,
   listBookingsByOrganizer,
   listBookingsForAdmin,
   listBookingsByUser,

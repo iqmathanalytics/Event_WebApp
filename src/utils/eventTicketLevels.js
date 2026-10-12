@@ -149,10 +149,31 @@ function enrichTicketLevelAvailability(level, bookedCount = 0) {
   };
 }
 
+function normalizeTicketTiersSort(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "price_desc" || raw === "high_to_low" || raw === "desc") {
+    return "price_desc";
+  }
+  return "price_asc";
+}
+
+function sortTicketLevelsForDisplay(levels, sortMode) {
+  const list = [...(levels || [])];
+  const mode = normalizeTicketTiersSort(sortMode);
+  if (mode === "price_desc") {
+    return list.sort(
+      (a, b) => Number(b.price) - Number(a.price) || (a.sort_order ?? 0) - (b.sort_order ?? 0)
+    );
+  }
+  return list.sort(
+    (a, b) => Number(a.price) - Number(b.price) || (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  );
+}
+
 function getCheckoutTicketLevels(event) {
   const levels = filterActiveTicketLevelsForCheckout(parseTicketLevelsFromEvent(event));
   if (levels.length) {
-    return levels;
+    return sortTicketLevelsForDisplay(levels, event?.ticket_tiers_sort);
   }
   const mode = event?.ticket_sales_mode || "external";
   if (mode === "platform") {
@@ -325,6 +346,8 @@ module.exports = {
   normalizeTicketLevelsInput,
   parseTicketLevelsFromEvent,
   getCheckoutTicketLevels,
+  normalizeTicketTiersSort,
+  sortTicketLevelsForDisplay,
   sanitizeTicketLevelsForSave,
   assertValidTicketLevelsForPlatform,
   normalizeTicketItemsInput,

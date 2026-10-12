@@ -1,4 +1,5 @@
 import { Navigate, useParams } from "react-router-dom";
+import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import { getEventLandingConfig } from "./registry";
 import LandingPageMeta from "./LandingPageMeta";
 import LandingNav from "./LandingNav";
@@ -17,6 +18,7 @@ import "./landingTheme.css";
 export default function EventLandingPage() {
   const { eventSlug } = useParams();
   const config = getEventLandingConfig(eventSlug);
+  useRouteContentReady(false);
 
   if (!config) {
     return <Navigate to="/404" replace />;

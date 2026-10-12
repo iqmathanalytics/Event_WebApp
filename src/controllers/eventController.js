@@ -91,6 +91,11 @@ const trackEventView = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: result });
 });
 
+const touchEventPresence = asyncHandler(async (req, res) => {
+  const result = await eventService.touchEventPresence(req.params.id, req.validated.body || {});
+  res.status(200).json({ success: true, data: result });
+});
+
 const editOwnEvent = asyncHandler(async (req, res) => {
   const result = await eventService.editOwnEvent(Number(req.params.id), req.user.id, req.validated.body, {
     role: req.user.role
@@ -122,5 +127,6 @@ module.exports = {
   deleteOwnEvent,
   fetchFeaturedEvents,
   trackEventClick,
-  trackEventView
+  trackEventView,
+  touchEventPresence
 };

@@ -185,7 +185,7 @@ export function HourlyViewsChart({
             radius={[6, 6, 0, 0]}
             animationDuration={700}
             maxBarSize={28}
-            minPointSize={2}
+            minPointSize={0}
           >
             {data.map((entry) => {
               const hourNum =
@@ -194,10 +194,13 @@ export function HourlyViewsChart({
                 (entry.isCurrentHour ||
                   (highlightCurrentHour && currentHour != null && hourNum === currentHour)) &&
                 !entry.isFuture;
+              const hasViews = (Number(entry.views) || 0) > 0;
+              // Priority: current (red) → liveRealtime (pink) → slate (black).
+              // Upcoming hours stay empty (views=0) — no gray stub color.
               let fill = CHART_PALETTE.slate;
               if (entry.isFuture) {
-                fill = "#e2e8f0";
-              } else if (isNow) {
+                fill = "transparent";
+              } else if (isNow && (hasViews || entry.liveRealtime)) {
                 fill = CHART_PALETTE.rose;
               } else if (entry.liveRealtime) {
                 fill = CHART_PALETTE.roseLight;
@@ -206,7 +209,7 @@ export function HourlyViewsChart({
                 <Cell
                   key={`${entry.hour}-${hourNum}`}
                   fill={fill}
-                  fillOpacity={entry.isFuture ? 0.45 : 1}
+                  fillOpacity={1}
                   className="transition-opacity"
                 />
               );
@@ -215,8 +218,19 @@ export function HourlyViewsChart({
         </BarChart>
       </ResponsiveContainer>
       {isLiveDay ? (
-        <p className="mt-2 text-center text-[11px] font-medium text-slate-500">
-          Highlighted bar = current hour. Light gray = later today.
+        <p className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: CHART_PALETTE.rose }} />
+            Current hour
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: CHART_PALETTE.roseLight }} />
+            Live / provisional
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: CHART_PALETTE.slate }} />
+            Standard{timezoneLabel ? ` (${timezoneLabel})` : ""}
+          </span>
         </p>
       ) : null}
     </ChartFrame>

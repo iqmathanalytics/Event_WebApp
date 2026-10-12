@@ -11,9 +11,11 @@ import useAuth from "../hooks/useAuth";
 import ListingCardImage from "./ListingCardImage";
 import PremiumLockOverlay from "./PremiumLockOverlay";
 import HomeSpotlightChip from "./HomeSpotlightChip";
+import { LandingTagList } from "./ListingTagIcon";
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 import { resolveEventListPrice } from "../utils/eventTicketLevels";
 import { isHomeFeaturedEvent } from "../utils/eventHomeFeatured";
+import { HOME_CARD_SIZES } from "../utils/displayImage";
 
 function EventCard({
   item,
@@ -96,8 +98,8 @@ function EventCard({
       <button
         type="button"
         onClick={() => onToggleFavorite?.()}
-        className={`absolute right-3 top-3 z-10 grid h-9 w-9 place-content-center rounded-full bg-white/95 text-sm shadow transition ${
-          isFavorite ? "opacity-100 text-rose-600" : "opacity-100 text-slate-600 md:opacity-0 md:group-hover:opacity-100"
+        className={`absolute right-3 top-3 z-10 grid h-11 w-11 place-content-center rounded-full bg-white/95 text-sm shadow transition lg:h-9 lg:w-9 ${
+          isFavorite ? "opacity-100 text-rose-600" : "opacity-100 text-slate-600 lg:opacity-0 lg:group-hover:opacity-100"
         }`}
         aria-label="Save event"
       >
@@ -106,7 +108,9 @@ function EventCard({
       <button
         type="button"
         onClick={openEvent}
-        className={`relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-slate-100 text-left ${
+        className={`relative w-full shrink-0 overflow-hidden bg-slate-100 text-left ${
+          isLanding ? "aspect-[3/2] lg:aspect-[16/10]" : "aspect-[16/10]"
+        } ${
           locked ? "cursor-default" : "cursor-pointer"
         }`}
         aria-label={`View ${item.title}`}
@@ -118,7 +122,13 @@ function EventCard({
             </span>
           </div>
         ) : null}
-        <ListingCardImage src={eventImage} alt={item.title} emptyLabel="No event image" priority={priority} />
+        <ListingCardImage
+          src={eventImage}
+          alt={item.title}
+          emptyLabel="No event image"
+          priority={priority}
+          sizes={isLanding ? HOME_CARD_SIZES : undefined}
+        />
         {homeFeatured ? (
           <div className="pointer-events-none absolute left-2 top-2 z-20 sm:left-2.5 sm:top-2.5">
             <HomeSpotlightChip compact />
@@ -132,11 +142,11 @@ function EventCard({
           </span>
           <span className="truncate text-[10px] font-semibold text-slate-600 sm:text-xs">{item.city}</span>
         </div>
-        <button
+          <button
           type="button"
           onClick={openEvent}
           className={`text-left font-bold leading-snug text-slate-900 hover:text-brand-700 ${
-            isLanding ? "line-clamp-2 text-[15px]" : "line-clamp-2 text-sm sm:text-[15px]"
+            isLanding ? "line-clamp-2 text-lg lg:text-[15px]" : "line-clamp-2 text-sm sm:text-[15px]"
           }`}
         >
           {item.title}
@@ -149,29 +159,33 @@ function EventCard({
           <p className="text-xs font-bold text-rose-600">{daysLeftLabel}</p>
         ) : null}
 
-        {displayTags.length ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {displayTags.map((tag) => (
-              <span
-                key={tag}
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:text-[11px] ${renderTag(tag)}`}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <LandingTagList
+          tags={displayTags}
+          classFor={(tag) =>
+            `rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:text-[11px] ${renderTag(tag)}`
+          }
+        />
 
         <div className="flex-1" aria-hidden />
 
-        <div className={`mt-auto flex shrink-0 items-center justify-between gap-2 ${isLanding ? "pt-2" : "pt-1"}`}>
+        <div
+          className={`mt-auto flex shrink-0 gap-2 ${
+            isLanding
+              ? "flex-col items-stretch pt-1 lg:flex-row lg:items-center lg:justify-between lg:pt-2"
+              : "flex-col items-stretch pt-1 lg:flex-row lg:items-center lg:justify-between"
+          }`}
+        >
           <span className="text-xs font-bold text-slate-900 sm:text-sm">
             {listPrice != null ? `Tickets from ${formatCurrency(listPrice)}` : "See ticket options"}
           </span>
           {locked ? (
             <button
               type="button"
-              className="shrink-0 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-slate-700"
+              className={`shrink-0 rounded-full bg-slate-900 font-bold text-white transition hover:bg-slate-700 ${
+                isLanding
+                  ? "inline-flex min-h-11 w-full items-center justify-center px-4 text-sm lg:min-h-0 lg:w-auto lg:px-3 lg:py-1.5 lg:text-xs"
+                  : "inline-flex min-h-11 w-full items-center justify-center px-4 text-sm lg:min-h-0 lg:w-auto lg:px-3 lg:py-1.5 lg:text-xs"
+              }`}
               onClick={() => setPremiumGateOpen(true)}
             >
               View Details
@@ -180,7 +194,11 @@ function EventCard({
             <button
               type="button"
               onClick={openEvent}
-              className="shrink-0 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-slate-700"
+              className={`shrink-0 rounded-full bg-slate-900 font-bold text-white transition hover:bg-slate-700 ${
+                isLanding
+                  ? "inline-flex min-h-11 w-full items-center justify-center px-4 text-sm lg:min-h-0 lg:w-auto lg:px-3 lg:py-1.5 lg:text-xs"
+                  : "inline-flex min-h-11 w-full items-center justify-center px-4 text-sm lg:min-h-0 lg:w-auto lg:px-3 lg:py-1.5 lg:text-xs"
+              }`}
             >
               View Details
             </button>

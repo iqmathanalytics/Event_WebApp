@@ -1,7 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, motion, useAnimation, useReducedMotion } from "framer-motion";
-import { FiCheck, FiChevronDown, FiMapPin, FiMenu, FiSearch, FiUser, FiX } from "react-icons/fi";
+import { FiCheck, FiChevronDown, FiMapPin, FiMenu, FiUser, FiX } from "react-icons/fi";
 import useAuth from "../hooks/useAuth";
 import useCityFilter from "../hooks/useCityFilter";
 import { BRAND_BANNER_URL, BRAND_HEADER_LOGO_URL } from "../constants/brand";
@@ -14,13 +15,6 @@ const navItems = [
 ];
 
 function Navbar({
-  homeSearchSummary = {
-    cityLabel: "Anywhere",
-    dateLabel: "Any date",
-    categoryLabel: "Any category",
-    priceLabel: "Any price"
-  },
-  isHeroSearchVisible = true,
   brandLogoPhase = "ready",
   headerLogoRef = null,
   logoFlightActive = false,
@@ -99,6 +93,10 @@ function Navbar({
   }, []);
 
   useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
     const onDocClick = () => setIsCityMenuOpen(false);
     if (isCityMenuOpen) {
       window.addEventListener("click", onDocClick);
@@ -125,18 +123,19 @@ function Navbar({
       }
       setIsMenuOpen(false);
     };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("touchstart", onPointerDown, { passive: true });
     return () => {
+      document.body.style.overflow = prevOverflow;
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("touchstart", onPointerDown);
     };
   }, [isMenuOpen]);
 
-  const isHomePage = location.pathname === "/";
-  const showCompactSearch = isHomePage && !isHeroSearchVisible;
   const showGlobalCityFilter =
     !location.pathname.startsWith("/dashboard") &&
     location.pathname !== "/admin" &&
@@ -161,20 +160,6 @@ function Navbar({
     (logoFlightActive && brandLogoPhase !== "settling")
   );
 
-  const reopenHeroSearch = (panel = "where") => {
-    const target = document.getElementById("home-hero-search-anchor");
-    const navbarOffset = 108;
-    if (target) {
-      const targetTop = Math.max(0, window.scrollY + target.getBoundingClientRect().top - navbarOffset);
-      window.scrollTo({ top: targetTop, behavior: "smooth" });
-    } else {
-      window.scrollTo({ top: navbarOffset, behavior: "smooth" });
-    }
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(`open-home-${panel}-search`));
-    }, 360);
-  };
-
   return (
     <motion.header
       animate={{
@@ -182,7 +167,9 @@ function Navbar({
         boxShadow: isScrolled ? "0 8px 24px rgba(15, 23, 42, 0.08)" : "0 0 0 rgba(15,23,42,0)"
       }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 backdrop-blur-md"
+      className={`fixed inset-x-0 top-0 border-b border-slate-200 backdrop-blur-md ${
+        isMenuOpen ? "z-[80]" : "z-50"
+      }`}
     >
       <div className="container-page flex h-16 items-center justify-between gap-3 sm:h-20">
         <Link to="/" className="flex min-w-0 items-center gap-2 text-slate-900 sm:gap-2.5">
@@ -384,244 +371,187 @@ function Navbar({
           onClick={() => setIsMenuOpen((prev) => !prev)}
           aria-expanded={isMenuOpen}
           aria-controls={mobileMenuId}
-          className="relative z-[60] grid h-10 w-10 place-content-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 lg:hidden"
+          className="relative z-[60] grid h-11 w-11 place-content-center rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-sm transition active:scale-[0.98] lg:hidden"
           aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
         >
           {isMenuOpen ? <FiX size={18} /> : <FiMenu size={18} />}
         </button>
       </div>
 
-      {showCompactSearch ? (
-      <motion.div
-        initial={false}
-        animate={{
-          opacity: 1,
-          y: 0,
-          scale: 1
-        }}
-        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-        className="pointer-events-none absolute inset-x-0 top-full mt-[10px]"
-      >
-        <div className="container-page flex justify-center max-lg:px-0">
-          <div
-            className="relative flex h-12 w-fit max-w-[88vw] items-center gap-1.5 px-1 py-1 pointer-events-auto"
-            style={{ willChange: "transform, opacity" }}
-          >
-            <div className="pointer-events-none absolute inset-0 rounded-full border border-slate-200 bg-white shadow-lg ring-1 ring-black/5" />
-            <div className="relative flex h-full min-w-0 items-center gap-1.5 pr-0.5">
-              <button
-                type="button"
-                onClick={() => reopenHeroSearch("where")}
-                className="min-w-0 truncate rounded-full px-2.5 py-1 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
-              >
-                {homeSearchSummary.cityLabel}
-              </button>
-              <span className="shrink-0 text-slate-300">|</span>
-              <button
-                type="button"
-                onClick={() => reopenHeroSearch("when")}
-                className="min-w-0 truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-              >
-                {homeSearchSummary.dateLabel}
-              </button>
-              <span className="shrink-0 text-slate-300">|</span>
-              <button
-                type="button"
-                onClick={() => reopenHeroSearch("category")}
-                className="min-w-0 truncate rounded-full px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-              >
-                {homeSearchSummary.categoryLabel}
-              </button>
-              <button
-                type="button"
-                onClick={() => reopenHeroSearch("where")}
-                className="grid h-8 w-8 shrink-0 place-content-center rounded-full bg-rose-500 text-white shadow-sm"
-                aria-label="Open home search"
-              >
-                <FiSearch size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-      ) : null}
-
-      <AnimatePresence>
-        {isMenuOpen ? (
-          <motion.div
-            key="mobile-menu-root"
-            className="fixed inset-x-0 bottom-0 top-16 z-[55] sm:top-20 lg:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <motion.button
-              type="button"
-              aria-label="Dismiss menu"
-              tabIndex={-1}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setIsMenuOpen(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
-            />
-            <div className="relative z-10 flex justify-center px-2.5 pt-2">
-              <motion.div
-                ref={mobileMenuPanelRef}
-                id={mobileMenuId}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Quick menu"
-                initial={{ opacity: 0, y: -18, scale: 0.92 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -12, scale: 0.96 }}
-                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                className="mx-auto w-full max-w-[25.5rem] origin-top overflow-hidden rounded-[1.35rem] border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/[0.06] sm:max-w-[26.5rem]"
-              >
-                <div className="rounded-t-[1.35rem] border-b border-slate-800/30 bg-slate-900 px-3 py-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Navigation</p>
-                      <p className="text-xl font-bold leading-none text-white">Quick Menu</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15"
+      {typeof document !== "undefined"
+        ? createPortal(
+            <AnimatePresence>
+              {isMenuOpen ? (
+                <motion.div
+                  key="mobile-menu-root"
+                  className="phone-menu-layer fixed inset-x-0 top-16 z-[70] sm:top-20 lg:hidden"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <motion.button
+                    type="button"
+                    aria-label="Dismiss menu"
+                    tabIndex={-1}
+                    onClick={() => setIsMenuOpen(false)}
+                    className="absolute inset-0 bg-slate-900/35"
+                  />
+                  <div className="relative z-10 flex h-full min-h-0 items-stretch justify-center px-3 pt-2 pb-1">
+                    <motion.div
+                      ref={mobileMenuPanelRef}
+                      id={mobileMenuId}
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Quick menu"
+                      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                      transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                      className="flex h-full min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-[1.25rem] border border-white/80 bg-white shadow-[0_18px_42px_-28px_rgba(15,23,42,0.48)]"
                     >
-                      Close
-                    </button>
-                  </div>
+                      <div className="shrink-0 border-b border-slate-200 px-3 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500">Navigation</p>
+                            <p className="text-lg font-bold leading-tight text-slate-900">Menu</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsMenuOpen(false)}
+                            className="inline-flex min-h-11 items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800"
+                          >
+                            Close
+                          </button>
+                        </div>
 
-                  <nav className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-white/10 p-1.5">
-                    {navItems.map((item) => (
-                      <NavLink
-                        key={item.to}
-                        to={item.to}
-                        onClick={() => setIsMenuOpen(false)}
-                        className={({ isActive }) =>
-                          `rounded-lg px-3 py-2 text-center text-xs font-semibold ${
-                            isActive ? "bg-fuchsia-500 text-white" : "text-slate-200"
-                          }`
-                        }
-                      >
-                        {item.label}
-                      </NavLink>
-                    ))}
-                  </nav>
-                </div>
-                <div className="hide-scrollbar max-h-[70vh] space-y-3 overflow-y-auto p-3">
-                  {isAuthenticated ? (
-                    <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 text-white shadow-md ring-1 ring-white/10">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/50">Signed in</p>
-                      <div className="mt-1.5">
-                        <BrandUserGreeting name={user?.name} variant="dark" size="sm" />
+                        <nav className="mt-3 grid grid-cols-3 gap-2">
+                          {navItems.map((item) => (
+                            <NavLink
+                              key={item.to}
+                              to={item.to}
+                              onClick={() => setIsMenuOpen(false)}
+                              className={({ isActive }) =>
+                                `inline-flex min-h-11 items-center justify-center rounded-2xl px-2 text-center text-sm font-semibold ${
+                                  isActive ? "bg-rose-50 text-brand-700" : "bg-slate-50 text-slate-700"
+                                }`
+                              }
+                            >
+                              {item.label}
+                            </NavLink>
+                          ))}
+                        </nav>
                       </div>
-                    </div>
-                  ) : null}
-                  {showGlobalCityFilter ? (
-                  <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">City Filter</p>
-                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
-                        {selectedCity ? "1 selected" : "All selected"}
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      value={cityMenuQuery}
-                      onChange={(e) => setCityMenuQuery(e.target.value)}
-                      placeholder="Search cities"
-                      aria-label="Search cities"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none"
-                    />
-                    <div className="hide-scrollbar max-h-[132px] space-y-1 overflow-y-auto pr-1">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCity("")}
-                        className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
-                          !selectedCity
-                            ? "border-fuchsia-200 bg-fuchsia-50 font-semibold text-fuchsia-700"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span className="inline-flex items-center gap-2.5">
-                          <span className="grid h-7 w-7 place-content-center rounded-md bg-white text-fuchsia-500">
-                            <FiMapPin />
-                          </span>
-                          <span>
-                            <p className="font-semibold">All Cities</p>
-                            <p className="text-[10px] text-slate-500">Show listings from all cities</p>
-                          </span>
-                        </span>
-                      </button>
-                      {filteredCities.map((city) => (
-                        <button
-                          key={city.value}
-                          type="button"
-                          onClick={() => setSelectedCity(city.value)}
-                          className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
-                            selectedCity === city.value
-                              ? "border-fuchsia-200 bg-fuchsia-50 font-semibold text-fuchsia-700"
-                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                          }`}
-                        >
-                          <span className="inline-flex items-center gap-2.5">
-                            <span className="grid h-7 w-7 place-content-center rounded-md bg-slate-100 text-slate-500">
-                              <FiMapPin />
+                      <div className="hide-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+                        {isAuthenticated ? (
+                          <div className="shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-slate-900">
+                            <p className="text-xs font-semibold text-slate-500">Signed in</p>
+                            <div className="mt-1.5">
+                              <BrandUserGreeting name={user?.name} variant="light" size="sm" />
+                            </div>
+                          </div>
+                        ) : null}
+                        {showGlobalCityFilter ? (
+                        <div className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex shrink-0 items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-800">City</p>
+                            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                              {selectedCity ? "1 selected" : "All cities"}
                             </span>
-                            <span>
-                              <p className="font-semibold">{city.label}</p>
-                              <p className="text-[10px] text-slate-500">Popular destination</p>
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                      {filteredCities.length === 0 ? <p className="px-1 text-xs text-slate-500">No cities found.</p> : null}
-                    </div>
-                  </div>
-                  ) : null}
+                          </div>
+                          <input
+                            type="text"
+                            value={cityMenuQuery}
+                            onChange={(e) => setCityMenuQuery(e.target.value)}
+                            placeholder="Search cities"
+                            aria-label="Search cities"
+                            className="min-h-11 w-full shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none"
+                          />
+                          <div className="hide-scrollbar min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCity("")}
+                              className={`flex min-h-11 w-full items-center rounded-xl border px-3 py-2 text-left text-sm ${
+                                !selectedCity
+                                  ? "border-rose-200 bg-rose-50 font-semibold text-brand-700"
+                                  : "border-slate-200 bg-white text-slate-700"
+                              }`}
+                            >
+                              <span className="inline-flex items-center gap-2.5">
+                                <span className="grid h-8 w-8 place-content-center rounded-xl bg-white text-brand-600">
+                                  <FiMapPin />
+                                </span>
+                                <span>
+                                  <p className="font-semibold">All cities</p>
+                                  <p className="text-xs font-normal text-slate-500">Show listings from every city</p>
+                                </span>
+                              </span>
+                            </button>
+                            {filteredCities.map((city) => (
+                              <button
+                                key={city.value}
+                                type="button"
+                                onClick={() => setSelectedCity(city.value)}
+                                className={`flex min-h-11 w-full items-center rounded-xl border px-3 py-2 text-left text-sm ${
+                                  selectedCity === city.value
+                                    ? "border-rose-200 bg-rose-50 font-semibold text-brand-700"
+                                    : "border-slate-200 bg-white text-slate-700"
+                                }`}
+                              >
+                                <span className="inline-flex items-center gap-2.5">
+                                  <span className="grid h-8 w-8 place-content-center rounded-xl bg-slate-100 text-slate-500">
+                                    <FiMapPin />
+                                  </span>
+                                  <span className="font-semibold">{city.label}</span>
+                                </span>
+                              </button>
+                            ))}
+                            {filteredCities.length === 0 ? <p className="px-1 text-sm text-slate-500">No cities found.</p> : null}
+                          </div>
+                        </div>
+                        ) : null}
 
-                  {isAuthenticated ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Link
-                        to={isAdmin ? "/dashboard/admin" : "/dashboard/user"}
-                        onClick={() => setIsMenuOpen(false)}
-                        className="rounded-lg border border-slate-300 px-3.5 py-2 text-center text-xs font-semibold text-slate-700"
-                      >
-                        Dashboard
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          logout();
-                          setIsMenuOpen(false);
-                        }}
-                        className="rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white"
-                      >
-                        Logout
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid gap-2">
-                      <Link
-                        to="/login"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white"
-                      >
-                        <FiUser />
-                        Sign In
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+                        <div className="mt-auto shrink-0 space-y-2">
+                          {isAuthenticated ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Link
+                                to={isAdmin ? "/dashboard/admin" : "/dashboard/user"}
+                                onClick={() => setIsMenuOpen(false)}
+                                className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800"
+                              >
+                                Dashboard
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  logout();
+                                  setIsMenuOpen(false);
+                                }}
+                                className="inline-flex min-h-11 items-center justify-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white"
+                              >
+                                Logout
+                              </button>
+                            </div>
+                          ) : (
+                            <Link
+                              to="/login"
+                              onClick={() => setIsMenuOpen(false)}
+                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-3 text-sm font-semibold text-white"
+                            >
+                              <FiUser />
+                              Sign In
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>,
+            document.body
+          )
+        : null}
     </motion.header>
   );
 }

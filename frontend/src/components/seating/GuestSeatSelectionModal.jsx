@@ -291,11 +291,12 @@ export default function GuestSeatSelectionModal({
   const showChart = !loading && !loadError && Boolean(chartConfig?.workspace_key && chartConfig?.event_key);
 
   const footer = (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+      <div className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
         {selectedSeats.length ? (
           <div>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 lg:hidden">Selected</p>
+            <p className="text-sm font-semibold tabular-nums text-slate-900">
               {selectedSeats.length} seat{selectedSeats.length === 1 ? "" : "s"} · {formatCurrency(subtotal)}
               {totalDays > 1 ? ` (${totalDays} show days)` : ""}
             </p>
@@ -304,15 +305,17 @@ export default function GuestSeatSelectionModal({
             </p>
           </div>
         ) : (
-          <p className="text-sm text-slate-600">Pick seats on the chart, then click Confirm seats to reserve them.</p>
+          <p className="text-sm leading-relaxed text-slate-600">
+            Tap seats on the chart, then confirm to reserve them.
+          </p>
         )}
       </div>
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 gap-2 pb-[env(safe-area-inset-bottom)] lg:pb-0">
         <button
           type="button"
           disabled={closing}
           onClick={() => void restoreOriginalHoldAndClose()}
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 disabled:opacity-50"
+          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-50 lg:min-h-0 lg:flex-none lg:rounded-xl lg:py-2.5 lg:font-medium"
         >
           {closing ? "Restoring…" : "Cancel"}
         </button>
@@ -320,7 +323,7 @@ export default function GuestSeatSelectionModal({
           type="button"
           disabled={!canConfirm || closing}
           onClick={() => void handleConfirm()}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white disabled:opacity-50 lg:min-h-0 lg:flex-none lg:rounded-xl lg:py-2.5"
         >
           <Ticket className="h-4 w-4" />
           {confirming || submitting ? "Confirming…" : "Confirm seats"}
@@ -342,7 +345,7 @@ export default function GuestSeatSelectionModal({
       footer={footer}
       size="full"
     >
-      <div className="h-[min(68vh,640px)] p-2 sm:p-3">
+      <div className="h-full min-h-[280px] p-2 sm:p-3 lg:h-[min(68vh,640px)]">
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-600">
             Loading seating chart…
@@ -357,14 +360,14 @@ export default function GuestSeatSelectionModal({
                 setLoadError("");
                 setReloadKey((value) => value + 1);
               }}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+              className="min-h-11 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white lg:min-h-0 lg:py-2"
             >
               Try again
             </button>
           </div>
         ) : null}
         {showChart ? (
-          <div className="h-full min-h-[480px] w-full">
+          <div className="h-full min-h-[280px] w-full lg:min-h-[480px]">
             <SeatsioSeatingChart
               key={`${chartConfig.event_key}-${isEditingSelection ? "edit" : "new"}-${preselectedLabels.join("|")}`}
               workspaceKey={chartConfig.workspace_key}

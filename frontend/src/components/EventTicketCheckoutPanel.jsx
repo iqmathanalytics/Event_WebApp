@@ -2,6 +2,8 @@
 import { useNavigate } from "react-router-dom";
 import { Ticket } from "lucide-react";
 import {
+  cancelBookingPayment,
+  cancelGuestBookingPayment,
   confirmBookingPayment,
   confirmGuestBookingPayment,
   createBookingCheckout,
@@ -240,7 +242,7 @@ function OrderPriceSummary({
     >
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Order summary</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 lg:text-[10px]">Order summary</p>
           {particulars.length ? (
             <p className="mt-0.5 text-xs font-medium text-slate-600">{particulars.join(" · ")}</p>
           ) : null}
@@ -253,7 +255,7 @@ function OrderPriceSummary({
             <button
               type="button"
               onClick={onClearSeats}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 lg:min-h-0 lg:py-1 lg:text-[11px]"
             >
               Clear seats
             </button>
@@ -275,11 +277,11 @@ function OrderPriceSummary({
             ))}
           </ul>
           {holdCountdown ? (
-            <p className="text-[11px] font-semibold text-amber-800">
+            <p className="text-xs font-semibold text-amber-800 lg:text-[11px]">
               Reserved for {holdCountdown}
             </p>
           ) : (
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-slate-500 lg:text-[11px]">
               Seats stay reserved for about {SEATSIO_HOLD_MINUTES} minutes while you finish checkout.
             </p>
           )}
@@ -320,18 +322,32 @@ function OrderPriceSummary({
   );
 }
 
+function scrollPhoneFieldIntoView(event) {
+  if (typeof window === "undefined" || !window.matchMedia("(max-width: 1023px)").matches) {
+    return;
+  }
+  const target = event?.target;
+  if (!target?.scrollIntoView) {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+}
+
 function CheckoutCard({ children, pill = `${BRAND_NAME} · your city's event guide`, seatBar = null }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_6px_20px_rgba(0,0,0,0.08)] ring-1 ring-slate-900/[0.04]">
       {seatBar}
-      <div className="p-5 sm:p-6">
-      <div className="-mt-1 mb-4 flex justify-center sm:-mt-2">
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm">
-          <Ticket className="shrink-0 text-rose-500" size={14} strokeWidth={2} aria-hidden />
-          {pill}
+      {/* Extra phone padding keeps guest fields / CTA above bottom nav + sticky book bar. Desktop padding unchanged. */}
+      <div className="p-5 max-lg:pb-[calc(8.5rem+env(safe-area-inset-bottom))] lg:p-6">
+        <div className="-mt-1 mb-4 flex justify-center sm:-mt-2">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm">
+            <Ticket className="shrink-0 text-rose-500" size={14} strokeWidth={2} aria-hidden />
+            {pill}
+          </div>
         </div>
-      </div>
-      {children}
+        {children}
       </div>
     </div>
   );
@@ -491,9 +507,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (draft.couponCodeInput) {
       setCouponCodeInput(String(draft.couponCodeInput));
     }
-    if (draft.vendorCodeInput) {
-      setVendorCodeInput(String(draft.vendorCodeInput));
-    }
     const returningFromStripe =
       stripeReturn.isPaymentReturn && stripeReturn.paymentIntentId && stripeReturn.redirectStatus;
     if (draft.step === "confirm" && !returningFromStripe) {
@@ -506,21 +519,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       cartKey: JSON.stringify(cart)
     };
 
-    if (draft.couponHold?.holdToken) {
-      // Legacy vendor discount holds are no longer valid — keep the typed vendor code only.
-      if (draft.couponHold.holdKind === "vendor") {
-        if (draft.couponHold.couponCode && !draft.vendorCodeInput) {
-          setVendorCodeInput(String(draft.couponHold.couponCode));
-        }
-      } else {
-        skipHoldClearRef.current = 2;
-        const hold = buildHoldState(draft.couponHold, snapshot) || {
-          ...draft.couponHold,
-          _draftSnapshot: snapshot
-        };
-        setCouponHold(hold);
-        setCouponMessage(draft.couponMessage || hold.message || COUPON_HOLD_MESSAGE);
-      }
+    if (draft.couponHold?.holdToken && draft.couponHold.holdKind !== "vendor") {
+      skipHoldClearRef.current = 2;
+      const hold = buildHoldState(draft.couponHold, snapshot) || {
+        ...draft.couponHold,
+        _draftSnapshot: snapshot
+      };
+      setCouponHold(hold);
+      setCouponMessage(draft.couponMessage || hold.message || COUPON_HOLD_MESSAGE);
     }
 
     if (isReservedSeating(event) && draft.seatHold?.holdToken && draft.seatHold?.selectedSeats?.length) {
@@ -581,6 +587,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     const fromLink = resolveVendorCodeForEvent(eventId);
     if (!fromLink) {
       setVendorCodeLocked(false);
+      // Do not keep manually typed codes — attribution is link-only.
+      setVendorCodeInput("");
       return;
     }
     setVendorCodeInput(fromLink);
@@ -699,20 +707,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           : await resumeEventCouponHold(resumePayload);
         const data = res?.data || res;
         const hold = buildHoldState(data, snapshot);
-        if (!hold) {
+        if (!hold || hold.holdKind === "vendor") {
           return;
         }
         skipHoldClearRef.current = 2;
         setCouponHold(hold);
         const code = data.couponCode || data.coupon_code;
         if (code) {
-          if (hold.holdKind === "vendor") {
-            setVendorCodeInput(String(code));
-            setCouponCodeInput("");
-          } else {
-            setCouponCodeInput(String(code));
-            setVendorCodeInput("");
-          }
+          setCouponCodeInput(String(code));
         }
         setCouponMessage(hold.message || COUPON_HOLD_MESSAGE);
       } catch (err) {
@@ -817,6 +819,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const showCouponCheckout =
     couponsEnabled && attendeeCount > 0 && !reservedSponsorCheckout && sponsorTicketCount < 1;
   const vendorCodeEnabled = toBoolFlag(event?.vendor_code_enabled, false);
+
   const isCouponHoldApplied = Boolean(couponHold?.holdToken);
 
   const sortedSelected = useMemo(() => normalizeDateList(selectedDates), [selectedDates]);
@@ -1324,7 +1327,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       email,
       phone,
       couponHold: reservedSponsorCheckout ? null : couponHold,
-      vendorCode: vendorCodeInput,
+      vendorCode: vendorCodeEnabled && vendorCodeLocked ? vendorCodeInput : "",
       reservedSeating,
       seatsioHoldToken,
       selectedSeats,
@@ -1465,12 +1468,105 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     if (submitting) {
       return;
     }
+    const abandonPiId = paymentIntentId;
     setPaymentModalOpen(false);
     setPaymentClientSecret("");
+    setPaymentIntentId("");
+    clearPendingStripePayment(eventId, checkoutUserId);
     setError(
       "Payment was not completed. Your tickets are not booked yet — try again when you are ready."
     );
+    if (abandonPiId) {
+      const cancelFn = guestMode ? cancelGuestBookingPayment : cancelBookingPayment;
+      void cancelFn(abandonPiId).catch(() => {
+        // Best-effort cleanup of Incomplete PaymentIntents in Stripe.
+      });
+    }
   };
+
+  const primaryActionRef = useRef(null);
+  const [pinCheckoutAction, setPinCheckoutAction] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)");
+    let frame = 0;
+    const update = () => {
+      const node = primaryActionRef.current;
+      if (!node || !media.matches || paymentModalOpen) {
+        setPinCheckoutAction(false);
+        return;
+      }
+      const buttonBox = node.getBoundingClientRect();
+      const checkout = document.getElementById("event-ticket-checkout");
+      const checkoutBox = checkout ? checkout.getBoundingClientRect() : null;
+      // Reserve space for bottom nav (~4.75rem) + sticky CTA so “visible” means usable, not covered.
+      const chromeBottom = 140;
+      const chromeTop = 96;
+      const buttonVisible =
+        buttonBox.bottom > chromeTop && buttonBox.top < window.innerHeight - chromeBottom;
+      const checkoutVisible = checkoutBox
+        ? checkoutBox.bottom > chromeTop && checkoutBox.top < window.innerHeight - 48
+        : false;
+      setPinCheckoutAction(checkoutVisible && !buttonVisible);
+    };
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        update();
+      });
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    media.addEventListener?.("change", update);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      media.removeEventListener?.("change", update);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [step, paymentModalOpen]);
+
+  const phoneCheckoutAction = pinCheckoutAction ? (
+    <div
+      className="fixed inset-x-0 z-[46] px-3 lg:hidden"
+      style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+    >
+      <div className="mx-auto flex w-full max-w-lg min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 shadow-soft backdrop-blur">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+            {attendeeCount > 0 ? `${attendeeCount} ticket${attendeeCount === 1 ? "" : "s"}` : "Tickets"}
+          </p>
+          <p className="truncate text-sm font-semibold tabular-nums text-slate-900">
+            {attendeeCount > 0 ? formatCheckoutCurrency(totalAmount) : "Add tickets to continue"}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={(step === "confirm" && submitting) || (step !== "confirm" && attendeeCount <= 0)}
+          onClick={() => {
+            if (step === "confirm") {
+              void onSubmitBooking();
+              return;
+            }
+            onContinueToConfirm();
+          }}
+          className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#E31C5F] px-4 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {step === "confirm"
+            ? submitting
+              ? needsCardPayment
+                ? "Starting…"
+                : "Saving…"
+              : needsCardPayment
+                ? "Pay & confirm"
+                : "Confirm"
+            : "Continue"}
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   if (popupReturnRelay?.paymentIntentId) {
     return (
@@ -1532,10 +1628,8 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             showDays={totalDays}
             couponCode={couponHold?.couponCode || ""}
           />
-          {vendorCodeInput.trim() ? (
-            <p className="text-xs font-semibold text-slate-700">
-              Vendor {vendorCodeInput.trim().toUpperCase()} (tracking only)
-            </p>
+          {vendorCodeLocked && vendorCodeInput.trim() ? (
+            <p className="text-xs font-semibold text-emerald-800">Partner referral applied</p>
           ) : null}
           <p className="text-sm text-slate-600">
             {needsCardPayment
@@ -1591,19 +1685,20 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:gap-3">
           <button
             type="button"
             onClick={() => setStep("form")}
-            className="flex-1 rounded-full border border-slate-300 bg-white py-3.5 text-center text-base font-semibold text-slate-900 transition hover:bg-slate-50"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-slate-300 bg-white py-3.5 text-center text-base font-semibold text-slate-900 transition hover:bg-slate-50 lg:min-h-0"
           >
             Edit details
           </button>
           <button
+            ref={primaryActionRef}
             type="button"
             disabled={submitting}
             onClick={() => void onSubmitBooking()}
-            className="flex-1 rounded-full bg-[#E31C5F] py-3.5 text-center text-base font-semibold text-white transition hover:bg-[#D70466] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-center text-base font-semibold text-white transition hover:bg-[#D70466] disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0"
           >
             {submitting
               ? needsCardPayment
@@ -1622,6 +1717,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             : `No card charge on ${BRAND_NAME} for this booking.`}
         </p>
       </CheckoutCard>
+      {phoneCheckoutAction}
       </>
     );
   }
@@ -1654,11 +1750,11 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       <div className="mb-4 overflow-hidden rounded-xl border border-slate-300">
         <div className="grid grid-cols-2 divide-x divide-slate-300">
           <div className="bg-white p-3.5">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-900">{gridLeftTitle}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-900 lg:text-[10px]">{gridLeftTitle}</p>
             <p className="mt-1 text-sm font-medium text-slate-900">{gridLeftValue}</p>
           </div>
           <div className="bg-white p-3.5">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-900">{gridRightTitle}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-900 lg:text-[10px]">{gridRightTitle}</p>
             <p
               className={`mt-1 text-sm font-medium ${
                 scheduleType !== "single" && sortedSelected.length <= 1 ? "text-slate-500" : "text-slate-900"
@@ -1726,7 +1822,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                   onClick={() => {
                     openSeatSelectionModal();
                   }}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400"
+                  className="w-full min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400"
                 >
                   {selectedSeats.length ? "Change seats on chart" : "Choose seats on chart"}
                 </button>
@@ -1746,7 +1842,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
               ) : null}
               {canUseSponsorTickets && sponsorLevels.length ? (
                 <div className="mt-3 rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-800">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-800 lg:text-[10px]">
                     Sponsor &amp; guest tickets
                   </p>
                   <p className="mb-3 text-xs text-emerald-900/80">
@@ -1762,7 +1858,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                   />
                 </div>
               ) : null}
-              <p className="mt-3 text-center text-[11px] font-medium text-slate-500">Max 50 tickets per order</p>
+              <p className="mt-3 text-center text-xs font-medium text-slate-500 lg:text-[11px]">Max 50 tickets per order</p>
             </>
           ) : (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-4 text-center text-sm text-amber-900">
@@ -1780,13 +1876,13 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
             {availableDates.map((d) => (
               <label
                 key={d}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50"
+                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
               >
                 <input
                   type="checkbox"
                   checked={selectedDates.includes(d)}
                   onChange={() => setSelectedDates((prev) => toggleDateInList(prev, d))}
-                  className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                  className="h-5 w-5 shrink-0 rounded border-slate-300 text-rose-600 focus:ring-rose-500 lg:h-4 lg:w-4"
                 />
                 <span>{formatDateUS(d)}</span>
               </label>
@@ -1795,95 +1891,104 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </div>
       ) : null}
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+      <div className="mb-4 grid gap-3 lg:grid-cols-2">
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+          <label className="text-xs font-bold uppercase tracking-wide text-slate-600 lg:text-[10px]">
             First name <span className="text-rose-600">*</span>
           </label>
           <input
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
+            onFocus={scrollPhoneFieldIntoView}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-900"
             autoComplete="given-name"
             required
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+          <label className="text-xs font-bold uppercase tracking-wide text-slate-600 lg:text-[10px]">
             Last name <span className="text-rose-600">*</span>
           </label>
           <input
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
+            onFocus={scrollPhoneFieldIntoView}
             className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-900"
             autoComplete="family-name"
             required
           />
         </div>
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
-            Email <span className="text-rose-600">*</span>
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
-            autoComplete="email"
-            required
-          />
-        </div>
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
-            Phone
-          </label>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
-            placeholder="Mobile number (optional)"
-            autoComplete="tel"
-          />
+        <div className="lg:col-span-2 lg:grid lg:grid-cols-2 lg:gap-3">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wide text-slate-600 lg:text-[10px]">
+              Email <span className="text-rose-600">*</span>
+            </label>
+            <input
+              type="email"
+              inputMode="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onFocus={scrollPhoneFieldIntoView}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
+              autoComplete="email"
+              required
+            />
+          </div>
+          <div className="mt-3 lg:mt-0">
+            <label className="text-xs font-bold uppercase tracking-wide text-slate-600 lg:text-[10px]">
+              Phone
+            </label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              onFocus={scrollPhoneFieldIntoView}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
+              placeholder="Mobile number (optional)"
+              autoComplete="tel"
+            />
+          </div>
         </div>
       </div>
 
-      {vendorCodeEnabled ? (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Vendor code</p>
-          <p className="mt-1 text-xs text-slate-500">
-            {vendorCodeLocked
-              ? "Applied from your partner link — tracking only, no discount."
-              : "Optional — enter a partner/vendor code for tracking only. No discount is applied."}
+      {vendorCodeLocked && vendorCodeInput ? (
+        <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3.5 py-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 lg:text-[10px]">Partner referral</p>
+          <p className="mt-1 text-xs text-emerald-900/80">
+            This booking is attributed to a partner link. No discount is applied.
           </p>
-          <input
-            value={vendorCodeInput}
-            onChange={(e) => {
-              if (vendorCodeLocked) {
-                return;
-              }
-              setVendorCodeInput(e.target.value.toUpperCase());
-            }}
-            readOnly={vendorCodeLocked}
-            maxLength={40}
-            placeholder="VENDOR123"
-            className={`mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase ${
-              vendorCodeLocked ? "bg-slate-100 text-slate-700" : ""
-            }`}
-          />
         </div>
       ) : null}
 
       {!showCouponCheckout ? null : (
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Coupon code</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-600 lg:text-[10px]">Coupon code</p>
           {guestMode ? (
             <p className="mt-1 text-xs text-slate-500">
               Enter your email above first, then apply your promo code here.
             </p>
           ) : null}
           <div className="mt-2 flex gap-2">
-            <input value={couponCodeInput} onChange={(e) => { setCouponCodeInput(e.target.value.toUpperCase()); if (couponHold) void clearCouponHold(); }} maxLength={20} placeholder="SAVE20" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase" />
-            <button type="button" disabled={couponApplying || !couponCodeInput.trim()} onClick={() => void applyCoupon()} className="shrink-0 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{couponApplying ? "..." : "Apply"}</button>
+            <input
+              value={couponCodeInput}
+              onChange={(e) => {
+                setCouponCodeInput(e.target.value.toUpperCase());
+                if (couponHold) void clearCouponHold();
+              }}
+              onFocus={scrollPhoneFieldIntoView}
+              maxLength={20}
+              placeholder="SAVE20"
+              className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase lg:min-h-0"
+            />
+            <button
+              type="button"
+              disabled={couponApplying || !couponCodeInput.trim()}
+              onClick={() => void applyCoupon()}
+              className="inline-flex h-11 shrink-0 items-center rounded-full bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50 lg:rounded-lg"
+            >
+              {couponApplying ? "..." : "Apply"}
+            </button>
           </div>
           {isCouponHoldApplied && couponHold?.holdToken ? (
             <div className="mt-2 space-y-1 text-xs">
@@ -1892,7 +1997,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                 <button
                   type="button"
                   onClick={() => void clearCouponHold()}
-                  className="font-semibold text-slate-600 hover:text-slate-900"
+                  className="inline-flex min-h-11 items-center font-semibold text-slate-600 hover:text-slate-900 lg:min-h-0"
                 >
                   Remove
                 </button>
@@ -1904,7 +2009,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
               ) : null}
             </div>
           ) : (
-            <p className="mt-2 text-[11px] text-slate-500">
+            <p className="mt-2 text-xs text-slate-500 lg:text-[11px]">
               Reserved for {COUPON_HOLD_MINUTES} minutes after you apply.
             </p>
           )}
@@ -1912,9 +2017,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       )}
 
       <button
+        ref={primaryActionRef}
         type="button"
         onClick={onContinueToConfirm}
-        className="w-full rounded-full bg-[#E31C5F] py-3.5 text-center text-base font-semibold text-white transition hover:bg-[#D70466]"
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-center text-base font-semibold text-white transition hover:bg-[#D70466] lg:min-h-0"
       >
         Book tickets
       </button>
@@ -1954,6 +2060,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         />
       </Suspense>
     ) : null}
+    {phoneCheckoutAction}
   </>
   );
 }

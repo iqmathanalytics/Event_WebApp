@@ -31,7 +31,9 @@ function getZonedParts(date, timeZone) {
     year: get("year"),
     month: get("month"),
     day: get("day"),
-    hour
+    hour,
+    minute: get("minute"),
+    second: get("second")
   };
 }
 
@@ -124,6 +126,85 @@ function listHourlyDateOptions(dayCount = 7, timeZone = getGaReportingTimezone()
   return options;
 }
 
+/** UTC Date for wall-clock Y-M-D H:M:S in timeZone (handles EDT/EST). */
+function zonedWallTimeToUtcDate(year, month, day, hour, minute, second, timeZone = getGaReportingTimezone()) {
+  let utcMs = Date.UTC(year, month - 1, day, hour, minute, second);
+  for (let i = 0; i < 4; i += 1) {
+    const p = getZonedParts(new Date(utcMs), timeZone);
+    const asLocalMs = Date.UTC(
+      Number(p.year),
+      Number(p.month) - 1,
+      Number(p.day),
+      p.hour,
+      Number(p.minute || 0),
+      Number(p.second || 0)
+    );
+    const wantedMs = Date.UTC(year, month - 1, day, hour, minute, second);
+    utcMs += wantedMs - asLocalMs;
+  }
+  return new Date(utcMs);
+}
+
+function toMysqlUtcDatetime(date) {
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
+
+/**
+ * Parse MySQL TIMESTAMP/DATETIME strings as UTC instants (pool uses dateStrings: true).
+ * Matches how we write bounds via toMysqlUtcDatetime for America/New_York day windows.
+ */
+function parseMysqlUtcDatetime(value) {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const match = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/
+  );
+  if (match) {
+    return new Date(
+      Date.UTC(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+        Number(match[4] || 0),
+        Number(match[5] || 0),
+        Number(match[6] || 0)
+      )
+    );
+  }
+  const fallback = new Date(raw);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+/**
+ * Half-open [start, end) UTC MySQL datetimes for a calendar day in reporting TZ.
+ * @param {string} dateStr YYYY-MM-DD
+ */
+function getZonedDayMysqlBounds(dateStr, timeZone = getGaReportingTimezone()) {
+  if (!isValidCalendarDateString(dateStr)) {
+    return null;
+  }
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const start = zonedWallTimeToUtcDate(y, m, d, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtcDate(y, m, d + 1, 0, 0, 0, timeZone);
+  return {
+    fromMysql: toMysqlUtcDatetime(start),
+    toMysql: toMysqlUtcDatetime(end),
+    fromUtc: start,
+    toUtc: end
+  };
+}
+
+/** Calendar YYYY-MM-DD for an instant in reporting timezone. */
+function getCalendarDateForInstant(date, timeZone = getGaReportingTimezone()) {
+  const p = getZonedParts(date instanceof Date ? date : new Date(date), timeZone);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
 module.exports = {
   getGaReportingTimezone,
   getCalendarDateString,
@@ -132,5 +213,11 @@ module.exports = {
   getTimezoneShortLabel,
   isValidCalendarDateString,
   formatCalendarDateLabel,
-  listHourlyDateOptions
+  listHourlyDateOptions,
+  zonedWallTimeToUtcDate,
+  toMysqlUtcDatetime,
+  parseMysqlUtcDatetime,
+  getZonedDayMysqlBounds,
+  getCalendarDateForInstant,
+  getZonedParts
 };

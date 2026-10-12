@@ -55,6 +55,11 @@ export function resolveVendorCodeForEvent(eventId, search) {
 }
 
 export function getOrCreateVendorSessionKey() {
+  return getOrCreatePageSessionKey();
+}
+
+/** Stable browser-tab session key for live presence (event + vendor). */
+export function getOrCreatePageSessionKey() {
   if (typeof sessionStorage === "undefined") {
     return `s${Date.now()}`;
   }

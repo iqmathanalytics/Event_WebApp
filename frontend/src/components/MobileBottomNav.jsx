@@ -30,13 +30,21 @@ function MobileBottomNav() {
             to={item.to}
             title={isProfile && isAuthenticated && profileName ? `Book My Tickets – ${profileName}` : undefined}
             className={({ isActive }) =>
-              `inline-flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-1 text-[11px] font-semibold transition ${
-                isActive ? "text-brand-600" : "text-slate-500"
+              `inline-flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1 text-xs font-semibold transition duration-150 ${
+                isActive ? "bg-rose-50 text-brand-600" : "text-slate-500 active:scale-[0.98]"
               }`
             }
           >
-            <Icon className="h-5 w-5" />
-            <span className="max-w-[4.5rem] truncate text-center">{item.label}</span>
+            {({ isActive }) => (
+              <>
+                <Icon className="h-5 w-5" aria-hidden="true" />
+                <span className="max-w-full truncate text-center leading-none">{item.label}</span>
+                <span
+                  className={`h-1 w-4 rounded-full ${isActive ? "bg-brand-600" : "bg-transparent"}`}
+                  aria-hidden="true"
+                />
+              </>
+            )}
           </NavLink>
         );
       })}

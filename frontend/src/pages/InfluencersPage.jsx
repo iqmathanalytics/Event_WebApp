@@ -10,6 +10,7 @@ import {
   parseInfluencerSocialLinks
 } from "../utils/influencerSocial";
 import EventFilterBar from "../components/EventFilterBar";
+import ListingEmptyState from "../components/ListingEmptyState";
 import {
   createInfluencerProfile,
   fetchInfluencers,
@@ -104,7 +105,7 @@ function InfluencersPage() {
   const [date, setDate] = useState("");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
-  const [sortBy, setSortBy] = useState("popularity");
+  const [sortBy, setSortBy] = useState("newest");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [list, setList] = useState([]);
   const [page, setPage] = useState(1);
@@ -155,6 +156,17 @@ function InfluencersPage() {
     setSelectedCity(value);
   };
 
+  const clearFilters = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setCategory("");
+    setDate("");
+    setPriceMin("");
+    setPriceMax("");
+    setSortBy("newest");
+    setPage(1);
+  };
+
   useEffect(() => {
     setCity(selectedCity || "");
   }, [selectedCity]);
@@ -181,7 +193,7 @@ function InfluencersPage() {
           q: debouncedQuery || undefined,
           city: city || undefined,
           category: category || undefined,
-          sort: sortBy || "popularity"
+          sort: sortBy || "newest"
         });
 
         if (active) {
@@ -240,9 +252,11 @@ function InfluencersPage() {
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-5"
     >
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Influencers</h1>
-        <p className="text-sm text-slate-600">Discover local creators and lifestyle experts by city, category, and audience reach.</p>
+      <div className="space-y-1.5 lg:space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">Influencers</h1>
+        <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+          Discover local creators and lifestyle experts by city, category, and audience reach.
+        </p>
       </div>
       <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-fuchsia-50/20 to-indigo-50/30 p-3 shadow-soft ring-1 ring-fuchsia-500/[0.07] sm:p-3.5">
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-fuchsia-400/30 to-violet-500/20 blur-3xl" />
@@ -259,13 +273,13 @@ function InfluencersPage() {
             <div className="flex shrink-0 items-center gap-2">
               <Link
                 to="/register"
-                className="inline-flex rounded-lg bg-gradient-to-r from-fuchsia-600 to-violet-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:from-fuchsia-500 hover:to-violet-500"
+                className="inline-flex min-h-11 items-center rounded-full bg-gradient-to-r from-fuchsia-600 to-violet-600 px-4 text-xs font-bold text-white shadow-sm transition hover:from-fuchsia-500 hover:to-violet-500 lg:min-h-0 lg:rounded-lg lg:px-3.5 lg:py-2"
               >
                 Join free
               </Link>
               <Link
                 to="/login"
-                className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:border-fuchsia-300"
+                className="inline-flex min-h-11 items-center rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-800 transition hover:border-fuchsia-300 lg:min-h-0 lg:rounded-lg lg:px-3.5 lg:py-2"
               >
                 Sign in
               </Link>
@@ -288,14 +302,14 @@ function InfluencersPage() {
                   setSubmitMessage("");
                   setSubmitOpen(true);
                 }}
-                className="inline-flex rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center rounded-full bg-slate-900 px-4 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-0 lg:rounded-lg lg:px-3.5 lg:py-2"
               >
                 Submit profile
               </button>
               {hasAnyInfluencerSubmission ? (
                 <Link
                   to="/dashboard/user/submissions"
-                  className="inline-flex rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+                  className="inline-flex min-h-11 items-center rounded-full border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 lg:min-h-0 lg:rounded-lg lg:px-3.5 lg:py-2"
                 >
                   Open submissions
                 </Link>
@@ -320,6 +334,7 @@ function InfluencersPage() {
         setPriceMax={setPriceMax}
         sortBy={sortBy}
         setSortBy={setSortBy}
+        showSort={false}
         searchPlaceholder="Search influencers"
         mobileTitle="Filter Influencers"
       />
@@ -333,7 +348,7 @@ function InfluencersPage() {
             ))
           : null}
         {!loading && list.length === 0 ? (
-          <p className="col-span-full text-sm text-slate-500">No influencers match your current filters.</p>
+          <ListingEmptyState message="No influencers match your current filters." actionLabel="Clear filters" onAction={clearFilters} />
         ) : null}
         {!loading
           ? paginatedList.map((item, idx) => {

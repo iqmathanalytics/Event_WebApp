@@ -56,7 +56,7 @@ Website (main domain document root):
 
 Database (once per environment):
   • npm run db:migrate              (local TiDB)
-  • npm run db:migrate:production   (production TiDB — includes event_seatsio.sql)
+  • npm run db:migrate:production   (production TiDB — includes vendor shares, link presence, event page presence)
   • npm run db:backfill-slugs
 
 Reserved seating (Seats.io):

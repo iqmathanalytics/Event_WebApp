@@ -103,9 +103,21 @@ function tabFromSearch(search) {
 }
 
 function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
+  const scrollerRef = useRef(null);
   const pillId = compact ? "host-tab-pill-mobile" : "host-tab-pill-desktop";
+
+  useEffect(() => {
+    const selected = scrollerRef.current?.querySelector("[data-host-tab-selected='true']");
+    selected?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [active]);
+
   return (
-    <div className="flex items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
+    <div
+      ref={scrollerRef}
+      className={`flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5 ${
+        compact ? "hide-scrollbar" : ""
+      }`}
+    >
       {tabs.map((tab) => {
         const selected = active === tab.key;
         const label = compact && tab.shortLabel ? tab.shortLabel : tab.label;
@@ -114,9 +126,10 @@ function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-              selected ? "text-slate-900" : "text-slate-600 hover:text-slate-800"
-            }`}
+            data-host-tab-selected={selected ? "true" : "false"}
+            className={`relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 font-semibold transition-colors ${
+              compact ? "min-h-11 py-2 text-sm" : "py-2 text-xs"
+            } ${selected ? "text-slate-900" : "text-slate-600 hover:text-slate-800"}`}
           >
             {selected ? (
               <motion.span
@@ -127,12 +140,12 @@ function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
             ) : null}
             <span className="relative z-[1]">{label}</span>
             {tab.key === "events" ? (
-              <span className="relative z-[1] rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+              <span className={`relative z-[1] rounded-md bg-slate-100 px-1.5 py-0.5 font-bold text-slate-700 ${compact ? "text-xs" : "text-[10px]"}`}>
                 {counts.events}
               </span>
             ) : null}
             {tab.key === "offers" ? (
-              <span className="relative z-[1] rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+              <span className={`relative z-[1] rounded-md bg-slate-100 px-1.5 py-0.5 font-bold text-slate-700 ${compact ? "text-xs" : "text-[10px]"}`}>
                 {counts.offers}
               </span>
             ) : null}
@@ -222,7 +235,7 @@ function HostWorkspacePanel({
   return (
     <section
       data-host-workspace={layout}
-      className={`scroll-mt-24 border border-slate-200 bg-white shadow-soft sm:scroll-mt-28 ${
+      className={`min-w-0 scroll-mt-24 border border-slate-200 bg-white shadow-soft sm:scroll-mt-28 ${
         layout === "mobile" ? "rounded-3xl p-3.5" : "rounded-2xl p-4"
       }`}
     >
@@ -864,7 +877,7 @@ function UserDashboardPage() {
     let cancelled = false;
     (async () => {
       setInviteError("");
-      setInviteNotice("Accepting vendor invitation…");
+      setInviteNotice("Accepting partner invitation…");
       setDesktopWorkspaceTab("vendor");
       setMobileWorkspaceTab("vendor");
       try {
@@ -895,7 +908,7 @@ function UserDashboardPage() {
           }
         }
         const eventId = String(res?.data?.event_id || "").trim();
-        setInviteNotice(res?.message || "Vendor invitation accepted.");
+        setInviteNotice(res?.message || "Partner invitation accepted. Open Vendor to view your link results.");
         const next = new URLSearchParams(location.search);
         next.delete("vendorInvite");
         next.set("host", "vendor");
@@ -912,7 +925,7 @@ function UserDashboardPage() {
           return;
         }
         setInviteNotice("");
-        setInviteError(err?.response?.data?.message || "Could not accept this vendor invitation.");
+        setInviteError(err?.response?.data?.message || "Could not accept this partner invitation.");
         const next = new URLSearchParams(location.search);
         next.delete("vendorInvite");
         next.set("host", "vendor");
@@ -1129,8 +1142,8 @@ function UserDashboardPage() {
                     className="min-w-0 max-w-full truncate"
                   />
                 </div>
-                <p className="truncate text-[11px] leading-tight text-white/70 sm:text-xs">{profile?.email || user?.email}</p>
-                <p className="truncate text-[11px] leading-tight text-white/55 sm:text-xs">{profileMobileOrEmpty(profile?.mobile_number) || "Add mobile number"}</p>
+                <p className="truncate text-xs leading-tight text-white/70">{profile?.email || user?.email}</p>
+                <p className="truncate text-xs leading-tight text-white/55">{profileMobileOrEmpty(profile?.mobile_number) || "Add mobile number"}</p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -1142,7 +1155,7 @@ function UserDashboardPage() {
                   setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
                   setShowPasswordModal(true);
                 }}
-                className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
+                className="inline-flex h-11 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2.5 text-xs font-semibold text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
                 title={isGoogleFirstPassword ? "Set your password" : "Change password"}
               >
                 <FiKey className="h-3.5 w-3.5" aria-hidden />
@@ -1156,7 +1169,7 @@ function UserDashboardPage() {
                   setProfileEditorTab("basic");
                   setShowProfileEditor(true);
                 }}
-                className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
+                className="inline-flex h-11 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2.5 text-xs font-semibold text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
               >
                 <FiEdit2 className="h-3.5 w-3.5" aria-hidden />
                 <span>Edit</span>
@@ -1172,14 +1185,14 @@ function UserDashboardPage() {
               type="button"
               disabled={enablingOrganizer}
               onClick={() => void onPostEventClick()}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
+              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
             >
               Post an event
             </button>
             <button
               type="button"
               onClick={onSubmitDealClick}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15"
+              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15"
             >
               Submit a deal
             </button>
@@ -1187,7 +1200,7 @@ function UserDashboardPage() {
               type="button"
               onClick={() => void openDealerOnboardingModal()}
               disabled={businessProfileCta.disabled}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
+              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
             >
               {hasRegisteredDealer ? "Edit business profile" : "Business profile"}
             </button>
@@ -1195,14 +1208,14 @@ function UserDashboardPage() {
               type="button"
               onClick={openInfluencerSpotlightModal}
               disabled={infStatusLower === "pending"}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
+              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
             >
               Edit creator spotlight
             </button>
             <button
               type="button"
               onClick={openPlatformTicketRequestModal}
-              className={`col-span-2 rounded-xl border px-3 py-2 text-xs font-semibold text-white ring-1 transition ${
+              className={`col-span-2 min-h-11 rounded-xl border px-3 py-2.5 text-sm font-semibold text-white ring-1 transition ${
                 canSellPlatformTickets
                   ? "border-emerald-300/40 bg-emerald-500/25 ring-emerald-400/30 hover:bg-emerald-500/35"
                   : "border-violet-300/40 bg-violet-500/25 ring-violet-400/30 hover:bg-violet-500/35"
@@ -1511,12 +1524,12 @@ function UserDashboardPage() {
               <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
                 <div className="min-w-0 flex-1">
                   <h3 className="text-base font-bold tracking-tight text-slate-900 sm:text-lg lg:text-lg">Edit profile</h3>
-                  <p className="mt-0.5 text-[11px] leading-snug text-slate-600 sm:text-sm">
+                  <p className="mt-0.5 text-xs leading-snug text-slate-600 sm:text-sm">
                     <span className="hidden lg:inline">Keep your account details updated for a smoother experience.</span>
                     <span className="lg:hidden">Update your details below.</span>
                   </p>
                 {dealerStatus ? (
-                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Dealer profile:{" "}
                     <span
                       className={
@@ -1532,7 +1545,7 @@ function UserDashboardPage() {
                   </p>
                 ) : null}
                 </div>
-                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 sm:px-3 sm:py-1 sm:text-xs">
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700 sm:px-3 sm:py-1">
                   {currentTabIndex + 1}/{profileTabs.length}
                 </span>
               </div>
@@ -1552,7 +1565,7 @@ function UserDashboardPage() {
                   key={tab.key}
                   type="button"
                   onClick={() => setProfileEditorTab(tab.key)}
-                  className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition sm:rounded-lg sm:px-3 sm:py-2 sm:text-xs ${
+                  className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-md px-2 py-1.5 text-xs font-semibold transition sm:rounded-lg sm:px-3 sm:py-2 lg:min-h-0 ${
                     profileEditorTab === tab.key
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-600 hover:text-slate-900"
@@ -1680,7 +1693,7 @@ function UserDashboardPage() {
                 {profileEditorTab === "preferences" ? (
                   <>
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:rounded-xl sm:p-3 lg:rounded-xl">
-                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 sm:mb-2 sm:text-xs">
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 sm:mb-2">
                         Interested in
                       </p>
                       <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -1698,7 +1711,7 @@ function UserDashboardPage() {
                                     : [...s.interests, interest]
                                 }))
                               }
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${
+                              className={`inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold transition lg:min-h-0 lg:py-1 ${
                                 active ? "bg-slate-900 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200/80"
                               }`}
                             >
@@ -1725,7 +1738,7 @@ function UserDashboardPage() {
                       }
                     }}
                     disabled={currentTabIndex === 0}
-                    className="min-h-[40px] flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
+                    className="min-h-11 flex-1 rounded-full border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40 lg:min-h-0 sm:flex-initial sm:px-4"
                   >
                     Back
                   </button>
@@ -1737,7 +1750,7 @@ function UserDashboardPage() {
                       }
                     }}
                     disabled={currentTabIndex >= profileTabs.length - 1}
-                    className="min-h-[40px] flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
+                    className="min-h-11 flex-1 rounded-full border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40 lg:min-h-0 sm:flex-initial sm:px-4"
                   >
                     Next
                   </button>
@@ -1746,14 +1759,14 @@ function UserDashboardPage() {
                 <button
                   type="button"
                   onClick={() => setShowProfileEditor(false)}
-                  className="min-h-[40px] flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
+                  className="min-h-11 flex-1 rounded-full border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 lg:min-h-0 sm:flex-initial sm:px-4"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={savingProfile}
-                  className="min-h-[40px] flex-[1.15] rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:min-h-0 sm:flex-initial sm:px-4 sm:py-2 sm:text-sm"
+                  className="min-h-11 flex-[1.15] rounded-full bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60 lg:min-h-0 sm:flex-initial sm:px-4"
                 >
                   {savingProfile ? (
                     "Saving…"
@@ -1797,7 +1810,7 @@ function UserDashboardPage() {
                   <button
                     type="button"
                     onClick={() => setShowPasswordModal(false)}
-                    className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100"
+                    className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-slate-500 hover:bg-slate-100 lg:min-h-0 lg:px-2 lg:py-1"
                   >
                     Close
                   </button>
@@ -1883,7 +1896,7 @@ function UserDashboardPage() {
                           setPasswordResetSending(false);
                         }
                       }}
-                      className="text-left text-xs font-semibold text-brand-600 underline-offset-2 hover:underline disabled:opacity-60"
+                      className="inline-flex min-h-11 items-center text-left text-sm font-semibold text-brand-600 underline-offset-2 hover:underline disabled:opacity-60 lg:min-h-0 lg:text-xs"
                     >
                       {passwordResetSending ? "Sending reset link…" : "Forgot password? Email me a reset link"}
                     </button>
@@ -1910,18 +1923,18 @@ function UserDashboardPage() {
                   />
                   {passwordError ? <p className="text-sm font-medium text-rose-600">{passwordError}</p> : null}
                   {passwordMessage ? <p className="text-sm font-medium text-emerald-700">{passwordMessage}</p> : null}
-                  <div className="flex justify-end gap-2 pt-1">
+                  <div className="flex flex-col gap-2 pt-1 lg:flex-row lg:justify-end">
                     <button
                       type="button"
                       onClick={() => setShowPasswordModal(false)}
-                      className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                      className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-slate-300 px-4 text-sm font-semibold text-slate-700 lg:min-h-0 lg:w-auto lg:py-2"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={passwordSaving}
-                      className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-60 lg:min-h-0 lg:w-auto lg:py-2"
                     >
                       {passwordSaving
                         ? "Saving..."

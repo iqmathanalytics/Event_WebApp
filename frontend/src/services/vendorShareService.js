@@ -34,13 +34,16 @@ export async function fetchOwnedVendorEvents() {
   return response.data;
 }
 
-export async function fetchVendorInsights(eventId, { shareId, vendorCode } = {}) {
+export async function fetchVendorInsights(eventId, { shareId, vendorCode, hourlyDate } = {}) {
   const params = {};
   if (shareId) {
     params.share_id = shareId;
   }
   if (vendorCode) {
     params.vendor_code = vendorCode;
+  }
+  if (hourlyDate) {
+    params.hourly_date = hourlyDate;
   }
   const response = await api.get(`/events/vendor/insights/${eventId}`, { params, timeout: 60_000 });
   return response.data;
@@ -58,11 +61,12 @@ export async function fetchVendorBookings(eventId, { shareId, vendorCode } = {})
   return response.data;
 }
 
-export async function recordVendorLinkHit(eventId, { vendor_code, session_key, path }) {
+export async function recordVendorLinkHit(eventId, { vendor_code, session_key, path, heartbeat }) {
   const response = await api.post(`/events/${eventId}/vendor-hits`, {
     vendor_code,
     session_key,
-    path
+    path,
+    ...(heartbeat ? { heartbeat: true } : {})
   });
   return response.data;
 }

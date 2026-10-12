@@ -740,7 +740,7 @@ export default function OrganizerCouponsPanel() {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={openCreate}
-          className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft"
+          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-soft lg:min-h-0"
         >
           Create coupon
         </motion.button>
@@ -812,11 +812,11 @@ export default function OrganizerCouponsPanel() {
                     </p>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="hide-scrollbar flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto lg:w-auto lg:flex-wrap lg:overflow-visible">
                   <button
                     type="button"
                     onClick={() => openView(coupon)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 lg:min-h-0 lg:py-1.5 lg:text-xs"
                   >
                     <FiEye className="h-3.5 w-3.5" />
                     View
@@ -824,7 +824,7 @@ export default function OrganizerCouponsPanel() {
                   <button
                     type="button"
                     onClick={() => openEdit(coupon)}
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+                    className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 lg:min-h-0 lg:py-1.5 lg:text-xs"
                   >
                     Edit
                   </button>
@@ -832,7 +832,7 @@ export default function OrganizerCouponsPanel() {
                     <button
                       type="button"
                       onClick={() => void onDeactivate(coupon.id)}
-                      className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900"
+                      className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-semibold text-amber-900 lg:min-h-0 lg:py-1.5 lg:text-xs"
                     >
                       Deactivate
                     </button>
@@ -840,7 +840,7 @@ export default function OrganizerCouponsPanel() {
                     <button
                       type="button"
                       onClick={() => void onActivate(coupon.id)}
-                      className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900"
+                      className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-900 lg:min-h-0 lg:py-1.5 lg:text-xs"
                     >
                       Activate
                     </button>
@@ -848,7 +848,7 @@ export default function OrganizerCouponsPanel() {
                   <button
                     type="button"
                     onClick={() => void onDelete(coupon.id)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-800 lg:min-h-0 lg:py-1.5 lg:text-xs"
                   >
                     <FiTrash2 className="h-3.5 w-3.5" />
                     Delete

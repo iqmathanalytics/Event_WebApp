@@ -124,7 +124,7 @@ function AdminCommunicationsSection({
               <button
                 type="button"
                 onClick={() => onExportNewsletter("csv")}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 lg:min-h-0"
               >
                 <FiDownload className="h-3.5 w-3.5" />
                 CSV
@@ -132,7 +132,7 @@ function AdminCommunicationsSection({
               <button
                 type="button"
                 onClick={() => onExportNewsletter("excel")}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 lg:min-h-0"
               >
                 <FiDownload className="h-3.5 w-3.5" />
                 Excel
@@ -141,13 +141,13 @@ function AdminCommunicationsSection({
                 type="button"
                 onClick={onSyncNewsletterMailchimp}
                 disabled={syncingNewsletterMailchimp}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0"
               >
                 {syncingNewsletterMailchimp ? "Syncing..." : "Sync Mailchimp"}
               </button>
             </div>
           </div>
-          <div className="space-y-2 p-2 md:hidden">
+          <div className="space-y-2 p-2 lg:hidden">
             {loadingNewsletter ? (
               <p className="rounded-xl border border-slate-200 px-3 py-4 text-sm text-slate-500">Loading…</p>
             ) : newsletterRows.length === 0 ? (
@@ -166,7 +166,7 @@ function AdminCommunicationsSection({
                       title="Remove subscriber"
                       disabled={deletingNewsletterId === newsletterRowId(row)}
                       onClick={() => onDeleteNewsletterSubscriber?.(newsletterRowId(row))}
-                      className="shrink-0 rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="grid h-11 w-11 shrink-0 place-content-center rounded-lg text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {deletingNewsletterId === newsletterRowId(row) ? (
                         <span className="text-[11px] font-semibold">…</span>
@@ -192,7 +192,7 @@ function AdminCommunicationsSection({
                   type="button"
                   disabled={mobilePage <= 1}
                   onClick={() => setMobilePage((p) => Math.max(1, p - 1))}
-                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                 >
                   Prev
                 </button>
@@ -203,14 +203,14 @@ function AdminCommunicationsSection({
                   type="button"
                   disabled={mobilePage >= mobileNewsletterPages}
                   onClick={() => setMobilePage((p) => Math.min(mobileNewsletterPages, p + 1))}
-                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                 >
                   Next
                 </button>
               </div>
             ) : null}
           </div>
-          <div className="hidden md:block">
+          <div className="hidden lg:block">
             <ScrollableTableFrame minWidthClass="min-w-[1020px]" bordered={false}>
             <table className="w-full table-fixed text-left text-sm">
               <colgroup>
@@ -322,7 +322,7 @@ function AdminCommunicationsSection({
               <button
                 type="button"
                 onClick={() => onExportContact("csv")}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 lg:min-h-0"
               >
                 <FiDownload className="h-3.5 w-3.5" />
                 CSV
@@ -330,14 +330,14 @@ function AdminCommunicationsSection({
               <button
                 type="button"
                 onClick={() => onExportContact("excel")}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 lg:min-h-0"
               >
                 <FiDownload className="h-3.5 w-3.5" />
                 Excel
               </button>
             </div>
           </div>
-          <div className="space-y-2 p-2 md:hidden">
+          <div className="space-y-2 p-2 lg:hidden">
             {loadingContact ? (
               <p className="rounded-xl border border-slate-200 px-3 py-4 text-sm text-slate-500">Loading…</p>
             ) : contactRows.length === 0 ? (
@@ -367,7 +367,7 @@ function AdminCommunicationsSection({
                   type="button"
                   disabled={mobileContactPage <= 1}
                   onClick={() => setMobileContactPage((p) => Math.max(1, p - 1))}
-                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                 >
                   Prev
                 </button>
@@ -378,14 +378,14 @@ function AdminCommunicationsSection({
                   type="button"
                   disabled={mobileContactPage >= mobileContactPages}
                   onClick={() => setMobileContactPage((p) => Math.min(mobileContactPages, p + 1))}
-                  className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                 >
                   Next
                 </button>
               </div>
             ) : null}
           </div>
-          <div className="hidden md:block">
+          <div className="hidden lg:block">
             <ScrollableTableFrame minWidthClass="min-w-[980px]" bordered={false}>
             <table className="w-full table-fixed text-left text-sm">
               <colgroup>

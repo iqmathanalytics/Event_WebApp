@@ -503,6 +503,7 @@ function resolveEditableColumns(type) {
       "deal_event_discount_code",
       "ticket_levels",
       "ticket_levels_json",
+      "ticket_tiers_sort",
       "service_fee_enabled",
       "service_fee_type",
       "service_fee_value",
@@ -628,6 +629,10 @@ async function editListing({ type, id, payload }) {
         const { normalizeTicketLevelsInput } = require("../utils/eventTicketLevels");
         const levels = normalizeTicketLevelsInput(value);
         return ["ticket_levels_json", levels.length ? JSON.stringify(levels) : null];
+      }
+      if (key === "ticket_tiers_sort") {
+        const { normalizeTicketTiersSort } = require("../utils/eventTicketLevels");
+        return [key, normalizeTicketTiersSort(value)];
       }
       if (
         key === "service_fee_enabled" ||

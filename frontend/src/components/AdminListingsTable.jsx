@@ -105,7 +105,7 @@ function AdminListingsTable({
 
   return (
     <>
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {mobileRows.map((item) => (
           <article
             key={`card-${String(item.id)}`}
@@ -175,14 +175,14 @@ function AdminListingsTable({
                     <button
                       type="button"
                       onClick={() => onApprove(item)}
-                      className="min-h-9 rounded-2xl bg-emerald-600 px-2.5 py-1.5 text-[10px] font-semibold text-white shadow-sm"
+                      className="min-h-11 rounded-2xl bg-emerald-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm"
                     >
                       Review
                     </button>
                     <button
                       type="button"
                       onClick={() => onReject(item)}
-                      className="min-h-9 rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-semibold text-rose-700"
+                      className="min-h-11 rounded-2xl border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-sm font-semibold text-rose-700"
                     >
                       Reject
                     </button>
@@ -192,14 +192,14 @@ function AdminListingsTable({
                     <button
                       type="button"
                       onClick={() => onView(item)}
-                      className="min-h-9 rounded-2xl border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-800"
+                      className="min-h-11 rounded-2xl border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-800"
                     >
                       View details
                     </button>
                     <button
                       type="button"
                       onClick={() => onDelete(item)}
-                      className="min-h-9 rounded-2xl bg-rose-600 px-2.5 py-1.5 text-[10px] font-semibold text-white shadow-sm"
+                      className="min-h-11 rounded-2xl bg-rose-600 px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm"
                     >
                       Delete
                     </button>
@@ -215,7 +215,7 @@ function AdminListingsTable({
               type="button"
               disabled={mobilePage <= 1}
               onClick={() => setMobilePage((p) => Math.max(1, p - 1))}
-              className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+              className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
             >
               Prev
             </button>
@@ -226,14 +226,14 @@ function AdminListingsTable({
               type="button"
               disabled={mobilePage >= mobileTotalPages}
               onClick={() => setMobilePage((p) => Math.min(mobileTotalPages, p + 1))}
-              className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+              className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
             >
               Next
             </button>
           </div>
         ) : null}
       </div>
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
       <ScrollableTableFrame minWidthClass="min-w-[1120px]" className="rounded-2xl">
       <table className="w-full table-fixed text-left text-sm">
         <colgroup>

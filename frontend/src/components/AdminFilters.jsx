@@ -188,14 +188,14 @@ function AdminFilters({ filters, onChange, onApply, onReset, canApply = true }) 
                 type="button"
                 onClick={onApply}
                 disabled={!canApply}
-                className="min-h-9 rounded-2xl bg-slate-900 px-2.5 py-1.5 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-11 rounded-2xl bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Apply
               </button>
               <button
                 type="button"
                 onClick={onReset}
-                className="min-h-9 rounded-2xl border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-700"
+                className="min-h-11 rounded-2xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700"
               >
                 Reset
               </button>

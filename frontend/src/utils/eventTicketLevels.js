@@ -128,7 +128,7 @@ export function resolveEventListPrice(event, referenceDate = new Date()) {
 export function getCheckoutTicketLevels(event) {
   const levels = filterActiveTicketLevelsForCheckout(parseTicketLevelsFromEvent(event));
   if (levels.length) {
-    return levels;
+    return sortTicketLevelsForDisplay(levels, event?.ticket_tiers_sort);
   }
   if ((event?.ticket_sales_mode || "external") === "platform") {
     const price = Number(event?.price || 0);
@@ -145,6 +145,33 @@ export function getCheckoutTicketLevels(event) {
     ];
   }
   return [];
+}
+
+export const TICKET_TIERS_SORT_OPTIONS = [
+  { value: "price_asc", label: "Price: low to high" },
+  { value: "price_desc", label: "Price: high to low" }
+];
+
+export function normalizeTicketTiersSort(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "price_desc" || raw === "high_to_low" || raw === "desc") {
+    return "price_desc";
+  }
+  return "price_asc";
+}
+
+/** Order tiers for buyer-facing checkout / event page. */
+export function sortTicketLevelsForDisplay(levels, sortMode) {
+  const list = [...(levels || [])];
+  const mode = normalizeTicketTiersSort(sortMode);
+  if (mode === "price_desc") {
+    return list.sort(
+      (a, b) => Number(b.price) - Number(a.price) || (a.sort_order ?? 0) - (b.sort_order ?? 0)
+    );
+  }
+  return list.sort(
+    (a, b) => Number(a.price) - Number(b.price) || (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  );
 }
 
 export function createEmptyCart(levels) {

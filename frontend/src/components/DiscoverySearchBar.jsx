@@ -228,15 +228,15 @@ function DiscoverySearchBar({ onCriteriaChange }) {
   return (
     <section ref={containerRef} className="relative">
       <div className="mb-1.5 flex items-center justify-between px-1 lg:hidden">
-        <h3 className="text-lg font-bold text-white sm:text-xl">Find Events</h3>
+        <h3 className="text-lg font-bold text-slate-900 sm:text-xl">Find Events</h3>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-600">
+          <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
             {activeFilterCount} filters
           </span>
           <button
             type="button"
             onClick={resetMobileFilters}
-            className="grid h-7 w-7 place-content-center rounded-full border border-slate-300 bg-white text-slate-600"
+            className="grid h-11 w-11 place-content-center rounded-full border border-slate-200 bg-white text-slate-700"
             aria-label="Reset filters"
             title="Reset filters"
           >
@@ -265,7 +265,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                     <FiMapPin size={14} />
                   </span>
                   <span className="min-w-0 flex-1 text-left">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Where</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Where</p>
                     <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedCityLabel}</p>
                   </span>
                   <FiChevronDown className="text-rose-500" size={14} />
@@ -351,7 +351,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                 : null}
             </div>
 
-            <div className="relative min-w-0">
+            <div className="relative col-span-2 min-w-0 lg:col-span-1">
               <button
                 ref={whenButtonRef}
                 type="button"
@@ -365,7 +365,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                     <FiCalendar size={14} />
                   </span>
                   <span className="min-w-0 flex-1 text-left">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">When</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">When</p>
                     <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedDateLabel}</p>
                   </span>
                 </div>
@@ -404,7 +404,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                 : null}
             </div>
 
-            <div className="relative min-w-0">
+            <div className="relative col-span-2 min-w-0 lg:col-span-1">
               <button
                 ref={categoryButtonRef}
                 type="button"
@@ -421,7 +421,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                     <FiSliders size={14} />
                   </span>
                   <span className="min-w-0 flex-1 text-left">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Category</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Category</p>
                     <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedCategoryLabel}</p>
                   </span>
                 </div>
@@ -512,7 +512,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
               <div className="flex items-center gap-2 lg:hidden">
                 <span className="grid h-9 w-9 place-content-center rounded-xl bg-emerald-50 text-emerald-600">$</span>
                 <span className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Budget</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Budget</p>
                   <p className="truncate text-sm font-semibold text-slate-900 sm:text-base">{selectedPriceLabel}</p>
                 </span>
                 <FiChevronDown className="text-emerald-600" size={14} />
@@ -567,14 +567,14 @@ function DiscoverySearchBar({ onCriteriaChange }) {
                           setPriceMin("");
                           setPriceMax("");
                         }}
-                        className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                        className="inline-flex min-h-11 items-center rounded-full border border-slate-300 px-4 text-sm font-semibold text-slate-700 lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-xs"
                       >
                         Reset
                       </button>
                       <button
                         type="button"
                         onClick={() => setActivePanel(null)}
-                        className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white"
+                        className="inline-flex min-h-11 items-center rounded-full bg-slate-900 px-4 text-sm font-semibold text-white lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-xs"
                       >
                         Done
                       </button>
@@ -588,7 +588,7 @@ function DiscoverySearchBar({ onCriteriaChange }) {
               <button
                 type="button"
                 onClick={onSearch}
-                className="inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-rose-600 px-3 py-2 text-sm font-semibold text-white shadow transition hover:from-fuchsia-600 hover:to-rose-700 sm:min-h-[44px] sm:text-base lg:w-auto lg:bg-brand-600 lg:px-5 lg:py-3 lg:text-sm lg:hover:bg-brand-700"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow transition hover:bg-brand-700 lg:min-h-0 lg:w-auto lg:bg-brand-600 lg:px-5 lg:py-3 lg:text-sm lg:hover:bg-brand-700"
                 aria-label="Search discovery listings"
               >
                 <FiSearch size={14} />

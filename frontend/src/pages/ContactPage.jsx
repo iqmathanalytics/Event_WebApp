@@ -56,7 +56,7 @@ function ContactPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="mx-auto max-w-3xl px-4 py-10 sm:py-14"
+      className="mx-auto max-w-3xl px-1 py-8 sm:px-4 sm:py-14 lg:px-4"
     >
       {/* Mobile + Tablet (does not affect desktop). */}
       <div className="lg:hidden space-y-5">
@@ -66,7 +66,10 @@ function ContactPage() {
           <p className="mt-2 text-sm leading-relaxed text-white/75">
             Partnerships, support, feedback—send a message and we’ll reply within one business day. You can also email us
             at{" "}
-            <a href={`mailto:${BRAND_SUPPORT_EMAIL}`} className="font-semibold text-white underline decoration-white/40">
+            <a
+              href={`mailto:${BRAND_SUPPORT_EMAIL}`}
+              className="inline-flex min-h-11 items-center font-semibold text-white underline decoration-white/40"
+            >
               {BRAND_SUPPORT_EMAIL}
             </a>
             .
@@ -181,7 +184,7 @@ function ContactPage() {
               disabled={submitting}
               whileHover={{ scale: submitting ? 1 : 1.01 }}
               whileTap={{ scale: submitting ? 1 : 0.99 }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {submitting ? (
                 <>
@@ -325,7 +328,7 @@ function ContactPage() {
               disabled={submitting}
               whileHover={{ scale: submitting ? 1 : 1.01 }}
               whileTap={{ scale: submitting ? 1 : 0.99 }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:min-w-[200px]"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:min-w-[200px] lg:min-h-0"
             >
               {submitting ? (
                 <>

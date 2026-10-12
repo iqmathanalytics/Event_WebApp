@@ -73,7 +73,7 @@ export default function BecomeSponsorButton({ email, phone, eventTitle }) {
               <button
                 type="button"
                 onClick={close}
-                className="absolute right-3 top-3 grid h-8 w-8 place-content-center rounded-full text-slate-500 transition hover:bg-white/80 hover:text-slate-800"
+                className="absolute right-3 top-3 grid h-11 w-11 place-content-center rounded-full text-slate-500 transition hover:bg-white/80 hover:text-slate-800 lg:h-8 lg:w-8"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -127,13 +127,14 @@ export default function BecomeSponsorButton({ email, phone, eventTitle }) {
         onClick={() => setOpen(true)}
         whileHover={{ y: -1 }}
         whileTap={{ scale: 0.97 }}
-        className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/90 bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2 text-xs font-semibold text-amber-950 shadow-sm ring-1 ring-amber-900/[0.04] backdrop-blur-sm transition hover:border-amber-300 hover:from-amber-100 hover:to-orange-100 hover:shadow-md sm:gap-2 sm:px-3.5"
+        className="event-action-btn inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200/90 bg-gradient-to-r from-amber-50 to-orange-50 px-2.5 py-1.5 text-xs font-semibold text-amber-950 shadow-sm ring-1 ring-amber-900/[0.04] backdrop-blur-sm transition hover:border-amber-300 hover:from-amber-100 hover:to-orange-100 hover:shadow-md lg:gap-2 lg:px-3 lg:min-h-0"
+        aria-label="Become a sponsor"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <Handshake className="h-3.5 w-3.5 text-amber-700" aria-hidden />
-        <span className="hidden sm:inline">Become a Sponsor</span>
-        <span className="sm:hidden">Sponsor</span>
+        <Handshake className="event-action-glyph h-3.5 w-3.5 text-amber-700" aria-hidden />
+        <span className="hidden lg:inline">Become a Sponsor</span>
+        <span className="event-action-label lg:hidden">Sponsor</span>
       </motion.button>
       {typeof document !== "undefined" ? createPortal(modal, document.body) : null}
     </>

@@ -189,25 +189,23 @@ async function sendTransactionalEmail({ to, subject, text, html, replyTo, attach
           return { sent: true, provider: "brevo" };
         }
       } else {
-        if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
-          console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, firstErr);
-        }
-        return { sent: false, error: firstErr, provider: "brevo" };
+        // eslint-disable-next-line no-console
+        console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, firstErr);
+        return { sent: false, error: firstErr, provider: "brevo", status: res.status };
       }
     }
 
     if (!res.ok) {
       const errText = await parseBrevoErrorResponse(res);
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, errText);
-      }
-      return { sent: false, error: errText, provider: "brevo" };
+      // eslint-disable-next-line no-console
+      console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, errText);
+      return { sent: false, error: errText, provider: "brevo", status: res.status };
     }
 
     return { sent: true, provider: "brevo" };
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[emailIntegrations] Brevo request error:`, err?.message || err);
     return { sent: false, error: err?.message || "Brevo request failed", provider: "brevo" };
   }
 }

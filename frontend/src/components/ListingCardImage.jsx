@@ -22,7 +22,8 @@ export default function ListingCardImage({
   className,
   placeholderClassName = "flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500",
   emptyLabel = "No image",
-  priority = false
+  priority = false,
+  sizes = LISTING_CARD_SIZES
 }) {
   const rootRef = useRef(null);
   const [shouldLoad, setShouldLoad] = useState(Boolean(priority));
@@ -131,7 +132,7 @@ export default function ListingCardImage({
             <img
               src={displaySrc}
               srcSet={srcSet}
-              sizes={LISTING_CARD_SIZES}
+              sizes={sizes}
               alt={alt}
               loading={loadingAttr}
               fetchPriority={fetchPriority}
@@ -146,7 +147,7 @@ export default function ListingCardImage({
             <img
               src={displaySrc}
               srcSet={srcSet}
-              sizes={LISTING_CARD_SIZES}
+              sizes={sizes}
               alt={alt}
               loading={loadingAttr}
               fetchPriority={fetchPriority}

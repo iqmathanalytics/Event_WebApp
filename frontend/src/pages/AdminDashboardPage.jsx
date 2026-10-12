@@ -653,6 +653,7 @@ function AdminDashboardPage() {
       String(item.is_yay_deal_event || "") === "1",
     deal_event_discount_code: item.deal_event_discount_code || "",
     ticket_levels: ticketLevelsToFormRows(parseTicketLevelsFromEvent(item)),
+    ticket_tiers_sort: item.ticket_tiers_sort === "price_desc" ? "price_desc" : "price_asc",
     ticket_levels_json: item.ticket_levels_json
   });
 
@@ -692,6 +693,10 @@ function AdminDashboardPage() {
           payload.ticket_levels = levels;
           payload.price = Math.min(...levels.map((l) => l.price));
         }
+        return;
+      }
+      if (key === "ticket_tiers_sort") {
+        payload.ticket_tiers_sort = value === "price_desc" ? "price_desc" : "price_asc";
         return;
       }
       if (key === "ticket_levels_json") {
@@ -1492,7 +1497,7 @@ function AdminDashboardPage() {
                       await loadNotifications({ silent: false });
                     }
                   }}
-                  className="relative rounded-2xl bg-white/10 p-2 text-white ring-1 ring-white/10 hover:bg-white/15"
+                  className="relative grid h-11 w-11 place-content-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10 hover:bg-white/15"
                   aria-label="Open notifications"
                 >
                   <FiBell className="h-5 w-5" />
@@ -1526,7 +1531,7 @@ function AdminDashboardPage() {
                     key={item.key}
                     type="button"
                     onClick={() => setActiveSection(item.key)}
-                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
+                    className={`inline-flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold ring-1 transition ${
                       selected
                         ? "bg-white/20 text-white ring-white/25 shadow-[0_10px_26px_-18px_rgba(255,255,255,0.35)]"
                         : "bg-white/10 text-white/80 ring-white/10 hover:bg-white/15"
@@ -2051,21 +2056,21 @@ function AdminDashboardPage() {
                     setActiveBookingPanel(null);
                     setMobileBookingsPage(1);
                   }}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 lg:min-h-0"
                 >
                   Reset filters
                 </button>
                 <button
                   type="button"
                   onClick={() => exportBookings("csv")}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                  className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 lg:min-h-0"
                 >
                   Download CSV
                 </button>
                 <button
                   type="button"
                   onClick={() => exportBookings("excel")}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                  className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 lg:min-h-0"
                 >
                   Download Excel
                 </button>
@@ -2273,7 +2278,7 @@ function AdminDashboardPage() {
               />
               </div>
             </div>
-            <div className="mt-3 space-y-2 md:hidden">
+            <div className="mt-3 space-y-2 lg:hidden">
               {loadingBookings ? (
                 <p className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">Loading bookings...</p>
               ) : bookingRows.length === 0 ? (
@@ -2314,7 +2319,7 @@ function AdminDashboardPage() {
                     type="button"
                     disabled={mobileBookingsPage <= 1}
                     onClick={() => setMobileBookingsPage((p) => Math.max(1, p - 1))}
-                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                   >
                     Prev
                   </button>
@@ -2327,7 +2332,7 @@ function AdminDashboardPage() {
                     onClick={() =>
                       setMobileBookingsPage((p) => Math.min(Math.max(1, Math.ceil(bookingRows.length / perPageMobile)), p + 1))
                     }
-                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                   >
                     Next
                   </button>
@@ -2336,7 +2341,7 @@ function AdminDashboardPage() {
             </div>
             <div
               ref={bookingTableRef}
-              className="mt-3 hidden w-full max-w-full min-w-0 md:block"
+              className="mt-3 hidden w-full max-w-full min-w-0 lg:block"
             >
               <ScrollableTableFrame minWidthClass="min-w-[1280px]">
               <table className="w-full table-fixed text-left text-sm">
@@ -2439,7 +2444,7 @@ function AdminDashboardPage() {
         ) : activeSection === "users" ? (
           <section className="space-y-4">
             <h2 className="text-lg font-semibold text-slate-900">User Management</h2>
-            <div className="space-y-2 md:hidden">
+            <div className="space-y-2 lg:hidden">
               {loadingUsers ? (
                 <p className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">Loading users...</p>
               ) : usersRows.length === 0 ? (
@@ -2471,7 +2476,7 @@ function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteUser(user.id)}
-                      className="mt-2 rounded-lg bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white"
+                      className="mt-2 inline-flex min-h-11 items-center rounded-lg bg-rose-600 px-3 py-1 text-sm font-semibold text-white"
                     >
                       Delete
                     </button>
@@ -2484,7 +2489,7 @@ function AdminDashboardPage() {
                     type="button"
                     disabled={mobileUsersPage <= 1}
                     onClick={() => setMobileUsersPage((p) => Math.max(1, p - 1))}
-                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                   >
                     Prev
                   </button>
@@ -2497,14 +2502,14 @@ function AdminDashboardPage() {
                     onClick={() =>
                       setMobileUsersPage((p) => Math.min(Math.max(1, Math.ceil(usersRows.length / perPageMobile)), p + 1))
                     }
-                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                   >
                     Next
                   </button>
                 </div>
               ) : null}
             </div>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <ScrollableTableFrame minWidthClass="min-w-[900px]" className="rounded-2xl">
               <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
@@ -2644,11 +2649,11 @@ function AdminDashboardPage() {
             {teamMessage ? <p className="text-sm font-medium text-emerald-700">{teamMessage}</p> : null}
             {teamError ? <p className="text-sm font-medium text-rose-600">{teamError}</p> : null}
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setTeamRole("organizer")}
-                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                className={`inline-flex min-h-11 items-center rounded-lg px-3 py-1.5 text-sm font-semibold lg:min-h-0 ${
                   teamRole === "organizer" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"
                 }`}
               >
@@ -2657,7 +2662,7 @@ function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={() => setTeamRole("admin")}
-                className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                className={`inline-flex min-h-11 items-center rounded-lg px-3 py-1.5 text-sm font-semibold lg:min-h-0 ${
                   teamRole === "admin" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"
                 }`}
               >
@@ -2665,7 +2670,7 @@ function AdminDashboardPage() {
               </button>
             </div>
 
-            <div className="space-y-2 md:hidden">
+            <div className="space-y-2 lg:hidden">
               {loadingTeam ? (
                 <p className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">Loading team users...</p>
               ) : teamRows.length === 0 ? (
@@ -2737,14 +2742,14 @@ function AdminDashboardPage() {
                           <button
                             type="button"
                             onClick={() => handleSaveCapabilities(user)}
-                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                            className="inline-flex min-h-11 items-center rounded-md border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700"
                           >
                             Save Capabilities
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeactivate(user.id)}
-                            className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white"
+                            className="inline-flex min-h-11 items-center rounded-md bg-rose-600 px-3 py-1 text-sm font-semibold text-white"
                           >
                             Deactivate
                           </button>
@@ -2753,7 +2758,7 @@ function AdminDashboardPage() {
                         <button
                           type="button"
                           onClick={() => handleActivate(user.id)}
-                          className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white"
+                          className="inline-flex min-h-11 items-center rounded-md bg-emerald-600 px-3 py-1 text-sm font-semibold text-white"
                         >
                           Activate
                         </button>
@@ -2768,7 +2773,7 @@ function AdminDashboardPage() {
                     type="button"
                     disabled={mobileTeamPage <= 1}
                     onClick={() => setMobileTeamPage((p) => Math.max(1, p - 1))}
-                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                   >
                     Prev
                   </button>
@@ -2781,14 +2786,14 @@ function AdminDashboardPage() {
                     onClick={() =>
                       setMobileTeamPage((p) => Math.min(Math.max(1, Math.ceil(teamRows.length / perPageMobile)), p + 1))
                     }
-                    className="rounded-lg px-2 py-1 font-semibold disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center rounded-lg px-3 py-1 font-semibold disabled:opacity-40"
                   >
                     Next
                   </button>
                 </div>
               ) : null}
             </div>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <ScrollableTableFrame minWidthClass="min-w-[980px]" className="rounded-2xl">
               <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
@@ -3437,6 +3442,10 @@ function AdminDashboardPage() {
                     <EventTicketLevelsEditor
                       levels={editForm.ticket_levels || []}
                       onChange={(ticket_levels) => setEditForm((prev) => ({ ...prev, ticket_levels }))}
+                      tiersSort={editForm.ticket_tiers_sort || "price_asc"}
+                      onTiersSortChange={(ticket_tiers_sort) =>
+                        setEditForm((prev) => ({ ...prev, ticket_tiers_sort }))
+                      }
                       disabled={editSaving}
                     />
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
@@ -4008,6 +4017,10 @@ function AdminDashboardPage() {
                     <EventTicketLevelsEditor
                       levels={reviewForm.ticket_levels || []}
                       onChange={(ticket_levels) => setReviewForm((prev) => ({ ...prev, ticket_levels }))}
+                      tiersSort={reviewForm.ticket_tiers_sort || "price_asc"}
+                      onTiersSortChange={(ticket_tiers_sort) =>
+                        setReviewForm((prev) => ({ ...prev, ticket_tiers_sort }))
+                      }
                     />
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:col-span-2">
                       Guest checkout uses the on-site flow. The optional URL below is not the primary buy action.

@@ -114,6 +114,7 @@ export function thumbImageUrl(url) {
   return displayImageUrl(url, 160);
 }
 
-export const LISTING_CARD_SIZES = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw";
+export const LISTING_CARD_SIZES = "(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw";
+export const HOME_CARD_SIZES = "(max-width: 1023px) 100vw, 33vw";
 export const LISTING_BANNER_SIZES = "100vw";
 export const HERO_IMAGE_SIZES = "(max-width: 1024px) 100vw, 56vw";

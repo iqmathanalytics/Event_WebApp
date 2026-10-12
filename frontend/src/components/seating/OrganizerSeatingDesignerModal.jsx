@@ -259,25 +259,25 @@ export default function OrganizerSeatingDesignerModal({
           ? "Pick a type → draw seats → Use this chart → Submit Event on the listing form."
           : "Edit this chart, then Save seating chart to update the linked event."}
       </p>
-      <div className="flex shrink-0 flex-wrap gap-1.5">
+      <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:gap-1.5">
         <button
           type="button"
           onClick={() => setShowGuide(true)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 lg:min-h-0 lg:w-auto lg:py-1.5 lg:text-xs"
         >
           How it works
         </button>
         <button
           type="button"
           onClick={reloadDesigner}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 lg:min-h-0 lg:w-auto lg:py-1.5 lg:text-xs"
         >
           Reload designer
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 lg:min-h-0 lg:w-auto lg:py-1.5 lg:text-xs"
         >
           Close
         </button>
@@ -285,7 +285,7 @@ export default function OrganizerSeatingDesignerModal({
           type="button"
           disabled={saving || !hasChartKey}
           onClick={() => void handleSave()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-50 lg:min-h-0 lg:w-auto lg:py-1.5 lg:text-xs"
         >
           <Save className="h-3.5 w-3.5" />
           {saving ? "Saving..." : draftMode ? "Use this chart" : "Save seating chart"}
@@ -367,7 +367,7 @@ export default function OrganizerSeatingDesignerModal({
                   <button
                     type="button"
                     onClick={() => setShowGuide(false)}
-                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white lg:min-h-0 lg:w-auto lg:py-2"
                   >
                     Got it
                   </button>

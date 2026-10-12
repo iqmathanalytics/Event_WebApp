@@ -11,20 +11,42 @@ const {
   getTimezoneShortLabel
 } = require("../utils/gaReportingTimezone");
 const { normalizeTicketSalesMode, readTicketSalesModeRaw } = require("../utils/eventTicketSalesMode");
+const { getEventAvailableDates } = require("../utils/eventSchedule");
 
-function isActiveListedEvent(event) {
+function isTruthyFlag(value) {
+  return value !== false && value !== 0 && String(value) !== "false" && value != null && String(value) !== "";
+}
+
+/**
+ * Same bucket as organizer "Active Events":
+ * approved + listed on site + not past (last show date >= today in app TZ).
+ */
+function isActiveListedEvent(event, todayStr = getCalendarDateString(0, getAppTimeZone() || getGaReportingTimezone())) {
   if (!event) {
     return false;
   }
-  const listed =
-    event.is_listed !== false &&
-    event.is_listed !== 0 &&
-    String(event.is_listed) !== "false";
-  const shown =
-    event.show_on_events_page !== false &&
-    event.show_on_events_page !== 0 &&
-    String(event.show_on_events_page) !== "false";
-  return listed && shown;
+  const approved = String(event.status || "").toLowerCase() === "approved";
+  if (!approved) {
+    return false;
+  }
+  const listed = Object.prototype.hasOwnProperty.call(event, "is_listed")
+    ? isTruthyFlag(event.is_listed)
+    : isTruthyFlag(event.show_on_events_page);
+  const shown = Object.prototype.hasOwnProperty.call(event, "show_on_events_page")
+    ? isTruthyFlag(event.show_on_events_page)
+    : listed;
+  if (!listed || !shown) {
+    return false;
+  }
+  const dates = getEventAvailableDates(event);
+  const lastShow =
+    dates.length > 0
+      ? dates[dates.length - 1]
+      : String(event.event_date || event.event_end_date || "").slice(0, 10);
+  if (lastShow && /^\d{4}-\d{2}-\d{2}$/.test(lastShow) && lastShow < todayStr) {
+    return false;
+  }
+  return true;
 }
 
 function formatPartsInTz(date, timeZone) {

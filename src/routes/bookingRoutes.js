@@ -40,6 +40,11 @@ router.post(
   validateRequest(confirmPaymentSchema),
   paymentController.confirmGuestPayment
 );
+router.post(
+  "/guest/cancel-payment",
+  validateRequest(confirmPaymentSchema),
+  paymentController.cancelGuestPaymentIntent
+);
 
 router.post(
   "/guest/validate-coupon",
@@ -75,6 +80,12 @@ router.post(
   authMiddleware,
   validateRequest(confirmPaymentSchema),
   paymentController.confirmPayment
+);
+router.post(
+  "/cancel-payment",
+  authMiddleware,
+  validateRequest(confirmPaymentSchema),
+  paymentController.cancelPaymentIntent
 );
 router.post(
   "/validate-coupon",

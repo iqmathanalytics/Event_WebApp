@@ -33,7 +33,8 @@ function EventFilterControls({
   showDate = true,
   showPrice = true,
   showSort = true,
-  searchPlaceholder = "Search events"
+  searchPlaceholder = "Search events",
+  className = "contents"
 }) {
   const containerRef = useRef(null);
   const [activePanel, setActivePanel] = useState(null);
@@ -80,8 +81,8 @@ function EventFilterControls({
   const priceLabel = priceMin || priceMax ? `${priceMin || 0} - ${priceMax || "Any"}` : "Any Price";
 
   return (
-    <div ref={containerRef} className="contents">
-      <label className="relative min-w-[210px] flex-1">
+    <div ref={containerRef} className={className}>
+      <label className="relative min-w-0 w-full flex-1 lg:w-auto lg:min-w-[210px]">
         <span className="sr-only">{searchPlaceholder}</span>
         <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -337,13 +338,14 @@ function EventFilterBar(props) {
 
   return (
     <>
-      <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className={`${compact ? "flex" : "hidden lg:flex"} items-center gap-2`}>
+      <section className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm lg:rounded-3xl lg:p-3">
+        <div className={compact ? undefined : "hidden items-center gap-2 lg:flex"}>
           <EventFilterControls
             {...props}
+            className={compact ? "listing-filter-compact" : "contents"}
             showDate={compact ? false : showDate}
             showPrice={compact ? false : showPrice}
-            showSort={compact ? false : showSort}
+            showSort={showSort}
           />
           {!compact ? (
             <>

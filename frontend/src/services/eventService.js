@@ -90,3 +90,8 @@ export function trackEventView(slugOrId, payload = {}) {
   const path = `/events/${encodePublicListingParam(slugOrId)}/track-view`;
   return postKeepalive(path, payload).catch(() => ({ success: false }));
 }
+
+export function trackEventPresence(slugOrId, { session_key } = {}) {
+  const path = `/events/${encodePublicListingParam(slugOrId)}/presence`;
+  return postKeepalive(path, { session_key }).catch(() => ({ success: false }));
+}

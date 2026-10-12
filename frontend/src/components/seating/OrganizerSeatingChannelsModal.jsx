@@ -44,11 +44,11 @@ export default function OrganizerSeatingChannelsModal({
       <p className="text-xs text-slate-600">
         Manage private channels directly in Seats.io. Channel changes are saved by Seats.io for this event.
       </p>
-      <div className="flex shrink-0 flex-wrap gap-1.5">
+      <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:justify-end">
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 lg:min-h-0 lg:w-auto lg:py-1.5 lg:text-xs"
         >
           Close
         </button>

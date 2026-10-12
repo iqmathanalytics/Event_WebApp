@@ -221,7 +221,7 @@ function GalleryTile({ entry, reduceMotion, large, roundClass }) {
         </div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 p-2.5 sm:p-3">
           <span
-            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-sm sm:text-[11px] ${typeBadgeClass(
+            className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm sm:text-[11px] ${typeBadgeClass(
               entry.type
             )}`}
           >
@@ -294,7 +294,7 @@ export default function LoginDiscoverGallery() {
   return (
     <div
       data-route-splash-ignore
-      className="relative flex h-full min-h-[min(58vh,420px)] w-full min-w-0 flex-col overflow-hidden bg-slate-950 shadow-[0_28px_64px_-28px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/20 sm:min-h-[min(60vh,460px)] lg:rounded-3xl lg:min-h-0 lg:h-full"
+      className="relative flex h-full min-h-[min(40vh,300px)] w-full min-w-0 flex-col overflow-hidden rounded-3xl bg-slate-950 shadow-[0_28px_64px_-28px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/20 sm:min-h-[min(48vh,360px)] lg:min-h-0 lg:h-full"
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_70%_at_70%_20%,rgba(244,114,182,0.12),transparent_55%),radial-gradient(ellipse_80%_60%_at_10%_80%,rgba(56,189,248,0.1),transparent_50%)]" aria-hidden />
       <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:24px_24px]" aria-hidden />
@@ -312,10 +312,10 @@ export default function LoginDiscoverGallery() {
         </div>
       ) : (
         <div className="relative z-[1] flex min-h-0 flex-1 flex-col pointer-events-none">
-          <p className="pointer-events-none absolute bottom-2 left-3 right-3 z-[2] text-center text-[11px] font-medium leading-snug text-white/80 sm:left-4 sm:right-4 sm:text-sm lg:bottom-auto lg:left-5 lg:right-auto lg:top-5 lg:max-w-none lg:text-left lg:text-sm">
+          <p className="pointer-events-none absolute left-3 right-3 top-2 z-[2] text-center text-xs font-medium leading-snug text-white/80 sm:left-4 sm:right-4 sm:text-sm lg:left-5 lg:right-auto lg:top-5 lg:max-w-none lg:text-left lg:text-sm">
             Discover events, deals &amp; creators near you.
           </p>
-          <div className="relative min-h-0 flex-1 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 lg:p-4 lg:pb-4 lg:pt-14">
+          <div className="relative min-h-0 flex-1 px-2 pb-3 pt-11 sm:px-3 sm:pt-12 lg:p-4 lg:pb-4 lg:pt-14">
             <div className="grid h-full min-h-[260px] auto-rows-fr grid-cols-2 grid-rows-[2fr_1fr_1fr_1fr_1fr] gap-2 sm:min-h-[300px] sm:gap-2.5 lg:min-h-0 lg:grid-cols-12 lg:grid-rows-6 lg:gap-3">
               {tilesWithEntries.map((tile) => (
                 <div key={tile.key} className={`relative min-h-0 ${tile.className}`}>

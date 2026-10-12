@@ -13,14 +13,14 @@ function NewsletterPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="mx-auto max-w-2xl space-y-8 px-4 py-10 sm:py-14"
+      className="mx-auto max-w-2xl space-y-6 px-1 py-8 sm:space-y-8 sm:px-4 sm:py-14 lg:px-4"
     >
       {/* Mobile + Tablet (does not affect desktop). */}
       <div className="lg:hidden space-y-5">
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-soft">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-white/70">Newsletter</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/70">Newsletter</p>
               <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight">
                 City pulse,
                 <span className="block text-white/90">in your inbox</span>
@@ -60,7 +60,7 @@ function NewsletterPage() {
                 We’ll use your selected city when relevant. You can change it anytime.
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">
+            <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
               Fast signup
             </span>
           </div>
@@ -70,7 +70,7 @@ function NewsletterPage() {
               cityId={selectedCity || undefined}
               title={null}
               description={null}
-              className="border-none p-0 shadow-none"
+              className="!rounded-none !border-0 !p-0 !shadow-none sm:!p-0"
             />
           </div>
         </section>
@@ -93,7 +93,7 @@ function NewsletterPage() {
             <p className="text-xs font-semibold text-slate-700">Prefer reaching out first?</p>
             <a
               href="/contact"
-              className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-slate-900 px-4 text-sm font-semibold text-white"
             >
               Contact us
               <FiArrowRight className="h-3.5 w-3.5" aria-hidden />

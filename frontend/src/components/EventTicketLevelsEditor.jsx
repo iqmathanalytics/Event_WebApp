@@ -25,8 +25,15 @@ function colorSelection(row) {
   return { key: key || "", hex: hex || "" };
 }
 
-export default function EventTicketLevelsEditor({ levels, onChange, disabled = false }) {
+export default function EventTicketLevelsEditor({
+  levels,
+  onChange,
+  tiersSort = "price_asc",
+  onTiersSortChange,
+  disabled = false
+}) {
   const rows = Array.isArray(levels) ? levels : [];
+  const sortMode = tiersSort === "price_desc" ? "price_desc" : "price_asc";
 
   const updateRow = (index, patch) => {
     const next = rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
@@ -99,6 +106,59 @@ export default function EventTicketLevelsEditor({ levels, onChange, disabled = f
           Add level
         </button>
       </div>
+
+      {typeof onTiersSortChange === "function" ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 sm:px-4">
+          <p className="text-xs font-semibold text-slate-900">Show ticket tiers by price</p>
+          <p className="mt-0.5 text-[11px] text-slate-600">
+            Controls the order buyers see on the event page and checkout (not the order you edit below).
+          </p>
+          <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+            <label
+              className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2.5 transition ${
+                sortMode === "price_asc"
+                  ? "border-slate-900 bg-white ring-1 ring-slate-900/10"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="ticket_tiers_sort"
+                value="price_asc"
+                checked={sortMode === "price_asc"}
+                disabled={disabled}
+                onChange={() => onTiersSortChange("price_asc")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-900">Price: low to high</span>
+                <span className="block text-xs text-slate-500">Cheapest tier first.</span>
+              </span>
+            </label>
+            <label
+              className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2.5 transition ${
+                sortMode === "price_desc"
+                  ? "border-slate-900 bg-white ring-1 ring-slate-900/10"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="ticket_tiers_sort"
+                value="price_desc"
+                checked={sortMode === "price_desc"}
+                disabled={disabled}
+                onChange={() => onTiersSortChange("price_desc")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-900">Price: high to low</span>
+                <span className="block text-xs text-slate-500">Most expensive tier first.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-4 py-6 text-center">

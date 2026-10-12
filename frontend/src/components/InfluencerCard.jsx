@@ -5,6 +5,8 @@ import { Instagram, Youtube } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { influencerDetailPath } from "../utils/listingPaths";
 import ListingCardImage from "./ListingCardImage";
+import { HOME_CARD_SIZES } from "../utils/displayImage";
+import { LandingTagList } from "./ListingTagIcon";
 
 /** Fixed height for the stats row so every card aligns in the carousel/grid. */
 const REACH_STATS_ROW_CLASS = "h-[5.25rem]";
@@ -171,8 +173,8 @@ function InfluencerCard({
           e.stopPropagation();
           onToggleFavorite?.();
         }}
-        className={`absolute right-3 top-3 z-10 grid h-9 w-9 place-content-center rounded-full bg-white/95 text-sm shadow transition ${
-          isFavorite ? "opacity-100 text-rose-600" : "opacity-100 text-slate-600 md:opacity-0 md:group-hover:opacity-100"
+        className={`absolute right-3 top-3 z-10 grid h-11 w-11 place-content-center rounded-full bg-white/95 text-sm shadow transition lg:h-9 lg:w-9 ${
+          isFavorite ? "opacity-100 text-rose-600" : "opacity-100 text-slate-600 lg:opacity-0 lg:group-hover:opacity-100"
         }`}
         aria-label="Save influencer"
       >
@@ -181,7 +183,7 @@ function InfluencerCard({
 
       <div
         className={`relative w-full shrink-0 overflow-hidden bg-slate-100 ${
-          isLanding ? "h-44" : "h-40 sm:h-44"
+          isLanding ? "h-64 sm:h-72 lg:h-44" : "h-40 sm:h-44"
         }`}
       >
         <ListingCardImage
@@ -191,6 +193,7 @@ function InfluencerCard({
           emptyLabel="No profile image"
           placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-500"
           priority={priority}
+          sizes={isLanding ? HOME_CARD_SIZES : undefined}
         />
       </div>
 
@@ -204,24 +207,18 @@ function InfluencerCard({
 
         <h3
           className={`font-bold leading-snug text-slate-900 ${
-            isLanding ? "line-clamp-2 text-[15px]" : "line-clamp-2 text-sm sm:text-[15px]"
+            isLanding ? "line-clamp-2 text-lg lg:text-[15px]" : "line-clamp-2 text-sm sm:text-[15px]"
           }`}
         >
           {item.name}
         </h3>
 
-        {tags.length ? (
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className={`inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:text-[11px] ${getTagStyles(tag)}`}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <LandingTagList
+          tags={tags}
+          classFor={(tag) =>
+            `inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:text-[11px] ${getTagStyles(tag)}`
+          }
+        />
 
         <div className="flex-1" aria-hidden />
 
@@ -230,7 +227,11 @@ function InfluencerCard({
 
           <button
             type="button"
-            className="w-full rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+            className={`rounded-full bg-slate-900 font-semibold text-white transition hover:bg-slate-700 ${
+              isLanding
+                ? "inline-flex min-h-11 w-full items-center justify-center px-4 text-sm lg:min-h-0 lg:px-3 lg:py-2 lg:text-xs"
+                : "inline-flex min-h-11 w-full items-center justify-center px-4 text-sm lg:min-h-0 lg:px-3 lg:py-2 lg:text-xs"
+            }`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

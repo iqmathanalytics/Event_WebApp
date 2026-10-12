@@ -2,7 +2,7 @@ import { useId, useRef, useState } from "react";
 import { uploadImageFile } from "../services/uploadService";
 
 const btnClass =
-  "inline-flex cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50";
+  "inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 lg:min-h-0";
 const btnDisabled = "cursor-not-allowed opacity-60";
 
 /**
@@ -61,7 +61,7 @@ export default function CloudinaryImageInput({ value, onChange, disabled, compac
             <button
               type="button"
               onClick={() => onChange("")}
-              className="shrink-0 rounded-xl border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-xl border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 lg:min-h-0"
             >
               Clear
             </button>
@@ -92,7 +92,7 @@ export default function CloudinaryImageInput({ value, onChange, disabled, compac
       </div>
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
       {value ? (
-        <p className="truncate text-[11px] text-slate-500" title={value}>
+        <p className="truncate text-xs text-slate-500 lg:text-[11px]" title={value}>
           {value}
         </p>
       ) : null}
