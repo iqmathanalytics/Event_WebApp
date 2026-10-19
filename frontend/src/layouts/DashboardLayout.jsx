@@ -1,14 +1,26 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import MobileBottomNav from "../components/MobileBottomNav";
 
+/** Routes whose page cards sit directly on the background on mobile (no outer white shell). */
+const FLAT_MOBILE_PATHS = new Set(["/dashboard/user"]);
+
 function DashboardLayout() {
+  const { pathname } = useLocation();
+  const flatOnMobile = FLAT_MOBILE_PATHS.has(pathname.replace(/\/+$/, ""));
+
   return (
     <div className="flex min-h-screen flex-col bg-transparent">
       <Navbar />
       <main className="container-page mobile-safe-main flex-1 pt-20 pb-8 sm:pt-24 sm:pb-10">
-        <div className="min-w-0 max-w-full overflow-x-clip rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-soft backdrop-blur-[1px] sm:p-5 md:p-6">
+        <div
+          className={`min-w-0 max-w-full overflow-x-clip rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-soft backdrop-blur-[1px] sm:p-5 md:p-6 ${
+            flatOnMobile
+              ? "max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none max-lg:backdrop-blur-none"
+              : ""
+          }`}
+        >
           <Outlet />
         </div>
       </main>

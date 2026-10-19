@@ -28,6 +28,79 @@ async function findByPaymentIntentId(paymentIntentId, conn) {
   return rows[0] || null;
 }
 
+/**
+ * Recent succeeded checkouts for the same buyer + event + amount (duplicate-charge guard).
+ */
+async function findRecentSucceededCheckouts({
+  eventId,
+  userId = null,
+  email = null,
+  amountCents = null,
+  withinMinutes = 45,
+  conn
+}) {
+  const runner = conn || pool;
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+  const minutes = Math.max(1, Math.min(24 * 60, Number(withinMinutes) || 45));
+  const amount = amountCents == null ? null : Number(amountCents);
+  const [rows] = await runner.query(
+    `SELECT id, stripe_payment_intent_id, booking_id, user_id, event_id, status, amount_cents, payload_json, updated_at
+     FROM event_checkout_payments
+     WHERE event_id = ?
+       AND status = 'succeeded'
+       AND (? IS NULL OR amount_cents = ?)
+       AND updated_at >= (NOW() - INTERVAL ? MINUTE)
+       AND (
+         (? IS NOT NULL AND user_id = ?)
+         OR (
+           ? <> ''
+           AND LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.email')), ''))) = ?
+         )
+       )
+     ORDER BY updated_at DESC
+     LIMIT 10`,
+    [
+      eventId,
+      amount,
+      amount,
+      minutes,
+      userId,
+      userId,
+      normalizedEmail,
+      normalizedEmail
+    ]
+  );
+  return rows || [];
+}
+
+/** Open (unpaid) checkouts for the same buyer + event — cancel before starting a new PI. */
+async function findOpenCheckoutsForBuyer({ eventId, userId = null, email = null, conn }) {
+  const runner = conn || pool;
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+  const [rows] = await runner.query(
+    `SELECT id, stripe_payment_intent_id, user_id, event_id, status, amount_cents, payload_json, created_at
+     FROM event_checkout_payments
+     WHERE event_id = ?
+       AND status IN ('requires_payment', 'failed')
+       AND created_at >= (NOW() - INTERVAL 6 HOUR)
+       AND (
+         (? IS NOT NULL AND user_id = ?)
+         OR (
+           ? <> ''
+           AND LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.email')), ''))) = ?
+         )
+       )
+     ORDER BY created_at DESC
+     LIMIT 20`,
+    [eventId, userId, userId, normalizedEmail, normalizedEmail]
+  );
+  return rows || [];
+}
+
 async function updateCheckoutStatus(
   paymentIntentId,
   { status, booking_id, stripe_charge_id, failure_code, failure_message },
@@ -68,5 +141,7 @@ async function updateCheckoutStatus(
 module.exports = {
   createCheckoutPayment,
   findByPaymentIntentId,
+  findRecentSucceededCheckouts,
+  findOpenCheckoutsForBuyer,
   updateCheckoutStatus
 };

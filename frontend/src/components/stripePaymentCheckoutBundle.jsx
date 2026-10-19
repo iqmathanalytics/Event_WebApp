@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Elements,
   ExpressCheckoutElement,
@@ -51,14 +51,21 @@ function PaymentForm({
   onSuccess,
   onError,
   onClose,
+  onBusyChange,
   totalLabel,
   returnUrl
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
+  const [paymentLocked, setPaymentLocked] = useState(false);
+  const submitLockRef = useRef(false);
   const [formError, setFormError] = useState("");
   const [expressMethods, setExpressMethods] = useState(null);
+
+  useEffect(() => {
+    onBusyChange?.(submitting || paymentLocked);
+  }, [submitting, paymentLocked, onBusyChange]);
 
   const expressReady = Boolean(
     expressMethods &&
@@ -78,68 +85,69 @@ function PaymentForm({
   }, []);
 
   const confirmPayment = async (expressEvent) => {
-    if (!stripe || !elements) {
+    if (!stripe || !elements || submitLockRef.current || paymentLocked) {
       return { ok: false };
     }
+    submitLockRef.current = true;
+    setSubmitting(true);
+    setFormError("");
+    let succeeded = false;
 
-    const { error: submitError } = await elements.submit();
-    if (submitError) {
-      const msg = submitError.message || "Please check your payment details.";
+    try {
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        const msg = submitError.message || "Please check your payment details.";
+        setFormError(msg);
+        onError(msg);
+        expressEvent?.paymentFailed?.({ message: msg });
+        return { ok: false };
+      }
+
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        clientSecret,
+        confirmParams: { return_url: returnUrl },
+        redirect: "if_required"
+      });
+
+      if (error) {
+        const msg =
+          error.type === "card_error" || error.type === "validation_error"
+            ? error.message
+            : "Payment could not be completed. Please try again.";
+        setFormError(msg);
+        onError(msg);
+        expressEvent?.paymentFailed?.({ message: msg });
+        return { ok: false };
+      }
+
+      if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
+        succeeded = true;
+        setPaymentLocked(true);
+        onSuccess(paymentIntent.id);
+        return { ok: true };
+      }
+
+      const msg = "Payment was not completed. Please try again.";
       setFormError(msg);
       onError(msg);
       expressEvent?.paymentFailed?.({ message: msg });
       return { ok: false };
+    } finally {
+      if (!succeeded) {
+        submitLockRef.current = false;
+        setSubmitting(false);
+      }
     }
-
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      clientSecret,
-      confirmParams: { return_url: returnUrl },
-      redirect: "if_required"
-    });
-
-    if (error) {
-      const msg =
-        error.type === "card_error" || error.type === "validation_error"
-          ? error.message
-          : "Payment could not be completed. Please try again.";
-      setFormError(msg);
-      onError(msg);
-      expressEvent?.paymentFailed?.({ message: msg });
-      return { ok: false };
-    }
-
-    if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
-      onSuccess(paymentIntent.id);
-      return { ok: true };
-    }
-
-    const msg = "Payment was not completed. Please try again.";
-    setFormError(msg);
-    onError(msg);
-    expressEvent?.paymentFailed?.({ message: msg });
-    return { ok: false };
   };
 
   const handleExpressConfirm = async (expressEvent) => {
-    setFormError("");
-    try {
-      setSubmitting(true);
-      await confirmPayment(expressEvent);
-    } finally {
-      setSubmitting(false);
-    }
+    await confirmPayment(expressEvent);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setFormError("");
-    try {
-      setSubmitting(true);
-      await confirmPayment();
-    } finally {
-      setSubmitting(false);
-    }
+    await confirmPayment();
   };
 
   return (
@@ -211,17 +219,17 @@ function PaymentForm({
           <button
             type="button"
             onClick={onClose}
-            disabled={submitting}
+            disabled={submitting || paymentLocked}
             className="min-h-11 flex-1 rounded-lg border border-slate-300 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 lg:min-h-0"
           >
             Cancel
           </button>
           <button
             type="submit"
-            disabled={!stripe || submitting}
+            disabled={!stripe || submitting || paymentLocked}
             className="min-h-11 flex-1 rounded-lg bg-[#E31C5F] py-3 text-sm font-semibold text-white hover:bg-[#D70466] disabled:opacity-50 lg:min-h-0"
           >
-            {submitting ? "Processing…" : `Pay ${totalLabel}`}
+            {paymentLocked ? "Payment received…" : submitting ? "Processing…" : `Pay ${totalLabel}`}
           </button>
         </div>
         <p className="mt-2 flex items-center justify-center gap-1 text-[11px] text-slate-400">
@@ -241,7 +249,8 @@ export function StripePaymentCheckout({
   paymentIntentId,
   onClose,
   onError,
-  onSuccess
+  onSuccess,
+  onBusyChange
 }) {
   const [stripePromise, setStripePromise] = useState(null);
 
@@ -277,6 +286,7 @@ export function StripePaymentCheckout({
         returnUrl={returnUrl}
         onClose={onClose}
         onError={onError}
+        onBusyChange={onBusyChange}
         onSuccess={(piId) => onSuccess(piId || paymentIntentId)}
       />
     </Elements>

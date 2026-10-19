@@ -174,6 +174,8 @@ function InfluencerCard({
           onToggleFavorite?.();
         }}
         className={`absolute right-3 top-3 z-10 grid h-11 w-11 place-content-center rounded-full bg-white/95 text-sm shadow transition lg:h-9 lg:w-9 ${
+          isLanding ? "hidden lg:grid" : ""
+        } ${
           isFavorite ? "opacity-100 text-rose-600" : "opacity-100 text-slate-600 lg:opacity-0 lg:group-hover:opacity-100"
         }`}
         aria-label="Save influencer"
@@ -217,6 +219,26 @@ function InfluencerCard({
           tags={tags}
           classFor={(tag) =>
             `inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:text-[11px] ${getTagStyles(tag)}`
+          }
+          mobileAside={
+            isLanding ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleFavorite?.();
+                }}
+                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ring-1 shadow-sm transition ${
+                  isFavorite
+                    ? "bg-rose-50 text-rose-600 ring-rose-200"
+                    : "bg-white text-slate-600 ring-slate-200"
+                }`}
+                aria-label="Save influencer"
+              >
+                <FiHeart className={`h-[18px] w-[18px] ${isFavorite ? "fill-current" : ""}`} />
+              </button>
+            ) : null
           }
         />
 

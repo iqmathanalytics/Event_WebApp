@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "../services/api";
+
 const DEFAULT_APP_ORIGIN =
   typeof window !== "undefined" ? window.location.origin : "https://www.bookmytickets.us";
 
@@ -6,6 +8,16 @@ export function appBaseUrl() {
     .trim()
     .replace(/\/$/, "");
   return configured || DEFAULT_APP_ORIGIN;
+}
+
+/** Same hosted PNG URL used in booking confirmation emails. */
+export function ticketQrImageUrl(checkInCode) {
+  const code = String(checkInCode || "").trim();
+  if (!code) {
+    return null;
+  }
+  const base = String(API_BASE_URL || "").replace(/\/+$/, "");
+  return `${base}/public/ticket-qr/${encodeURIComponent(code)}.png`;
 }
 
 export function buildCheckInUrl(checkInCode) {

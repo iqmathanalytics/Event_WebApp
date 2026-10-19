@@ -49,6 +49,57 @@ function paymentStatusLabel(status) {
   return "Confirmed";
 }
 
+/** Guest-facing ticket terms for booking confirmation emails (platform copy, not venue-specific). */
+function bookingTermsOfUsePoints() {
+  return [
+    `Welcome! These Terms of Use govern your use of ${BRAND_NAME} and your purchase, possession, or use of any ${BRAND_NAME} tickets, products, or services.`,
+    "Events may have age or entry rules set by the organizer. Please review the event page before you attend.",
+    "Unless the organizer states otherwise in writing, ticket sales are final. Refunds, returns, exchanges, or cancellations are not available after purchase.",
+    "A service or processing fee may apply per order or ticket. Always confirm the total amount before you pay.",
+    `If an event is canceled by the organizer or host, ${BRAND_NAME} (or the organizer, as applicable) may refund the face value of the ticket. Service or processing fees are generally non-refundable unless required by law.`,
+    "At the venue, you must present your ticket or entry QR and a valid photo ID when asked. By presenting an ID, you confirm that the details on it are accurate.",
+    "The organizer/host is responsible for the event experience on site. They are not liable for personal or financial loss, or for items lost, stolen, or misplaced at the venue, except where the law requires otherwise.",
+    `${BRAND_NAME} tickets cannot be redeemed for cash, store credit, or other benefits unless the organizer expressly offers that.`,
+    "You purchase tickets voluntarily. Chargeback or payment disputes filed without a valid reason may lead to account review. Contact support first if something looks wrong with your order.",
+    `By buying, allocating, or holding tickets through ${BRAND_NAME}, you agree to our Terms of Use and Privacy Policy.`,
+    "Arrive at least 30 minutes before the published start time for smoother entry.",
+    "The organizer/host may deny entry if you arrive late (for example, 15 minutes or more after the event starts). Late arrival does not create a refund right."
+  ];
+}
+
+function bookingTermsOfUseText() {
+  const termsUrl = dashboardUrl("/terms");
+  const privacyUrl = dashboardUrl("/privacy");
+  const lines = ["Terms of Use (summary)", ...bookingTermsOfUsePoints().map((p, i) => `${i + 1}. ${p}`)];
+  lines.push(`Full terms: ${termsUrl}`);
+  lines.push(`Privacy policy: ${privacyUrl}`);
+  return lines.join("\n");
+}
+
+function bookingTermsOfUseHtml() {
+  const termsUrl = dashboardUrl("/terms");
+  const privacyUrl = dashboardUrl("/privacy");
+  const items = bookingTermsOfUsePoints()
+    .map(
+      (point) =>
+        `<li style="margin:0 0 8px;padding:0;font-size:12px;line-height:1.5;color:#475569;">${escapeHtml(point)}</li>`
+    )
+    .join("");
+  return `
+    <div style="margin:22px 0 0;padding:16px 16px 14px;border:1px solid #e2e8f0;border-radius:16px;background:#f8fafc;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Terms of Use</div>
+      <p style="margin:8px 0 10px;font-size:12px;line-height:1.5;color:#334155;">
+        Please read these ticket terms carefully. Full policies:
+        <a href="${escapeHtml(termsUrl)}" style="color:#e11d48;font-weight:700;text-decoration:none;">Terms</a>
+        ·
+        <a href="${escapeHtml(privacyUrl)}" style="color:#e11d48;font-weight:700;text-decoration:none;">Privacy</a>
+      </p>
+      <ol style="margin:0;padding:0 0 0 18px;">
+        ${items}
+      </ol>
+    </div>`;
+}
+
 /**
  * Shared Book My Tickets email shell (Brevo HTML).
  */
@@ -61,6 +112,7 @@ function buildLayout({
   highlights = [],
   ticketBlocks = [],
   extraHtml = "",
+  bottomHtml = "",
   ctaLabel,
   ctaUrl,
   footerNote,
@@ -187,6 +239,7 @@ function buildLayout({
                   ${qrHtml}
                   ${ctaHtml}
                   <p style="margin:24px 0 0;font-size:12px;line-height:1.55;color:#64748b;">${escapeHtml(footerNote || `You're receiving this because you use ${BRAND_NAME}.`)}</p>
+                  ${bottomHtml || ""}
                 </td>
               </tr>
             </table>
@@ -387,6 +440,8 @@ function buildBookingConfirmationEmail({
     `View event: ${eventUrl}`,
     `My bookings: ${dashboardUrl("/dashboard/user")}`,
     "",
+    bookingTermsOfUseText(),
+    "",
     `${BRAND_NAME} Team`
   ]
     .filter(Boolean)
@@ -426,7 +481,8 @@ function buildBookingConfirmationEmail({
       : [],
     ctaLabel: isGuestBooking ? "Sign in to My Hub" : "View my bookings",
     ctaUrl: isGuestBooking ? createAccountUrl : dashboardUrl("/dashboard/user"),
-    footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`
+    footerNote: `Need help? Contact ${BRAND_SUPPORT_EMAIL}. Present your QR code at the event for check-in.`,
+    bottomHtml: bookingTermsOfUseHtml()
   });
 
   return { subject, text, html };

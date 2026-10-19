@@ -73,7 +73,7 @@ function App() {
   const isEventLanding = Boolean(rootSlug && getEventLandingConfig(rootSlug));
 
   return (
-    <div className="relative isolate min-h-screen overflow-x-hidden">
+    <div className="relative isolate min-h-screen overflow-x-hidden supports-[overflow:clip]:overflow-x-clip">
       {!isEventLanding ? <AnimatedBackground /> : null}
       <LogoutOverlay />
       <NavigationProgress />

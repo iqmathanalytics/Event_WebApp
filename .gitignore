@@ -6,10 +6,26 @@ yarn-debug.log*
 yarn-error.log*
 coverage/
 dist/
-frontend/dist.zip
-src.zip
+*.zip
+*.xlsx
 .env.production
 frontend/.env.production
 deploy/milesweb-api.env
-deploy/*.zip
+deploy/droplet.env
+deploy/ga-env-patch.env
+deploy/tidb-prod-to-do.sql
+deploy/*.tgz
 frontend/.netlify/
+
+# Local Cursor / agent scratch (not part of the app)
+.agents/
+skills-lock.json
+
+# One-off audit / prompt dumps at repo root
+MOBILE_UI_AUDIT.md
+PERFORMANCE-AUDIT*.md
+mobile-ui-prompt.md
+
+deploy/origin.crt
+deploy/origin.key
+

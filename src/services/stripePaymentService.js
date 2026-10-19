@@ -135,6 +135,115 @@ function parsePayloadJson(raw) {
   }
 }
 
+function buildStripePaymentDescription({ eventId, bookingId = null }) {
+  const eventPart = `Event #${eventId}`;
+  if (bookingId != null && String(bookingId).trim() !== "") {
+    return `${eventPart} · Booking ref #${bookingId}`;
+  }
+  return `${eventPart} · booking pending`;
+}
+
+function stripeCustomerContact({ name, email, phone }) {
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+  const normalizedName = String(name || "").trim();
+  const normalizedPhone = String(phone || "").trim();
+  return {
+    email: normalizedEmail || null,
+    name: normalizedName || null,
+    phone: normalizedPhone || null
+  };
+}
+
+async function ensureStripeCustomer(stripe, { name, email, phone }) {
+  const contact = stripeCustomerContact({ name, email, phone });
+  if (!contact.email) {
+    return null;
+  }
+  try {
+    const listed = await stripe.customers.list({ email: contact.email, limit: 1 });
+    const existing = listed?.data?.[0];
+    if (existing?.id) {
+      const patch = {};
+      if (contact.name && contact.name !== existing.name) {
+        patch.name = contact.name;
+      }
+      if (contact.phone && contact.phone !== existing.phone) {
+        patch.phone = contact.phone;
+      }
+      if (Object.keys(patch).length) {
+        await stripe.customers.update(existing.id, patch);
+      }
+      return existing.id;
+    }
+    const created = await stripe.customers.create({
+      email: contact.email,
+      name: contact.name || undefined,
+      phone: contact.phone || undefined,
+      metadata: { source: "bookmytickets" }
+    });
+    return created.id;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[stripe] ensureStripeCustomer failed:", err?.message || err);
+    return null;
+  }
+}
+
+/** Best-effort: keep Stripe Dashboard description + customer fields in sync with booking. */
+async function syncStripePaymentRecord({
+  stripe,
+  paymentIntentId,
+  chargeId = null,
+  eventId,
+  bookingId = null,
+  name = null,
+  email = null,
+  phone = null
+}) {
+  const contact = stripeCustomerContact({ name, email, phone });
+  const description = buildStripePaymentDescription({ eventId, bookingId });
+  const metadata = {
+    event_id: String(eventId),
+    ...(bookingId != null ? { booking_id: String(bookingId) } : {}),
+    ...(contact.name ? { customer_name: contact.name.slice(0, 450) } : {}),
+    ...(contact.email ? { customer_email: contact.email.slice(0, 450) } : {}),
+    ...(contact.phone ? { customer_phone: contact.phone.slice(0, 450) } : {})
+  };
+
+  try {
+    await stripe.paymentIntents.update(paymentIntentId, {
+      description,
+      metadata,
+      ...(contact.email ? { receipt_email: contact.email } : {})
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[stripe] paymentIntents.update failed:", paymentIntentId, err?.message || err);
+  }
+
+  const resolvedChargeId =
+    chargeId ||
+    (await stripe.paymentIntents
+      .retrieve(paymentIntentId)
+      .then((pi) => (typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge?.id || null))
+      .catch(() => null));
+
+  if (resolvedChargeId) {
+    try {
+      await stripe.charges.update(resolvedChargeId, {
+        description,
+        metadata,
+        ...(contact.email ? { receipt_email: contact.email } : {})
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[stripe] charges.update failed:", resolvedChargeId, err?.message || err);
+    }
+  }
+}
+
 function mapFulfillResult(bookingId, pricing, extra = {}) {
   return {
     bookingId,
@@ -152,6 +261,91 @@ function mapFulfillResult(bookingId, pricing, extra = {}) {
   };
 }
 
+/**
+ * A prior attempt may already be charged in Stripe while our checkout row is still unpaid
+ * (slow confirm / webhook lag). Never start a new charge in that case.
+ */
+async function guardPriorChargedAttempts({ stripe, openRows, userId, isGuest }) {
+  for (const row of openRows || []) {
+    const piId = String(row.stripe_payment_intent_id || "").trim();
+    if (!piId) {
+      continue;
+    }
+    let pi;
+    try {
+      pi = await stripe.paymentIntents.retrieve(piId);
+    } catch (_err) {
+      continue;
+    }
+    if (pi.status === "succeeded") {
+      const chargeId =
+        typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge?.id || null;
+      let bookingId = null;
+      try {
+        const result = await fulfillPaymentIntent({
+          paymentIntentId: piId,
+          userId: isGuest ? null : userId,
+          stripeChargeId: chargeId
+        });
+        bookingId = result?.bookingId ?? null;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[stripe] fulfill of prior charged attempt failed:", piId, err?.message || err);
+      }
+      throw new ApiError(
+        409,
+        bookingId
+          ? `Your earlier payment for this order already went through (booking #${bookingId}). Check your email for tickets — you were not charged again.`
+          : "Your earlier payment for this order already went through. We are saving your booking — please do not pay again. Contact support if you do not get tickets by email.",
+        { code: "ALREADY_PAID", paymentIntentId: piId, bookingId }
+      );
+    }
+    if (pi.status === "processing") {
+      throw new ApiError(
+        409,
+        "Your earlier payment for this order is still processing. Please wait a moment instead of paying again.",
+        { code: "PAYMENT_PROCESSING", paymentIntentId: piId }
+      );
+    }
+  }
+}
+
+async function cancelOpenCheckoutPaymentIntents({ stripe, openRows }) {
+  for (const row of openRows || []) {
+    const piId = String(row.stripe_payment_intent_id || "").trim();
+    if (!piId) {
+      continue;
+    }
+    try {
+      const pi = await stripe.paymentIntents.retrieve(piId);
+      if (pi.status === "succeeded" || pi.status === "processing") {
+        continue;
+      }
+      if (pi.status !== "canceled") {
+        const cancelable = new Set([
+          "requires_payment_method",
+          "requires_confirmation",
+          "requires_action",
+          "requires_capture"
+        ]);
+        if (cancelable.has(pi.status)) {
+          await stripe.paymentIntents.cancel(piId, { cancellation_reason: "abandoned" });
+        }
+      }
+      if (row.status !== "canceled" && row.status !== "succeeded") {
+        await markCheckoutCanceled(piId).catch(() => {});
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[stripe] could not cancel prior open PaymentIntent",
+        piId,
+        err?.message || err
+      );
+    }
+  }
+}
+
 async function createPaymentIntentCore({ userId, payload, isGuest }) {
   const stripe = assertStripeConfigured();
   const pricing = isGuest
@@ -167,9 +361,85 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
 
   const amountCents = dollarsToCents(pricing.totalAmount);
   const holdToken = payload.coupon_hold_token || null;
+  const buyerEmail = String(pricing.userEmail || payload.email || "")
+    .trim()
+    .toLowerCase();
+  const checkoutAttemptId = String(payload.checkout_attempt_id || "").trim() || null;
 
   if (holdToken) {
     await couponModel.extendHoldExpiry(holdToken, PAYMENT_HOLD_EXTENSION_MINUTES);
+  }
+
+  const openRows = await checkoutPaymentModel.findOpenCheckoutsForBuyer({
+    eventId: payload.event_id,
+    userId: userId ?? null,
+    email: buyerEmail || null
+  });
+
+  await guardPriorChargedAttempts({ stripe, openRows, userId, isGuest });
+
+  // Same buyer already paid for this event recently — require an explicit "buy again".
+  if (payload.confirm_repeat_purchase !== true) {
+    const recentPaid = await checkoutPaymentModel.findRecentSucceededCheckouts({
+      eventId: payload.event_id,
+      userId: userId ?? null,
+      email: buyerEmail || null,
+      withinMinutes: 24 * 60
+    });
+    if (recentPaid.length) {
+      const existing = recentPaid[0];
+      throw new ApiError(
+        409,
+        existing.booking_id
+          ? `You already booked this event (booking #${existing.booking_id}). Check your email for tickets. Do you want to buy another order?`
+          : "You already paid for this event recently. Check your email for tickets. Do you want to buy another order?",
+        { code: "REPEAT_PURCHASE", bookingId: existing.booking_id ?? null }
+      );
+    }
+  }
+  if (checkoutAttemptId && openRows.length) {
+    const sameAttempt = openRows.find((row) => {
+      const snap = parsePayloadJson(row.payload_json);
+      return String(snap?.checkout_attempt_id || "").trim() === checkoutAttemptId;
+    });
+    if (sameAttempt?.stripe_payment_intent_id) {
+      try {
+        const existingPi = await stripe.paymentIntents.retrieve(sameAttempt.stripe_payment_intent_id);
+        if (
+          existingPi.status === "requires_payment_method" ||
+          existingPi.status === "requires_confirmation" ||
+          existingPi.status === "requires_action"
+        ) {
+          return {
+            clientSecret: existingPi.client_secret,
+            paymentIntentId: existingPi.id,
+            amountCents,
+            currency: "usd",
+            publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
+            subtotalAmount: pricing.subtotalAmount,
+            discountAmount: pricing.discountAmount,
+            serviceFeeAmount: pricing.serviceFeeAmount ?? 0,
+            platformFeeAmount: pricing.platformFeeAmount ?? 0,
+            transactionFeeAmount: pricing.transactionFeeAmount,
+            totalAmount: pricing.totalAmount,
+            couponCode: pricing.couponCode,
+            reused: true
+          };
+        }
+      } catch (_err) {
+        /* create a fresh PI below */
+      }
+    }
+  }
+  const opensToCancel = (openRows || []).filter((row) => {
+    if (!checkoutAttemptId) {
+      return true;
+    }
+    const snap = parsePayloadJson(row.payload_json);
+    return String(snap?.checkout_attempt_id || "").trim() !== checkoutAttemptId;
+  });
+  if (opensToCancel.length) {
+    await cancelOpenCheckoutPaymentIntents({ stripe, openRows: opensToCancel });
   }
 
   const storedPayload = {
@@ -179,7 +449,7 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     selected_dates: pricing.selectedDates,
     booking_date: pricing.bookingDate,
     name: payload.name,
-    email: payload.email,
+    email: payload.email || pricing.userEmail,
     phone: payload.phone,
     first_name: payload.first_name,
     last_name: payload.last_name,
@@ -191,37 +461,74 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
       : Array.isArray(payload.selected_seats)
         ? payload.selected_seats
         : undefined,
+    checkout_attempt_id: checkoutAttemptId,
     pricing_snapshot: buildPricingSnapshot(pricing, payload)
+  };
+
+  const buyerName = String(pricing.userName || payload.name || "").trim();
+  const buyerPhone = String(pricing.userPhone || payload.phone || "").trim();
+  const stripeCustomerId = await ensureStripeCustomer(stripe, {
+    name: buyerName,
+    email: buyerEmail,
+    phone: buyerPhone
+  });
+
+  const createParams = {
+    amount: amountCents,
+    currency: "usd",
+    // `card` enables Apple Pay + Google Pay (wallets); `amazon_pay` enables Amazon Pay in Express Checkout.
+    payment_method_types: ["card", "amazon_pay"],
+    ...(stripeCustomerId ? { customer: stripeCustomerId } : {}),
+    ...(buyerEmail ? { receipt_email: buyerEmail } : {}),
+    metadata: {
+      guest_checkout: isGuest ? "1" : "0",
+      user_id: userId != null ? String(userId) : "",
+      event_id: String(payload.event_id),
+      attendee_count: String(pricing.attendeeCount),
+      ...(checkoutAttemptId ? { checkout_attempt_id: checkoutAttemptId } : {}),
+      ...(buyerName ? { customer_name: buyerName.slice(0, 450) } : {}),
+      ...(buyerEmail ? { customer_email: buyerEmail.slice(0, 450) } : {}),
+      ...(buyerPhone ? { customer_phone: buyerPhone.slice(0, 450) } : {})
+    },
+    description: buildStripePaymentDescription({ eventId: payload.event_id })
   };
 
   let paymentIntent;
   try {
-    paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
-      currency: "usd",
-      // `card` enables Apple Pay + Google Pay (wallets); `amazon_pay` enables Amazon Pay in Express Checkout.
-      payment_method_types: ["card", "amazon_pay"],
-      metadata: {
-        guest_checkout: isGuest ? "1" : "0",
-        user_id: userId != null ? String(userId) : "",
-        event_id: String(payload.event_id),
-        attendee_count: String(pricing.attendeeCount)
-      },
-      description: `Event booking #${payload.event_id}`
-    });
+    paymentIntent = await stripe.paymentIntents.create(
+      createParams,
+      checkoutAttemptId
+        ? { idempotencyKey: `bmt-pi-${checkoutAttemptId}` }
+        : undefined
+    );
   } catch (err) {
     throw new ApiError(502, err?.message || "Could not start payment with Stripe.");
   }
 
-  await checkoutPaymentModel.createCheckoutPayment({
-    stripe_payment_intent_id: paymentIntent.id,
-    user_id: userId ?? null,
-    event_id: payload.event_id,
-    status: "requires_payment",
-    amount_cents: amountCents,
-    currency: "usd",
-    payload_json: JSON.stringify(storedPayload)
-  });
+  // Idempotent retries may return an existing PI — avoid duplicate checkout rows.
+  const existingCheckout = await checkoutPaymentModel.findByPaymentIntentId(paymentIntent.id);
+  if (!existingCheckout) {
+    try {
+      await checkoutPaymentModel.createCheckoutPayment({
+        stripe_payment_intent_id: paymentIntent.id,
+        user_id: userId ?? null,
+        event_id: payload.event_id,
+        status: "requires_payment",
+        amount_cents: amountCents,
+        currency: "usd",
+        payload_json: JSON.stringify(storedPayload)
+      });
+    } catch (err) {
+      const raced = await checkoutPaymentModel.findByPaymentIntentId(paymentIntent.id);
+      if (!raced) {
+        throw err;
+      }
+    }
+  } else if (existingCheckout.status === "canceled" || existingCheckout.status === "failed") {
+    await checkoutPaymentModel.updateCheckoutStatus(paymentIntent.id, {
+      status: "requires_payment"
+    });
+  }
 
   return {
     clientSecret: paymentIntent.client_secret,
@@ -260,6 +567,17 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
         err?.message || err
       );
     });
+    const stripe = assertStripeConfigured();
+    await syncStripePaymentRecord({
+      stripe,
+      paymentIntentId,
+      chargeId: stripeChargeId || null,
+      eventId: existingBooking.event_id,
+      bookingId: existingBooking.id,
+      name: existingBooking.name,
+      email: existingBooking.email,
+      phone: existingBooking.phone
+    }).catch(() => {});
     return {
       alreadyFulfilled: true,
       bookingId: existingBooking.id,
@@ -289,15 +607,35 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
     throw new ApiError(500, "Checkout data is invalid.");
   }
 
-  const pricing = await resolvePricingForFulfillment({
+  let pricing = await resolvePricingForFulfillment({
     checkout,
     payload,
     isGuestCheckout
   });
 
-  const expectedCents = dollarsToCents(pricing.totalAmount);
+  let expectedCents = dollarsToCents(pricing.totalAmount);
   if (expectedCents !== Number(checkout.amount_cents)) {
-    throw new ApiError(400, "Payment amount does not match the current booking total. Please start again.");
+    // Customer was already charged the snapshot total; live pricing changed since checkout.
+    const fromSnap = pricingFromSnapshot(payload);
+    if (!fromSnap || dollarsToCents(fromSnap.totalAmount) !== Number(checkout.amount_cents)) {
+      throw new ApiError(400, "Payment amount does not match the current booking total. Please start again.");
+    }
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[stripe] live pricing differs from paid amount; fulfilling from checkout snapshot:",
+      paymentIntentId
+    );
+    const event = pricing.event || (await findEventById(payload.event_id));
+    if (!event) {
+      throw new ApiError(404, "Event not found");
+    }
+    pricing = {
+      ...fromSnap,
+      event,
+      user: pricing.user ?? null,
+      isGuest: isGuestCheckout
+    };
+    expectedCents = Number(checkout.amount_cents);
   }
 
   const holdToken = payload.coupon_hold_token || null;
@@ -411,6 +749,18 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
 
     await conn.commit();
 
+    const stripe = assertStripeConfigured();
+    await syncStripePaymentRecord({
+      stripe,
+      paymentIntentId,
+      chargeId: stripeChargeId,
+      eventId: payload.event_id,
+      bookingId,
+      name: pricing.userName,
+      email: pricing.userEmail,
+      phone: pricing.userPhone
+    }).catch(() => {});
+
     await dispatchBookingEmails({
       bookingId,
       checkInCode,
@@ -426,6 +776,17 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
     };
   } catch (err) {
     await conn.rollback();
+    // Webhook and client confirm can race; the unique PI index lets only one booking win.
+    if (err?.code === "ER_DUP_ENTRY") {
+      const winner = await findBookingByPaymentIntentId(paymentIntentId).catch(() => null);
+      if (winner) {
+        return {
+          alreadyFulfilled: true,
+          bookingId: winner.id,
+          paymentStatus: winner.payment_status
+        };
+      }
+    }
     throw err;
   } finally {
     conn.release();
@@ -489,8 +850,31 @@ async function cancelAbandonedPaymentIntent({ paymentIntentId, userId = null, is
     throw new ApiError(502, err?.message || "Could not load payment from Stripe.");
   }
 
+  const fulfillCharged = async (chargedPi) => {
+    const chargeId =
+      typeof chargedPi.latest_charge === "string"
+        ? chargedPi.latest_charge
+        : chargedPi.latest_charge?.id || null;
+    try {
+      const result = await fulfillPaymentIntent({
+        paymentIntentId: id,
+        userId: checkoutIsGuest ? null : userId,
+        stripeChargeId: chargeId
+      });
+      return result?.bookingId ?? null;
+    } catch (fulfillErr) {
+      // eslint-disable-next-line no-console
+      console.warn("[stripe] fulfill on abandon failed:", id, fulfillErr?.message || fulfillErr);
+      return null;
+    }
+  };
+
   if (pi.status === "succeeded") {
-    return { canceled: false, reason: "stripe_succeeded", status: pi.status };
+    const bookingId = await fulfillCharged(pi);
+    return { canceled: false, reason: "stripe_succeeded", status: pi.status, bookingId };
+  }
+  if (pi.status === "processing") {
+    return { canceled: false, reason: "processing", status: pi.status };
   }
   if (pi.status === "canceled") {
     await markCheckoutCanceled(id);
@@ -501,8 +885,7 @@ async function cancelAbandonedPaymentIntent({ paymentIntentId, userId = null, is
     "requires_payment_method",
     "requires_confirmation",
     "requires_action",
-    "requires_capture",
-    "processing"
+    "requires_capture"
   ]);
   if (!cancelable.has(pi.status)) {
     return { canceled: false, reason: "not_cancelable", status: pi.status };
@@ -516,7 +899,11 @@ async function cancelAbandonedPaymentIntent({ paymentIntentId, userId = null, is
     // Race: payment may have succeeded between retrieve and cancel.
     const latest = await stripe.paymentIntents.retrieve(id).catch(() => null);
     if (latest?.status === "succeeded") {
-      return { canceled: false, reason: "stripe_succeeded", status: "succeeded" };
+      const bookingId = await fulfillCharged(latest);
+      return { canceled: false, reason: "stripe_succeeded", status: "succeeded", bookingId };
+    }
+    if (latest?.status === "processing") {
+      return { canceled: false, reason: "processing", status: "processing" };
     }
     throw new ApiError(502, err?.message || "Could not cancel payment.");
   }
@@ -611,15 +998,19 @@ async function confirmPaymentCore({ userId, paymentIntentId, isGuest }) {
   }
 
   if (pi.status === "requires_payment_method" || pi.status === "requires_confirmation") {
-    throw new ApiError(402, "Payment was not completed. Please try again.");
+    throw new ApiError(402, "Payment was not completed. Please try again.", {
+      code: "PAYMENT_NOT_COMPLETED"
+    });
   }
 
   if (pi.status === "canceled") {
     await markCheckoutCanceled(paymentIntentId);
-    throw new ApiError(400, "Payment was canceled.");
+    throw new ApiError(400, "Payment was canceled.", { code: "PAYMENT_NOT_COMPLETED" });
   }
 
-  throw new ApiError(400, `Payment could not be completed (status: ${pi.status}).`);
+  throw new ApiError(400, `Payment could not be completed (status: ${pi.status}).`, {
+    code: "PAYMENT_NOT_COMPLETED"
+  });
 }
 
 async function confirmPaymentForUser({ userId, paymentIntentId }) {

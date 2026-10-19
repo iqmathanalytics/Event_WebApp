@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { buildStripeReturnUrl } from "../utils/stripePaymentReturn";
@@ -18,6 +18,7 @@ export default function StripePaymentModal({
   onSuccess,
   onError
 }) {
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
   const returnUrl = useMemo(() => {
     if (!eventId) {
       return window.location.href.split("?")[0];
@@ -27,12 +28,13 @@ export default function StripePaymentModal({
 
   useEffect(() => {
     if (!open) {
+      setCheckoutBusy(false);
       return undefined;
     }
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !checkoutBusy) {
         onClose();
       }
     };
@@ -41,11 +43,18 @@ export default function StripePaymentModal({
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open, onClose, checkoutBusy]);
 
   if (!open || !clientSecret || !publishableKey) {
     return null;
   }
+
+  const requestClose = () => {
+    if (checkoutBusy) {
+      return;
+    }
+    onClose();
+  };
 
   const modal = (
     <div
@@ -58,7 +67,7 @@ export default function StripePaymentModal({
         type="button"
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-[1px]"
         aria-label="Close payment"
-        onClick={onClose}
+        onClick={requestClose}
       />
 
       <div className="stripe-payment-modal relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-[1.35rem] border border-slate-200 bg-white shadow-xl lg:rounded-xl">
@@ -75,8 +84,9 @@ export default function StripePaymentModal({
             </div>
             <button
               type="button"
-              onClick={onClose}
-              className="grid h-11 w-11 shrink-0 place-content-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 lg:h-9 lg:w-9"
+              onClick={requestClose}
+              disabled={checkoutBusy}
+              className="grid h-11 w-11 shrink-0 place-content-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 lg:h-9 lg:w-9"
               aria-label="Close"
             >
               <X size={18} aria-hidden />
@@ -98,9 +108,10 @@ export default function StripePaymentModal({
               totalLabel={totalLabel}
               returnUrl={returnUrl}
               paymentIntentId={paymentIntentId}
-              onClose={onClose}
+              onClose={requestClose}
               onError={onError}
               onSuccess={onSuccess}
+              onBusyChange={setCheckoutBusy}
             />
           </Suspense>
         </div>

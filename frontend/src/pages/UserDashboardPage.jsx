@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { FiEdit2, FiInfo, FiKey, FiUser } from "react-icons/fi";
+import { FiBriefcase, FiEdit2, FiInfo, FiKey, FiPlus, FiStar, FiTag, FiUser } from "react-icons/fi";
 import useFavorites from "../hooks/useFavorites";
 import useAuth from "../hooks/useAuth";
 import BrandUserGreeting from "../components/BrandUserGreeting";
@@ -114,8 +114,8 @@ function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
   return (
     <div
       ref={scrollerRef}
-      className={`flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5 ${
-        compact ? "hide-scrollbar" : ""
+      className={`flex w-full min-w-0 flex-nowrap items-center overflow-x-auto ${
+        compact ? "hide-scrollbar gap-4 border-b border-slate-200" : "gap-2 rounded-xl bg-slate-50 p-1.5"
       }`}
     >
       {tabs.map((tab) => {
@@ -127,14 +127,18 @@ function HostWorkspaceTabBar({ tabs, active, onChange, counts, compact }) {
             type="button"
             onClick={() => onChange(tab.key)}
             data-host-tab-selected={selected ? "true" : "false"}
-            className={`relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 font-semibold transition-colors ${
-              compact ? "min-h-11 py-2 text-sm" : "py-2 text-xs"
-            } ${selected ? "text-slate-900" : "text-slate-600 hover:text-slate-800"}`}
+            className={`relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap font-semibold transition-colors ${
+              compact ? "min-h-11 px-0.5 text-sm" : "rounded-lg px-3 py-2 text-xs"
+            } ${selected ? "text-slate-900" : compact ? "text-slate-500" : "text-slate-600 hover:text-slate-800"}`}
           >
             {selected ? (
               <motion.span
                 layoutId={pillId}
-                className="absolute inset-0 rounded-lg bg-white shadow-sm"
+                className={
+                  compact
+                    ? "absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-slate-900"
+                    : "absolute inset-0 rounded-lg bg-white shadow-sm"
+                }
                 transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
               />
             ) : null}
@@ -235,8 +239,8 @@ function HostWorkspacePanel({
   return (
     <section
       data-host-workspace={layout}
-      className={`min-w-0 scroll-mt-24 border border-slate-200 bg-white shadow-soft sm:scroll-mt-28 ${
-        layout === "mobile" ? "rounded-3xl p-3.5" : "rounded-2xl p-4"
+      className={`min-w-0 scroll-mt-24 sm:scroll-mt-28 ${
+        layout === "mobile" ? "" : "rounded-2xl border border-slate-200 bg-white p-4 shadow-soft"
       }`}
     >
       <HostWorkspaceTabBar
@@ -313,6 +317,11 @@ function UserDashboardPage() {
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [bookingsError, setBookingsError] = useState("");
   const [bookingFilter, setBookingFilter] = useState("upcoming");
+  /** Mobile only: which dashboard area is visible (tickets / saved / hosting). */
+  const [mobileSection, setMobileSection] = useState(() =>
+    tabFromSearch(location.search) || location.hash === "#host-events" ? "hosting" : "tickets"
+  );
+  const mobileTabsSentinelRef = useRef(null);
   const canOrganizeEarly = Number(user?.organizer_enabled) === 1;
   const initialHostTab = tabFromSearch(location.search) || (canOrganizeEarly ? "overview" : "events");
   const [desktopWorkspaceTab, setDesktopWorkspaceTab] = useState(initialHostTab);
@@ -703,6 +712,27 @@ function UserDashboardPage() {
     });
   }, [bookings, bookingFilter]);
 
+  const upcomingBookingsCount = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return bookings.filter((item) => {
+      const bookingDate = new Date(item.booking_date);
+      if (Number.isNaN(bookingDate.getTime())) {
+        return false;
+      }
+      bookingDate.setHours(0, 0, 0, 0);
+      return bookingDate >= today;
+    }).length;
+  }, [bookings]);
+
+  const openMobileSection = useCallback((key) => {
+    setMobileSection(key);
+    const sentinel = mobileTabsSentinelRef.current;
+    if (sentinel && sentinel.getBoundingClientRect().top < 0) {
+      sentinel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
   const openPlatformTicketRequestModal = useCallback(() => {
     setPlatformTicketRequestOpen(true);
   }, []);
@@ -737,6 +767,7 @@ function UserDashboardPage() {
     if (location.pathname !== "/dashboard/user" || location.hash !== "#host-events") {
       return undefined;
     }
+    setMobileSection("hosting");
     const scrollToHostWorkspace = () => {
       const desktop = document.querySelector('[data-host-workspace="desktop"]');
       const mobile = document.querySelector('[data-host-workspace="mobile"]');
@@ -793,6 +824,7 @@ function UserDashboardPage() {
     if (fromSearch) {
       setDesktopWorkspaceTab(fromSearch);
       setMobileWorkspaceTab(fromSearch);
+      setMobileSection("hosting");
     }
   }, [location.search]);
 
@@ -964,6 +996,7 @@ function UserDashboardPage() {
 
   const onListExperienceClick = async () => {
     await enableHostingIfNeeded();
+    setMobileSection("hosting");
     setWorkspaceTab("events");
     requestAnimationFrame(() => {
       scrollToHostWorkspace();
@@ -1123,28 +1156,33 @@ function UserDashboardPage() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      /* Mobile: no Y transform — it would break the sticky section switcher. */
+      initial={{ opacity: 0, y: isLgUp ? 10 : 0 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="space-y-4"
     >
       {!isLgUp ? (
       <div className="space-y-4">
-        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-3.5 text-white shadow-soft sm:rounded-3xl sm:p-4">
-          <div className="flex items-start justify-between gap-2.5 sm:gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="min-w-0">
-                  <BrandUserGreeting
-                    name={profile?.name || user?.name || "User"}
-                    variant="dark"
-                    size="sm"
-                    className="min-w-0 max-w-full truncate"
-                  />
-                </div>
-                <p className="truncate text-xs leading-tight text-white/70">{profile?.email || user?.email}</p>
-                <p className="truncate text-xs leading-tight text-white/55">{profileMobileOrEmpty(profile?.mobile_number) || "Add mobile number"}</p>
-              </div>
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+          <div className="flex items-center gap-3">
+            <div
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 text-lg font-bold text-white shadow-sm"
+              aria-hidden
+            >
+              {profileInitial}
+            </div>
+            <div className="min-w-0 flex-1">
+              <BrandUserGreeting
+                name={profile?.name || user?.name || "User"}
+                variant="light"
+                size="sm"
+                className="min-w-0 max-w-full truncate"
+              />
+              <p className="truncate text-xs leading-tight text-slate-500">{profile?.email || user?.email}</p>
+              <p className="truncate text-xs leading-tight text-slate-400">
+                {profileMobileOrEmpty(profile?.mobile_number) || "Add mobile number"}
+              </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <button
@@ -1155,11 +1193,11 @@ function UserDashboardPage() {
                   setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
                   setShowPasswordModal(true);
                 }}
-                className="inline-flex h-11 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2.5 text-xs font-semibold text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
+                className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 transition active:scale-[0.97]"
                 title={isGoogleFirstPassword ? "Set your password" : "Change password"}
+                aria-label={isGoogleFirstPassword ? "Set your password" : "Change password"}
               >
-                <FiKey className="h-3.5 w-3.5" aria-hidden />
-                <span>{isGoogleFirstPassword ? "Set" : "Password"}</span>
+                <FiKey className="h-4 w-4" aria-hidden />
               </button>
               <button
                 type="button"
@@ -1169,62 +1207,57 @@ function UserDashboardPage() {
                   setProfileEditorTab("basic");
                   setShowProfileEditor(true);
                 }}
-                className="inline-flex h-11 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/[0.12] px-2.5 text-xs font-semibold text-white shadow-sm ring-1 ring-white/10 backdrop-blur-sm transition active:scale-[0.97]"
+                className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 transition active:scale-[0.97]"
+                title="Edit profile"
+                aria-label="Edit profile"
               >
-                <FiEdit2 className="h-3.5 w-3.5" aria-hidden />
-                <span>Edit</span>
+                <FiEdit2 className="h-4 w-4" aria-hidden />
               </button>
             </div>
           </div>
-
-          {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-200">{profileMessage}</p> : null}
-          {profileError ? <p className="mt-2 text-sm font-medium text-rose-200">{profileError}</p> : null}
-
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={enablingOrganizer}
-              onClick={() => void onPostEventClick()}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
-            >
-              Post an event
-            </button>
-            <button
-              type="button"
-              onClick={onSubmitDealClick}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15"
-            >
-              Submit a deal
-            </button>
-            <button
-              type="button"
-              onClick={() => void openDealerOnboardingModal()}
-              disabled={businessProfileCta.disabled}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              {hasRegisteredDealer ? "Edit business profile" : "Business profile"}
-            </button>
-            <button
-              type="button"
-              onClick={openInfluencerSpotlightModal}
-              disabled={infStatusLower === "pending"}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 min-h-11 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              Edit creator spotlight
-            </button>
-            <button
-              type="button"
-              onClick={openPlatformTicketRequestModal}
-              className={`col-span-2 min-h-11 rounded-xl border px-3 py-2.5 text-sm font-semibold text-white ring-1 transition ${
-                canSellPlatformTickets
-                  ? "border-emerald-300/40 bg-emerald-500/25 ring-emerald-400/30 hover:bg-emerald-500/35"
-                  : "border-violet-300/40 bg-violet-500/25 ring-violet-400/30 hover:bg-violet-500/35"
-              }`}
-            >
-              {canSellPlatformTickets ? "On-site tickets · enabled" : "Host tickets on-site"}
-            </button>
-          </div>
+          {profileMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
+          {profileError ? <p className="mt-2 text-sm font-medium text-rose-600">{profileError}</p> : null}
         </section>
+
+        <div ref={mobileTabsSentinelRef} className="scroll-mt-[4.5rem] sm:scroll-mt-[5.5rem]" aria-hidden />
+        <div className="sticky top-16 z-20 sm:top-20">
+          <div
+            role="tablist"
+            aria-label="Dashboard sections"
+            className="grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur"
+          >
+            {[
+              { key: "tickets", label: "Tickets", count: upcomingBookingsCount },
+              { key: "saved", label: "Saved", count: favorites.length },
+              { key: "hosting", label: "Hosting", count: canOrganize ? myEventsCount : null }
+            ].map((tab) => {
+              const selected = mobileSection === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => openMobileSection(tab.key)}
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold transition ${
+                    selected ? "bg-slate-900 text-white shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.count ? (
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${
+                        selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {organizerEnableError ? (
           <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -1242,7 +1275,72 @@ function UserDashboardPage() {
           </p>
         ) : null}
 
-        {canOrganize ? (
+        {mobileSection !== "hosting" ? (
+          <UserDashboardBookingsAndFavorites
+            show={mobileSection === "saved" ? "favorites" : "bookings"}
+            filteredBookings={filteredBookings}
+            bookingsTotalCount={bookings.length}
+            loadingBookings={loadingBookings}
+            bookingsError={bookingsError}
+            bookingFilter={bookingFilter}
+            onBookingFilterChange={setBookingFilter}
+            favorites={favorites}
+            favoritesLoading={favoritesLoading}
+            toggleFavorite={toggleFavorite}
+          />
+        ) : null}
+
+        {/* Hosting stays mounted so switching sections does not refetch organizer data. */}
+        <div className={mobileSection === "hosting" ? "space-y-4" : "hidden"}>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={enablingOrganizer}
+              onClick={() => void onPostEventClick()}
+              className="flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-left text-[13px] leading-tight font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
+            >
+              <FiPlus className="h-4 w-4 shrink-0" aria-hidden />
+              Post an event
+            </button>
+            <button
+              type="button"
+              onClick={onSubmitDealClick}
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-[13px] leading-tight font-semibold text-slate-800 shadow-sm transition active:scale-[0.98]"
+            >
+              <FiTag className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              Submit a deal
+            </button>
+            <button
+              type="button"
+              onClick={() => void openDealerOnboardingModal()}
+              disabled={businessProfileCta.disabled}
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-[13px] leading-tight font-semibold text-slate-800 shadow-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              <FiBriefcase className="h-4 w-4 shrink-0 text-sky-600" aria-hidden />
+              {hasRegisteredDealer ? "Edit business profile" : "Business profile"}
+            </button>
+            <button
+              type="button"
+              onClick={openInfluencerSpotlightModal}
+              disabled={infStatusLower === "pending"}
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-[13px] leading-tight font-semibold text-slate-800 shadow-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              <FiStar className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+              Edit creator spotlight
+            </button>
+            <button
+              type="button"
+              onClick={openPlatformTicketRequestModal}
+              className={`col-span-2 min-h-11 rounded-xl border px-3 py-2 text-[13px] font-semibold transition active:scale-[0.98] ${
+                canSellPlatformTickets
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : "border-violet-200 bg-violet-50 text-violet-900"
+              }`}
+            >
+              {canSellPlatformTickets ? "On-site tickets · enabled" : "Host tickets on-site"}
+            </button>
+          </div>
+
           <HostWorkspacePanel
             layout="mobile"
             tabs={workspaceTabs}
@@ -1253,32 +1351,7 @@ function UserDashboardPage() {
             onRequestPlatformTickets={openPlatformTicketRequestModal}
             onAfterResubmitSuccess={handleListingResubmitSaved}
           />
-        ) : null}
-
-        <UserDashboardBookingsAndFavorites
-          filteredBookings={filteredBookings}
-          bookingsTotalCount={bookings.length}
-          loadingBookings={loadingBookings}
-          bookingsError={bookingsError}
-          bookingFilter={bookingFilter}
-          onBookingFilterChange={setBookingFilter}
-          favorites={favorites}
-          favoritesLoading={favoritesLoading}
-          toggleFavorite={toggleFavorite}
-        />
-
-        {!canOrganize ? (
-          <HostWorkspacePanel
-            layout="mobile"
-            tabs={workspaceTabs}
-            activeTab={mobileWorkspaceTab}
-            onTabChange={setWorkspaceTab}
-            myEventsCount={myEventsCount}
-            offersCount={offersCount}
-            onRequestPlatformTickets={openPlatformTicketRequestModal}
-            onAfterResubmitSuccess={handleListingResubmitSaved}
-          />
-        ) : null}
+        </div>
       </div>
       ) : (
       <div className="space-y-4">

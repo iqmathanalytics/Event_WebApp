@@ -30,6 +30,8 @@ function EventFilterControls({
   setPriceMax,
   sortBy,
   setSortBy,
+  showCity = true,
+  showCategory = true,
   showDate = true,
   showPrice = true,
   showSort = true,
@@ -97,113 +99,117 @@ function EventFilterControls({
         />
       </label>
 
-      <FilterPopupField
-        label="City"
-        value={cityLabel}
-        isActive={activePanel === "city"}
-        onToggle={(e) => {
-          e.stopPropagation();
-          setCityQuery("");
-          setActivePanel((prev) => (prev === "city" ? null : "city"));
-        }}
-        panelClassName="w-full min-w-[220px]"
-        panelContent={
-          <div>
-            <label className="mb-2 block">
-              <span className="sr-only">Search cities</span>
-              <input
-                type="text"
-                value={cityQuery}
-                onChange={(e) => setCityQuery(e.target.value)}
-                placeholder="Search cities"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
-              />
-            </label>
-            <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
-            <button
-              type="button"
-              onClick={() => {
-                setCity("");
-                setActivePanel(null);
-              }}
-              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
-            >
-              <FiMapPin className="text-slate-400" /> All Cities
-            </button>
-            {filteredCities.map((item) => (
+      {showCity ? (
+        <FilterPopupField
+          label="City"
+          value={cityLabel}
+          isActive={activePanel === "city"}
+          onToggle={(e) => {
+            e.stopPropagation();
+            setCityQuery("");
+            setActivePanel((prev) => (prev === "city" ? null : "city"));
+          }}
+          panelClassName="w-full min-w-[220px]"
+          panelContent={
+            <div>
+              <label className="mb-2 block">
+                <span className="sr-only">Search cities</span>
+                <input
+                  type="text"
+                  value={cityQuery}
+                  onChange={(e) => setCityQuery(e.target.value)}
+                  placeholder="Search cities"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
+                />
+              </label>
+              <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
               <button
-                key={item.value}
                 type="button"
                 onClick={() => {
-                  setCity(item.value);
+                  setCity("");
                   setActivePanel(null);
                 }}
                 className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
               >
-                <FiMapPin className="text-slate-400" /> {item.label}
+                <FiMapPin className="text-slate-400" /> All Cities
               </button>
-            ))}
-            {filteredCities.length === 0 ? (
-              <p className="px-2.5 py-3 text-sm text-slate-500">No cities found.</p>
-            ) : null}
+              {filteredCities.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => {
+                    setCity(item.value);
+                    setActivePanel(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                >
+                  <FiMapPin className="text-slate-400" /> {item.label}
+                </button>
+              ))}
+              {filteredCities.length === 0 ? (
+                <p className="px-2.5 py-3 text-sm text-slate-500">No cities found.</p>
+              ) : null}
+              </div>
             </div>
-          </div>
-        }
-      />
+          }
+        />
+      ) : null}
 
-      <FilterPopupField
-        label="Category"
-        value={categoryLabel}
-        isActive={activePanel === "category"}
-        onToggle={(e) => {
-          e.stopPropagation();
-          setCategoryQuery("");
-          setActivePanel((prev) => (prev === "category" ? null : "category"));
-        }}
-        panelClassName="w-full min-w-[220px]"
-        panelContent={
-          <div>
-            <label className="mb-2 block">
-              <span className="sr-only">Search categories</span>
-              <input
-                type="text"
-                value={categoryQuery}
-                onChange={(e) => setCategoryQuery(e.target.value)}
-                placeholder="Search categories"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
-              />
-            </label>
-            <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
-            <button
-              type="button"
-              onClick={() => {
-                setCategory("");
-                setActivePanel(null);
-              }}
-              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
-            >
-              <FiTag className="text-slate-400" /> All Categories
-            </button>
-            {filteredCategories.map((item) => (
+      {showCategory ? (
+        <FilterPopupField
+          label="Category"
+          value={categoryLabel}
+          isActive={activePanel === "category"}
+          onToggle={(e) => {
+            e.stopPropagation();
+            setCategoryQuery("");
+            setActivePanel((prev) => (prev === "category" ? null : "category"));
+          }}
+          panelClassName="w-full min-w-[220px]"
+          panelContent={
+            <div>
+              <label className="mb-2 block">
+                <span className="sr-only">Search categories</span>
+                <input
+                  type="text"
+                  value={categoryQuery}
+                  onChange={(e) => setCategoryQuery(e.target.value)}
+                  placeholder="Search categories"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 caret-slate-900 placeholder:text-slate-400 outline-none transition focus:border-slate-300"
+                />
+              </label>
+              <div className="hide-scrollbar max-h-56 space-y-0.5 overflow-y-auto pr-1">
               <button
-                key={item.value}
                 type="button"
                 onClick={() => {
-                  setCategory(item.value);
+                  setCategory("");
                   setActivePanel(null);
                 }}
                 className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
               >
-                <FiTag className="text-slate-400" /> {item.label}
+                <FiTag className="text-slate-400" /> All Categories
               </button>
-            ))}
-            {filteredCategories.length === 0 ? (
-              <p className="px-2.5 py-3 text-sm text-slate-500">No categories found.</p>
-            ) : null}
+              {filteredCategories.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => {
+                    setCategory(item.value);
+                    setActivePanel(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
+                >
+                  <FiTag className="text-slate-400" /> {item.label}
+                </button>
+              ))}
+              {filteredCategories.length === 0 ? (
+                <p className="px-2.5 py-3 text-sm text-slate-500">No categories found.</p>
+              ) : null}
+              </div>
             </div>
-          </div>
-        }
-      />
+          }
+        />
+      ) : null}
 
       {showDate ? (
         <FilterPopupField
@@ -317,6 +323,8 @@ function EventFilterBar(props) {
     canApply,
     mobileTitle = "Filter Events",
     compact = false,
+    showCity = true,
+    showCategory = true,
     showDate = true,
     showPrice = true,
     showSort = true
@@ -343,6 +351,8 @@ function EventFilterBar(props) {
           <EventFilterControls
             {...props}
             className={compact ? "listing-filter-compact" : "contents"}
+            showCity={showCity}
+            showCategory={showCategory}
             showDate={compact ? false : showDate}
             showPrice={compact ? false : showPrice}
             showSort={showSort}

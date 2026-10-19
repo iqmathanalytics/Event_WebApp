@@ -63,27 +63,33 @@ export default function ListingTagIcon({ tag }) {
 export function LandingTagList({
   tags,
   classFor,
+  mobileAside = null,
   mobileClassName = "flex flex-wrap items-center gap-2 lg:hidden",
   desktopClassName = "hidden flex-wrap items-center gap-1.5 lg:flex"
 }) {
-  if (!Array.isArray(tags) || tags.length === 0) {
+  const list = Array.isArray(tags) ? tags : [];
+  const hasTags = list.length > 0;
+  if (!hasTags && !mobileAside) {
     return null;
   }
 
   return (
     <>
       <div className={mobileClassName}>
-        {tags.map((tag) => (
-          <ListingTagIcon key={tag} tag={tag} />
-        ))}
+        {hasTags
+          ? list.map((tag) => <ListingTagIcon key={tag} tag={tag} />)
+          : null}
+        {mobileAside}
       </div>
-      <div className={desktopClassName}>
-        {tags.map((tag) => (
-          <span key={tag} className={classFor(tag)}>
-            {tag}
-          </span>
-        ))}
-      </div>
+      {hasTags ? (
+        <div className={desktopClassName}>
+          {list.map((tag) => (
+            <span key={tag} className={classFor(tag)}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </>
   );
 }

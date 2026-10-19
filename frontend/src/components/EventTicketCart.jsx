@@ -301,7 +301,7 @@ export default function EventTicketCart({
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
             {chartMode
-              ? "Prices and availability by tier — pick seats on the chart below"
+              ? "Prices and availability by tier — pick seats with the chart button above"
               : "Each tier has its own experience & price"}
           </p>
         </div>

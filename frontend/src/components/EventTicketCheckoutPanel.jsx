@@ -1,6 +1,6 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Ticket } from "lucide-react";
+import { Armchair, Ticket } from "lucide-react";
 import {
   cancelBookingPayment,
   cancelGuestBookingPayment,
@@ -335,6 +335,23 @@ function scrollPhoneFieldIntoView(event) {
   });
 }
 
+/** After "Book tickets", the confirm panel is shorter and sticks up — bring it into view. */
+function scrollCheckoutPanelIntoView() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const target = document.getElementById("event-ticket-checkout");
+  if (!target?.scrollIntoView) {
+    return;
+  }
+  // Wait for the shorter confirm step to paint before scrolling.
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
 function CheckoutCard({ children, pill = `${BRAND_NAME} · your city's event guide`, seatBar = null }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_6px_20px_rgba(0,0,0,0.08)] ring-1 ring-slate-900/[0.04]">
@@ -417,8 +434,24 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const resumeAttemptedRef = useRef(false);
   const guestCouponEmailRef = useRef("");
   const paymentReturnHandledRef = useRef(false);
+  const checkoutAttemptIdRef = useRef("");
+  const paymentStartLockRef = useRef(false);
+  /** Charged (or possibly charged) PaymentIntent whose booking confirm failed — retry it, never re-pay. */
+  const [pendingConfirmPiId, setPendingConfirmPiId] = useState("");
+  const [repeatPurchasePrompt, setRepeatPurchasePrompt] = useState(false);
   const [completingPaymentReturn, setCompletingPaymentReturn] = useState(false);
   const [popupReturnRelay, setPopupReturnRelay] = useState(null);
+
+  const newCheckoutAttemptId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (ch) => {
+      const r = (Math.random() * 16) | 0;
+      const v = ch === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
 
   const buildHoldState = useCallback((data, snapshot) => {
     const normalized = normalizeCouponHoldPayload(data);
@@ -1244,6 +1277,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       return;
     }
     setStep("confirm");
+    scrollCheckoutPanelIntoView();
   };
 
   const finishBookingSuccess = useCallback(
@@ -1281,6 +1315,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setCouponHold(null);
       setPaymentModalOpen(false);
       setPaymentClientSecret("");
+      setPaymentIntentId("");
+      setPendingConfirmPiId("");
+      setRepeatPurchasePrompt(false);
+      checkoutAttemptIdRef.current = "";
       clearPendingStripePayment(eventId, checkoutUserId);
       clearStripeReturnParams();
       clearEventCheckoutDraft(eventId, checkoutUserId);
@@ -1304,8 +1342,16 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     ]
   );
 
-  const onSubmitBooking = async () => {
+  const onSubmitBooking = async ({ confirmRepeat = false } = {}) => {
+    if (paymentStartLockRef.current || submitting || paymentModalOpen) {
+      return;
+    }
+    if (pendingConfirmPiId) {
+      await onPaymentSuccess(pendingConfirmPiId);
+      return;
+    }
     setError("");
+    setRepeatPurchasePrompt(false);
     const msg = validateForm();
     if (msg) {
       setError(msg);
@@ -1336,6 +1382,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       bookAsSponsor: reservedSponsorCheckout
     });
 
+    paymentStartLockRef.current = true;
     try {
       setSubmitting(true);
 
@@ -1346,6 +1393,14 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         const data = body?.data || body;
         finishBookingSuccess(data, sortedDates);
         return;
+      }
+
+      if (!checkoutAttemptIdRef.current) {
+        checkoutAttemptIdRef.current = newCheckoutAttemptId();
+      }
+      payload.checkout_attempt_id = checkoutAttemptIdRef.current;
+      if (confirmRepeat) {
+        payload.confirm_repeat_purchase = true;
       }
 
       const intentRes = guestMode
@@ -1370,9 +1425,19 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setPaymentModalOpen(true);
     } catch (err) {
       const apiMessage = err?.response?.data?.message;
+      const details = err?.response?.data?.details;
       setError(apiMessage || `We couldn’t start checkout on ${BRAND_NAME}. Please try again.`);
+      if (details?.code === "PAYMENT_PROCESSING" && details.paymentIntentId) {
+        setPendingConfirmPiId(details.paymentIntentId);
+      } else if (details?.code === "REPEAT_PURCHASE") {
+        setRepeatPurchasePrompt(true);
+      } else if (err?.response?.status === 409) {
+        // Allow a fresh attempt id after a hard failure (e.g. already paid / validation).
+        checkoutAttemptIdRef.current = "";
+      }
     } finally {
       setSubmitting(false);
+      paymentStartLockRef.current = false;
     }
   };
 
@@ -1388,10 +1453,19 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         finishBookingSuccess(data, sortedDates);
       } catch (err) {
         const apiMessage = err?.response?.data?.message;
-        setError(
-          apiMessage ||
-            `Payment went through but we could not save your booking. Contact ${BRAND_SUPPORT_EMAIL} with your receipt.`
-        );
+        const status = err?.response?.status;
+        const notCompleted =
+          err?.response?.data?.details?.code === "PAYMENT_NOT_COMPLETED" || status === 403;
+        if (notCompleted) {
+          setPendingConfirmPiId("");
+          checkoutAttemptIdRef.current = "";
+          setError(apiMessage || "Payment was not completed. Please try again.");
+        } else {
+          setPendingConfirmPiId(piId);
+          setError(
+            `${apiMessage || "We could not confirm your booking yet."} Do not pay again — tap “Retry confirmation”, or contact ${BRAND_SUPPORT_EMAIL} with your receipt.`
+          );
+        }
         setPaymentModalOpen(false);
         setStep("confirm");
       } finally {
@@ -1472,16 +1546,36 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     setPaymentModalOpen(false);
     setPaymentClientSecret("");
     setPaymentIntentId("");
+    // New attempt id on the next "Pay" so we do not reuse a canceled PI via Stripe idempotency.
+    checkoutAttemptIdRef.current = "";
     clearPendingStripePayment(eventId, checkoutUserId);
-    setError(
-      "Payment was not completed. Your tickets are not booked yet — try again when you are ready."
-    );
-    if (abandonPiId) {
-      const cancelFn = guestMode ? cancelGuestBookingPayment : cancelBookingPayment;
-      void cancelFn(abandonPiId).catch(() => {
-        // Best-effort cleanup of Incomplete PaymentIntents in Stripe.
-      });
+    const notCompletedMessage =
+      "Payment was not completed. Your tickets are not booked yet — try again when you are ready.";
+    if (!abandonPiId) {
+      setError(notCompletedMessage);
+      return;
     }
+    setError("");
+    const cancelFn = guestMode ? cancelGuestBookingPayment : cancelBookingPayment;
+    void cancelFn(abandonPiId)
+      .then((res) => {
+        const reason = (res?.data || res)?.reason;
+        if (reason === "stripe_succeeded" || reason === "already_succeeded") {
+          void onPaymentSuccess(abandonPiId);
+          return;
+        }
+        if (reason === "processing") {
+          setPendingConfirmPiId(abandonPiId);
+          setError(
+            "Your payment is still processing. Do not pay again — tap “Retry confirmation” in a moment."
+          );
+          return;
+        }
+        setError(notCompletedMessage);
+      })
+      .catch(() => {
+        setError(notCompletedMessage);
+      });
   };
 
   const primaryActionRef = useRef(null);
@@ -1544,7 +1638,10 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         </div>
         <button
           type="button"
-          disabled={(step === "confirm" && submitting) || (step !== "confirm" && attendeeCount <= 0)}
+          disabled={
+            (step === "confirm" && (submitting || paymentModalOpen)) ||
+            (step !== "confirm" && attendeeCount <= 0)
+          }
           onClick={() => {
             if (step === "confirm") {
               void onSubmitBooking();
@@ -1555,12 +1652,16 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#E31C5F] px-4 text-sm font-semibold text-white disabled:opacity-60"
         >
           {step === "confirm"
-            ? submitting
+            ? submitting || paymentModalOpen
               ? needsCardPayment
-                ? "Starting…"
+                ? paymentModalOpen
+                  ? "Complete payment…"
+                  : "Starting…"
                 : "Saving…"
               : needsCardPayment
-                ? "Pay & confirm"
+                ? pendingConfirmPiId
+                  ? "Retry confirmation"
+                  : "Pay & confirm"
                 : "Confirm"
             : "Continue"}
         </button>
@@ -1696,21 +1797,36 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
           <button
             ref={primaryActionRef}
             type="button"
-            disabled={submitting}
+            disabled={submitting || paymentModalOpen}
             onClick={() => void onSubmitBooking()}
             className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#E31C5F] py-3.5 text-center text-base font-semibold text-white transition hover:bg-[#D70466] disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0"
           >
-            {submitting
+            {submitting || paymentModalOpen
               ? needsCardPayment
-                ? "Starting…"
+                ? paymentModalOpen
+                  ? "Complete payment…"
+                  : "Starting…"
                 : "Saving…"
               : needsCardPayment
-                ? "Pay & confirm"
+                ? pendingConfirmPiId
+                  ? "Retry confirmation"
+                  : "Pay & confirm"
                 : "Confirm booking"}
           </button>
         </div>
 
         {error ? <p className="mt-3 text-center text-sm font-medium text-rose-700">{error}</p> : null}
+        {repeatPurchasePrompt && !submitting && !paymentModalOpen ? (
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              onClick={() => void onSubmitBooking({ confirmRepeat: true })}
+              className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+            >
+              Yes, buy another order
+            </button>
+          </div>
+        ) : null}
         <p className="mt-3 text-center text-xs text-slate-600">
           {needsCardPayment
             ? "Your card is charged only after you complete payment in the secure popup."
@@ -1767,6 +1883,22 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <div className="border-t border-slate-200/90 bg-gradient-to-b from-slate-100/60 via-white to-amber-50/30 px-3.5 pb-3.5 pt-4">
           {reservedSeating ? (
             <div className="space-y-3">
+              {paidLevels.length || (canUseSponsorTickets && sponsorLevels.length) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    openSeatSelectionModal();
+                  }}
+                  className={`inline-flex w-full min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                    selectedSeats.length
+                      ? "border border-emerald-300 bg-emerald-50 text-emerald-900 hover:border-emerald-400 hover:bg-emerald-100/80"
+                      : "border border-transparent bg-gradient-to-r from-[#E31C5F] to-[#F43F7A] text-white shadow-sm shadow-rose-200/70 hover:from-[#D70466] hover:to-[#E31C5F]"
+                  }`}
+                >
+                  <Armchair className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                  {selectedSeats.length ? "Change seats on chart" : "Choose seats on chart"}
+                </button>
+              ) : null}
               {selectedSeats.length && reservedSponsorCheckout ? (
                 <EventTicketCart
                   eventId={eventId}
@@ -1815,17 +1947,6 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-4 text-center text-sm text-amber-900">
                   No ticket types are available to book right now. Sale periods may have ended for all tiers.
                 </p>
-              ) : null}
-              {paidLevels.length || (canUseSponsorTickets && sponsorLevels.length) ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    openSeatSelectionModal();
-                  }}
-                  className="w-full min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400"
-                >
-                  {selectedSeats.length ? "Change seats on chart" : "Choose seats on chart"}
-                </button>
               ) : null}
             </div>
           ) : paidLevels.length || (canUseSponsorTickets && sponsorLevels.length) ? (

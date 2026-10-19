@@ -12,6 +12,7 @@ import { dealDetailPath, eventDetailPath, influencerDetailPath } from "../utils/
 import { thumbImageUrl } from "../utils/displayImage";
 import { resolveTicketLevelPalette } from "../utils/ticketLevelPalettes";
 import { resendMyBookingEmail } from "../services/bookingService";
+import BookingEntryQr from "./BookingEntryQr";
 
 function getDisplayPrice(item) {
   if (item.listing_type === "event") {
@@ -258,11 +259,7 @@ function TicketDetailsSheet({ open, onClose, booking, eventUrl, mapUrl, venueLin
                 {venueLine ? <TicketMeta icon={MapPin} label="Venue" value={venueLine} /> : null}
                 {booking.city ? <p className="text-sm text-slate-600">{booking.city}</p> : null}
                 {booking.organizer_name ? <p className="text-sm text-slate-600">Hosted by {booking.organizer_name}</p> : null}
-                {booking.has_ticket_qr && booking.check_in_code ? (
-                  <p className="rounded-2xl bg-amber-50 px-3 py-3 text-sm text-amber-950">
-                    Your entry QR code was sent to your email. Show that QR at the venue for check-in.
-                  </p>
-                ) : null}
+                <BookingEntryQr booking={booking} size={168} />
                 {resendStatus ? (
                   <p className={`text-sm font-medium ${resendStatus.ok ? "text-emerald-700" : "text-rose-600"}`}>{resendStatus.message}</p>
                 ) : null}
@@ -377,6 +374,7 @@ function UserBookingCard({ booking }) {
           <TicketMeta icon={Ticket} label="Tickets" value={`${ticketCount} ${ticketCount === 1 ? "ticket" : "tickets"}`} />
         </div>
         {seatsLabel ? <TicketMeta icon={Ticket} label="Seats" value={seatsLabel} /> : null}
+        <BookingEntryQr booking={booking} size={148} />
         <button
           type="button"
           onClick={() => setDetailsOpen(true)}
@@ -462,11 +460,7 @@ function UserBookingCard({ booking }) {
 
           {hasDiscount ? <BookingDiscountSummary booking={booking} /> : null}
 
-          {booking.has_ticket_qr && booking.check_in_code ? (
-            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-              Your entry QR code was sent to your email. Show that QR at the venue for check-in.
-            </p>
-          ) : null}
+          <BookingEntryQr booking={booking} size={132} compact className="max-w-md" />
 
           {(venueLine || booking.organizer_name || mapUrl) && (
             <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 lg:text-[11px]">
@@ -593,6 +587,13 @@ function FavoriteListingCard({ item, toggleFavorite }) {
   );
 }
 
+/** Mobile: no card shell — ticket / favourite cards sit directly on the page (max two layers). */
+const DASHBOARD_SECTION_CLASS =
+  "lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-white lg:p-5 lg:shadow-soft";
+
+const EMPTY_STATE_CLASS =
+  "rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center lg:bg-slate-50/80";
+
 const FILTER_OPTIONS = [
   { value: "upcoming", label: "Upcoming" },
   { value: "past", label: "Past" },
@@ -600,6 +601,8 @@ const FILTER_OPTIONS = [
 ];
 
 export default function UserDashboardBookingsAndFavorites({
+  /** "all" (desktop) | "bookings" | "favorites" — mobile shows one area at a time. */
+  show = "all",
   filteredBookings,
   bookingsTotalCount,
   loadingBookings,
@@ -612,21 +615,22 @@ export default function UserDashboardBookingsAndFavorites({
 }) {
   return (
     <div className="space-y-4">
+      {show !== "favorites" ? (
       <section
         aria-labelledby="dashboard-my-tickets-heading"
-        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5"
+        className={DASHBOARD_SECTION_CLASS}
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3 lg:flex-nowrap lg:items-start">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">Book My Tickets</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 max-lg:hidden lg:text-[11px]">Book My Tickets</p>
             <h2 id="dashboard-my-tickets-heading" className="mt-0.5 text-lg font-bold text-slate-900">
-              My tickets &amp; bookings
+              My tickets<span className="max-lg:hidden"> &amp; bookings</span>
             </h2>
-            <p className="mt-1 max-w-xl text-sm text-slate-600">
+            <p className="mt-1 max-w-xl text-sm text-slate-600 max-lg:hidden">
               Event reservations and payment status for tickets you booked on the site.
             </p>
           </div>
-          <div className="hide-scrollbar flex w-full min-w-0 shrink-0 flex-nowrap gap-1.5 overflow-x-auto rounded-xl bg-slate-50 p-1 lg:w-auto">
+          <div className="hide-scrollbar flex w-fit max-w-full min-w-0 shrink-0 flex-nowrap gap-1.5 overflow-x-auto rounded-xl bg-slate-200/70 p-1 lg:w-auto lg:bg-slate-50">
             {FILTER_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -652,7 +656,7 @@ export default function UserDashboardBookingsAndFavorites({
           {loadingBookings ? (
             <p className="text-sm text-slate-500">Loading your bookings…</p>
           ) : filteredBookings.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center">
+            <div className={EMPTY_STATE_CLASS}>
               <Ticket className="mx-auto h-8 w-8 text-slate-400" aria-hidden />
               <p className="mt-2 text-sm font-medium text-slate-800">
                 {bookingsTotalCount === 0
@@ -680,17 +684,19 @@ export default function UserDashboardBookingsAndFavorites({
           )}
         </div>
       </section>
+      ) : null}
 
+      {show !== "bookings" ? (
       <section
         aria-labelledby="dashboard-favorites-heading"
-        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft sm:p-5"
+        className={DASHBOARD_SECTION_CLASS}
       >
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:text-[11px]">Saved</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 max-lg:hidden lg:text-[11px]">Saved</p>
           <h2 id="dashboard-favorites-heading" className="mt-0.5 text-lg font-bold text-slate-900">
             Favourite listings
           </h2>
-          <p className="mt-1 max-w-xl text-sm text-slate-600">
+          <p className="mt-1 max-w-xl text-sm text-slate-600 max-lg:hidden">
             Events, deals, and creators you saved with the heart icon across Book My Tickets.
           </p>
         </div>
@@ -699,7 +705,7 @@ export default function UserDashboardBookingsAndFavorites({
           {favoritesLoading ? (
             <p className="text-sm text-slate-500">Loading your favourites…</p>
           ) : favorites.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center">
+            <div className={EMPTY_STATE_CLASS}>
               <Heart className="mx-auto h-8 w-8 text-slate-300" aria-hidden />
               <p className="mt-2 text-sm font-medium text-slate-800">Nothing saved yet</p>
               <p className="mt-1 text-xs text-slate-600">
@@ -725,6 +731,7 @@ export default function UserDashboardBookingsAndFavorites({
           )}
         </div>
       </section>
+      ) : null}
     </div>
   );
 }

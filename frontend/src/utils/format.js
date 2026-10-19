@@ -76,3 +76,21 @@ export function formatTime12Hour(value) {
   const hour12 = hour24 % 12 || 12;
   return `${hour12}:${minute} ${suffix}`;
 }
+
+/** "Oct 17, 2026, 1:29 PM" for timestamps (e.g. check-in time). */
+export function formatDateTimeUS(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}

@@ -1031,7 +1031,11 @@ async function resendUserBookingConfirmationEmail({ userId, userEmail, bookingId
   };
   ctx.pricing = pricing;
 
-  await dispatchBookingConfirmationEmail(ctx);
+  const result = await dispatchBookingConfirmationEmail(ctx);
+  if (!result?.sent) {
+    const detail = result?.error || (result?.skipped ? "Email provider is not configured" : "Email provider rejected the send");
+    throw new ApiError(502, `Could not send confirmation email. ${detail}`);
+  }
 
   return {
     bookingId: row.id,

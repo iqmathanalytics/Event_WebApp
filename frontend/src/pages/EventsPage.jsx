@@ -6,7 +6,6 @@ import EventFilterBar from "../components/EventFilterBar";
 import ListingEmptyState from "../components/ListingEmptyState";
 import { fetchEvents } from "../services/eventService";
 import useFavorites from "../hooks/useFavorites";
-import useCityFilter from "../hooks/useCityFilter";
 import { formatDateUS } from "../utils/format";
 import { getEventSortDate } from "../utils/eventSchedule";
 import { sortEventsByDate } from "../utils/eventPopularity";
@@ -19,40 +18,17 @@ const EVENTS_SKELETON_COUNT = 9;
 
 function EventsPage() {
   const [searchParams] = useSearchParams();
-  const { selectedCity, setSelectedCity } = useCityFilter();
-  const initialFilters = {
-    query: searchParams.get("q") || "",
-    city: selectedCity || searchParams.get("city") || "",
-    category: searchParams.get("category") || "",
-    date: searchParams.get("date") || "",
-    time: searchParams.get("time") || "",
-    priceMin: searchParams.get("price_min") || "",
-    priceMax: searchParams.get("price_max") || ""
-  };
-  const [query, setQuery] = useState(initialFilters.query);
-  const [city, setCity] = useState(initialFilters.city);
-  const [category, setCategory] = useState(initialFilters.category);
-  const [date, setDate] = useState(initialFilters.date);
-  const [priceMin, setPriceMin] = useState(initialFilters.priceMin);
-  const [priceMax, setPriceMax] = useState(initialFilters.priceMax);
-  const [debouncedQuery, setDebouncedQuery] = useState(initialFilters.query);
+  const initialQuery = searchParams.get("q") || "";
+  const [query, setQuery] = useState(initialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const { isFavorite, toggleFavorite } = useFavorites();
   useRouteContentReady(loading);
 
-  const setCityWithGlobal = (value) => {
-    setCity(value);
-    setSelectedCity(value);
-  };
-
   const clearFilters = () => {
     setQuery("");
     setDebouncedQuery("");
-    setCategory("");
-    setDate("");
-    setPriceMin("");
-    setPriceMax("");
   };
 
   useEffect(() => {
@@ -61,43 +37,23 @@ function EventsPage() {
   }, [query]);
 
   useEffect(() => {
-    setCity(selectedCity || "");
-  }, [selectedCity]);
-
-  useEffect(() => {
     let active = true;
 
     async function loadEvents() {
       try {
         setLoading(true);
-        const requestParams = {
+        const response = await fetchEvents({
           q: debouncedQuery || undefined,
-          city: city || undefined,
-          category: category || undefined,
           sort: "event_date",
           page: 1,
           limit: EVENTS_FEED_LIMIT
-        };
-        const response = await fetchEvents(requestParams);
+        });
 
         if (!active) {
           return;
         }
 
-        let payload = response?.data || {};
-        const hasOnlyCityFilter = Boolean(city) && !debouncedQuery && !category;
-
-        if (hasOnlyCityFilter && (!payload.rows || payload.rows.length === 0)) {
-          const fallbackResponse = await fetchEvents({
-            ...requestParams,
-            city: undefined
-          });
-          payload = fallbackResponse?.data || {};
-          setCity("");
-          setSelectedCity("");
-        }
-
-        const rows = payload.rows || [];
+        const rows = response?.data?.rows || [];
         setEvents(sortEventsWithHomeFeaturedFirst(sortEventsByDate(rows, "asc")));
       } catch (_error) {
         if (active) {
@@ -114,14 +70,14 @@ function EventsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedQuery, city, category, setSelectedCity]);
+  }, [debouncedQuery]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5 lg:space-y-6">
       <div className="space-y-1.5 lg:space-y-2">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Events</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-          Explore verified city events with smart filters, clear pricing, and real-time availability.
+          Explore verified city events with clear pricing and real-time availability.
         </p>
       </div>
 
@@ -129,16 +85,8 @@ function EventsPage() {
         compact
         query={query}
         setQuery={setQuery}
-        city={city}
-        setCity={setCityWithGlobal}
-        category={category}
-        setCategory={setCategory}
-        date={date}
-        setDate={setDate}
-        priceMin={priceMin}
-        setPriceMin={setPriceMin}
-        priceMax={priceMax}
-        setPriceMax={setPriceMax}
+        showCity={false}
+        showCategory={false}
         showSort={false}
       />
 
@@ -152,7 +100,7 @@ function EventsPage() {
             ))
           : null}
         {!loading && events.length === 0 ? (
-          <ListingEmptyState message="No events match your current filters." actionLabel="Clear filters" onAction={clearFilters} />
+          <ListingEmptyState message="No events match your search." actionLabel="Clear search" onAction={clearFilters} />
         ) : null}
         {!loading
           ? events.map((item, idx) => (

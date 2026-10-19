@@ -59,9 +59,17 @@ function warnMailchimpConfig(reason) {
 function getBrevoConfig() {
   const apiKey = String(process.env.BREVO_API_KEY || "").trim();
   const fromEmail = String(
-    process.env.BREVO_FROM_EMAIL || process.env.SENDGRID_FROM_EMAIL || "howdy@bookmytickets.us"
+    process.env.BREVO_FROM_EMAIL ||
+      process.env.BREVO_SENDER_EMAIL ||
+      process.env.SENDGRID_FROM_EMAIL ||
+      "howdy@bookmytickets.us"
   ).trim();
-  const fromName = String(process.env.BREVO_FROM_NAME || process.env.SENDGRID_FROM_NAME || "Book My Tickets").trim();
+  const fromName = String(
+    process.env.BREVO_FROM_NAME ||
+      process.env.BREVO_SENDER_NAME ||
+      process.env.SENDGRID_FROM_NAME ||
+      "Book My Tickets"
+  ).trim();
   return { apiKey, fromEmail, fromName };
 }
 
@@ -168,45 +176,64 @@ async function sendTransactionalEmail({ to, subject, text, html, replyTo, attach
       }));
   }
 
-  try {
-    const headers = {
-      "api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    };
-    const body = JSON.stringify(payload);
-    let res = await fetch(BREVO_API_URL, {
-      method: "POST",
-      headers,
-      body
-    });
+  const headers = {
+    "api-key": apiKey,
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  };
+  const body = JSON.stringify(payload);
 
-    if (!res.ok) {
-      const firstErr = await parseBrevoErrorResponse(res);
-      if (res.status === 401 && /unrecognised IP/i.test(firstErr)) {
-        res = await postBrevoJsonIpv4(headers, body);
-        if (res.ok) {
-          return { sent: true, provider: "brevo" };
-        }
-      } else {
-        // eslint-disable-next-line no-console
-        console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, firstErr);
-        return { sent: false, error: firstErr, provider: "brevo", status: res.status };
-      }
-    }
-
+  const finishWithRes = async (res) => {
     if (!res.ok) {
       const errText = await parseBrevoErrorResponse(res);
       // eslint-disable-next-line no-console
       console.warn(`[emailIntegrations] Brevo send failed (${res.status}):`, errText);
       return { sent: false, error: errText, provider: "brevo", status: res.status };
     }
-
     return { sent: true, provider: "brevo" };
-  } catch (err) {
+  };
+
+  // Prefer IPv4 first: Brevo authorized-IP lists are usually IPv4, and local
+  // Windows often resolves api.brevo.com to IPv6 (fetch fails or 401).
+  try {
+    const ipv4Res = await postBrevoJsonIpv4(headers, body);
+    if (ipv4Res.ok) {
+      return { sent: true, provider: "brevo" };
+    }
+    const ipv4Err = await parseBrevoErrorResponse(ipv4Res);
+    const isIpBlock = ipv4Res.status === 401 && /unrecognised IP/i.test(ipv4Err);
+
+    if (!isIpBlock) {
+      // Fall back to default fetch (may use IPv6) for other errors.
+      try {
+        const res = await fetch(BREVO_API_URL, { method: "POST", headers, body });
+        if (res.ok) {
+          return { sent: true, provider: "brevo" };
+        }
+      } catch (_fetchErr) {
+        /* keep ipv4 error */
+      }
+      // eslint-disable-next-line no-console
+      console.warn(`[emailIntegrations] Brevo send failed (${ipv4Res.status}):`, ipv4Err);
+      return { sent: false, error: ipv4Err, provider: "brevo", status: ipv4Res.status };
+    }
+
     // eslint-disable-next-line no-console
-    console.warn(`[emailIntegrations] Brevo request error:`, err?.message || err);
-    return { sent: false, error: err?.message || "Brevo request failed", provider: "brevo" };
+    console.warn(`[emailIntegrations] Brevo send failed (${ipv4Res.status}):`, ipv4Err);
+    return { sent: false, error: ipv4Err, provider: "brevo", status: ipv4Res.status };
+  } catch (err) {
+    try {
+      const res = await fetch(BREVO_API_URL, { method: "POST", headers, body });
+      return finishWithRes(res);
+    } catch (fetchErr) {
+      // eslint-disable-next-line no-console
+      console.warn(`[emailIntegrations] Brevo request error:`, fetchErr?.message || err?.message || err);
+      return {
+        sent: false,
+        error: fetchErr?.message || err?.message || "Brevo request failed",
+        provider: "brevo"
+      };
+    }
   }
 }
 

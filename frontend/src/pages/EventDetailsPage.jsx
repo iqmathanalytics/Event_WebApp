@@ -380,8 +380,9 @@ function EventDetailsPage() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+      /* Opacity only — a Y transform on this wrapper breaks `position: sticky` on the ticket cart. */
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-4 lg:space-y-6"
     >
@@ -759,27 +760,33 @@ function EventDetailsPage() {
           </Link>
         </div>
 
-        <aside ref={checkoutRef} id="event-ticket-checkout" className={`scroll-mt-28 lg:sticky lg:top-24 lg:z-10 lg:self-start ${phoneChapter("tickets")}`}>
-          {ticketSalesMode === "platform" && (isAuthenticated || !isYayDealEvent) ? (
-            <Suspense
-              fallback={
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-soft">
-                  Loading checkout…
-                </div>
-              }
-            >
-              <EventTicketCheckoutPanel event={event} guestMode={!isAuthenticated} />
-            </Suspense>
-          ) : (
-            <EventAirbnbBookingShell
-              event={event}
-              ticketSalesMode={ticketSalesMode}
-              isGuest={isGuest}
-              scheduleLabel={formatEventScheduleLabel(event)}
-              timeLabel={formatTime12Hour(event.event_time)}
-              pricePerDay={pricePerDay}
-            />
-          )}
+        <aside
+          ref={checkoutRef}
+          id="event-ticket-checkout"
+          className={`scroll-mt-28 lg:self-start ${phoneChapter("tickets")}`}
+        >
+          <div className="lg:sticky lg:top-24 lg:z-10">
+            {ticketSalesMode === "platform" && (isAuthenticated || !isYayDealEvent) ? (
+              <Suspense
+                fallback={
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-soft">
+                    Loading checkout…
+                  </div>
+                }
+              >
+                <EventTicketCheckoutPanel event={event} guestMode={!isAuthenticated} />
+              </Suspense>
+            ) : (
+              <EventAirbnbBookingShell
+                event={event}
+                ticketSalesMode={ticketSalesMode}
+                isGuest={isGuest}
+                scheduleLabel={formatEventScheduleLabel(event)}
+                timeLabel={formatTime12Hour(event.event_time)}
+                pricePerDay={pricePerDay}
+              />
+            )}
+          </div>
         </aside>
       </div>
       {showMobileBookBar ? (

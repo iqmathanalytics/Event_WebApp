@@ -63,7 +63,11 @@ const createBookingSchema = z.object({
     seatsio_hold_token: z.string().trim().min(1).max(128).optional(),
     selected_seats: z.array(selectedSeatSchema).max(20).optional(),
     /** Organizer-only: reserved seats booked as free Sponsor comps (still requires chart hold). */
-    book_as_sponsor: z.boolean().optional()
+    book_as_sponsor: z.boolean().optional(),
+    /** Client checkout attempt id — Stripe idempotency + duplicate-charge prevention. */
+    checkout_attempt_id: z.string().uuid().optional(),
+    /** Buyer acknowledged they already booked this event recently and want another order. */
+    confirm_repeat_purchase: z.boolean().optional()
   })
     .superRefine((data, ctx) => {
       if (data.selected_seats?.length) {
@@ -132,7 +136,9 @@ const guestCreateBookingSchema = z.object({
       coupon_hold_token: z.string().uuid().optional(),
       seatsio_hold_token: z.string().trim().min(1).max(128).optional(),
       selected_seats: z.array(selectedSeatSchema).max(20).optional(),
-      book_as_sponsor: z.boolean().optional()
+      book_as_sponsor: z.boolean().optional(),
+      checkout_attempt_id: z.string().uuid().optional(),
+      confirm_repeat_purchase: z.boolean().optional()
     })
     .superRefine((data, ctx) => {
       if (data.selected_seats?.length) {

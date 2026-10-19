@@ -204,7 +204,11 @@ const MY_EVENTS_LIFECYCLE_TABS = [
 
 function MyEventsLifecycleTabs({ active, onChange, counts, compact = false }) {
   return (
-    <div className="hide-scrollbar flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-50 p-1.5">
+    <div
+      className={`hide-scrollbar flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto rounded-xl p-1.5 ${
+        compact ? "bg-slate-200/70" : "bg-slate-50"
+      }`}
+    >
       {MY_EVENTS_LIFECYCLE_TABS.map((tab) => {
         const selected = active === tab.key;
         const count = counts?.[tab.key] ?? 0;
@@ -1413,7 +1417,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
               ) : null}
           </HostSectionSlot>
 
-          <HostSectionSlot id="my-events" activeId={displaySection} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
+          <HostSectionSlot id="my-events" activeId={displaySection}>
               <MyEventsActionBar
                 onCreate={openCreate}
                 className="mb-4"
@@ -1425,7 +1429,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
 
               {loading ? <p className="mt-3 text-sm text-slate-500">Loading your events...</p> : null}
               {!loading && rows.length === 0 ? (
-                <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center">
                   <p className="text-sm font-semibold text-slate-900">No events submitted yet.</p>
                   <button
                     type="button"
@@ -1448,13 +1452,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                     />
                   </div>
                   {filteredMyEvents.length === 0 ? (
-                    <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-5 text-center">
+                    <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-center">
                       <p className="text-sm font-medium text-slate-600">{myEventsEmptyCopy}</p>
                     </div>
                   ) : (
                 <div className="mt-3 space-y-2">
                   {filteredMyEvents.map((item) => (
-                    <article key={`m-org-event-card-${item.id}`} className="rounded-2xl border border-slate-200 p-4">
+                    <article key={`m-org-event-card-${item.id}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                         <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${getStatusBadgeClass(item.status)}`}>
