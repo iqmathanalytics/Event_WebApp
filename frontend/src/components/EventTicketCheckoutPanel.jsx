@@ -1,6 +1,7 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Armchair, Ticket } from "lucide-react";
+import PastEventTicketsNotice from "./PastEventTicketsNotice";
 import {
   cancelBookingPayment,
   cancelGuestBookingPayment,
@@ -20,10 +21,16 @@ import {
   buildStripeReturnUrl,
   clearPendingStripePayment,
   clearStripeReturnParams,
+  loadPendingStripePayment,
   parseStripeReturnParams,
   savePendingStripePayment,
   STRIPE_PAYMENT_MESSAGE
 } from "../utils/stripePaymentReturn";
+import {
+  clearGuestCheckoutAccessToken,
+  loadGuestCheckoutAccessToken,
+  saveGuestCheckoutAccessToken
+} from "../utils/guestCheckoutAccess";
 import {
   releaseEventCouponHold,
   releaseGuestEventCouponHold,
@@ -40,7 +47,12 @@ import {
   splitFullName,
   validateBookingContactNames
 } from "../utils/bookingContact";
-import { getEventAvailableDates, normalizeDateList } from "../utils/eventSchedule";
+import {
+  getEventAvailableDates,
+  getEventBookableDates,
+  isEventPast,
+  normalizeDateList
+} from "../utils/eventSchedule";
 import { BRAND_NAME, BRAND_SUPPORT_EMAIL } from "../constants/brand";
 import { BOOKING_CONFIRMED_STORAGE_KEY } from "../pages/BookingConfirmedPage";
 import EventTicketCart from "./EventTicketCart";
@@ -370,6 +382,18 @@ function CheckoutCard({ children, pill = `${BRAND_NAME} · your city's event gui
   );
 }
 
+function eventAcceptsBookings(event) {
+  if (event?.accept_bookings === undefined || event?.accept_bookings === null) {
+    return true;
+  }
+  return (
+    event.accept_bookings !== false &&
+    event.accept_bookings !== 0 &&
+    String(event.accept_bookings) !== "false" &&
+    String(event.accept_bookings) !== "0"
+  );
+}
+
 export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -386,7 +410,9 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   const checkoutUserId = guestMode ? guestCheckoutKey : userId;
   const eventId = event?.id;
   const reservedSeating = isReservedSeating(event);
-  const availableDates = useMemo(() => getEventAvailableDates(event), [event]);
+  const acceptsBookings = eventAcceptsBookings(event);
+  const eventHasEnded = useMemo(() => isEventPast(event), [event]);
+  const availableDates = useMemo(() => getEventBookableDates(event), [event]);
   const scheduleType = event?.schedule_type || "single";
 
   const [selectedDates, setSelectedDates] = useState([]);
@@ -485,7 +511,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     resumeAttemptedRef.current = false;
     setCheckoutReady(false);
 
-    const dates = getEventAvailableDates(event);
+    const dates = getEventBookableDates(event);
     if (!dates.length || !eventId || !checkoutUserId) {
       setCheckoutReady(true);
       return;
@@ -591,7 +617,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
   }, [reservedSeating]);
 
   useEffect(() => {
-    const dates = getEventAvailableDates(event);
+    const dates = getEventBookableDates(event);
     if (!dates.length || restoredFromDraftRef.current || !eventId || !checkoutUserId) {
       return;
     }
@@ -1418,8 +1444,12 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       setPaymentClientSecret(intent.clientSecret);
       setPaymentPublishableKey(pubKey);
       setPaymentIntentId(intent.paymentIntentId || "");
+      if (guestMode && intent.checkoutAccessToken && intent.paymentIntentId) {
+        saveGuestCheckoutAccessToken(intent.paymentIntentId, intent.checkoutAccessToken);
+      }
       savePendingStripePayment(eventId, checkoutUserId, {
         paymentIntentId: intent.paymentIntentId,
+        checkoutAccessToken: intent.checkoutAccessToken || null,
         returnUrl: buildStripeReturnUrl(eventId)
       });
       setPaymentModalOpen(true);
@@ -1447,9 +1477,29 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       try {
         setSubmitting(true);
         const sortedDates = normalizeDateList(selectedDates);
-        const confirmFn = guestMode ? confirmGuestBookingPayment : confirmBookingPayment;
+        let confirmFn = confirmBookingPayment;
+        if (guestMode) {
+          const accessToken =
+            loadGuestCheckoutAccessToken(piId) ||
+            loadPendingStripePayment(eventId, checkoutUserId)?.checkoutAccessToken ||
+            "";
+          if (!accessToken) {
+            throw Object.assign(new Error("Missing checkout access token"), {
+              response: {
+                status: 403,
+                data: {
+                  message:
+                    "We could not securely confirm this guest payment. Please restart checkout — if you were charged, contact support with your receipt."
+                }
+              }
+            });
+          }
+          confirmFn = (id) => confirmGuestBookingPayment(id, accessToken);
+        }
         const body = await confirmBookingPaymentWithRetry(confirmFn, piId);
         const data = body?.data || body;
+        clearGuestCheckoutAccessToken(piId);
+        clearPendingStripePayment(eventId, checkoutUserId);
         finishBookingSuccess(data, sortedDates);
       } catch (err) {
         const apiMessage = err?.response?.data?.message;
@@ -1473,7 +1523,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         setCompletingPaymentReturn(false);
       }
     },
-    [selectedDates, finishBookingSuccess, guestMode]
+    [selectedDates, finishBookingSuccess, guestMode, eventId, checkoutUserId]
   );
 
   const handleStripePaymentReturn = useCallback(
@@ -1548,6 +1598,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
     setPaymentIntentId("");
     // New attempt id on the next "Pay" so we do not reuse a canceled PI via Stripe idempotency.
     checkoutAttemptIdRef.current = "";
+    const pending = loadPendingStripePayment(eventId, checkoutUserId);
     clearPendingStripePayment(eventId, checkoutUserId);
     const notCompletedMessage =
       "Payment was not completed. Your tickets are not booked yet — try again when you are ready.";
@@ -1556,14 +1607,21 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
       return;
     }
     setError("");
-    const cancelFn = guestMode ? cancelGuestBookingPayment : cancelBookingPayment;
+    let cancelFn = cancelBookingPayment;
+    if (guestMode) {
+      const accessToken =
+        loadGuestCheckoutAccessToken(abandonPiId) || pending?.checkoutAccessToken || "";
+      cancelFn = (id) => cancelGuestBookingPayment(id, accessToken);
+    }
     void cancelFn(abandonPiId)
       .then((res) => {
         const reason = (res?.data || res)?.reason;
         if (reason === "stripe_succeeded" || reason === "already_succeeded") {
+          // Keep access token — confirm still needs it.
           void onPaymentSuccess(abandonPiId);
           return;
         }
+        clearGuestCheckoutAccessToken(abandonPiId);
         if (reason === "processing") {
           setPendingConfirmPiId(abandonPiId);
           setError(
@@ -1574,6 +1632,7 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         setError(notCompletedMessage);
       })
       .catch(() => {
+        clearGuestCheckoutAccessToken(abandonPiId);
         setError(notCompletedMessage);
       });
   };
@@ -1684,6 +1743,24 @@ export default function EventTicketCheckoutPanel({ event, guestMode = false }) {
         <div className="py-10 text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-[#E31C5F]" />
           <p className="mt-4 text-sm font-medium text-slate-800">Confirming your payment and booking…</p>
+        </div>
+      </CheckoutCard>
+    );
+  }
+
+  if (eventHasEnded || (!availableDates.length && getEventAvailableDates(event).length > 0)) {
+    return <PastEventTicketsNotice />;
+  }
+
+  if (!acceptsBookings) {
+    return (
+      <CheckoutCard pill="Ticket sales">
+        <div className="space-y-2 py-4 text-center">
+          <p className="text-base font-semibold text-slate-900">Ticket sales are paused</p>
+          <p className="text-sm leading-relaxed text-slate-600">
+            Tickets aren’t on sale for this event right now. You’re welcome to check back later, or reach out to
+            the organizer if you have questions.
+          </p>
         </div>
       </CheckoutCard>
     );

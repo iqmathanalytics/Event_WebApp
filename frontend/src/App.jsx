@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-rou
 import MainLayout from "./layouts/MainLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import AdminRoute from "./components/AdminRoute";
+import StaffCheckInRoute from "./components/StaffCheckInRoute";
 import UserRoute from "./components/UserRoute";
 import AnimatedBackground from "./components/AnimatedBackground";
 import LogoutOverlay from "./components/LogoutOverlay";
@@ -223,9 +224,11 @@ function App() {
           <Route
             path="/check-in"
             element={
-              <SuspendedPage label="Loading check-in...">
-                <CheckInPage />
-              </SuspendedPage>
+              <StaffCheckInRoute>
+                <SuspendedPage label="Loading check-in...">
+                  <CheckInPage />
+                </SuspendedPage>
+              </StaffCheckInRoute>
             }
           />
           <Route path="/dashboard/admin/verify-ticket" element={<RedirectLegacyVerifyTicket />} />

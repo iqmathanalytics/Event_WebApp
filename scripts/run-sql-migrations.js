@@ -77,7 +77,9 @@ const FILES = [
   "event_discovery_perf.sql",
   "event_vendor_shares.sql",
   "event_vendor_link_presence.sql",
-  "event_page_presence.sql"
+  "event_vendor_link_only_shares.sql",
+  "event_page_presence.sql",
+  "event_accept_bookings.sql"
 ];
 
 function buildSsl() {

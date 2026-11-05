@@ -14,7 +14,7 @@ function averageRgb(pixels) {
   return `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`;
 }
 
-/** Average colors along the left and right edges of an image (for banner letterboxing). */
+/** Average colors along image edges (for banner letterboxing / soft fills). */
 export function sampleImageEdgeColors(img) {
   try {
     if (!img?.naturalWidth || !img?.naturalHeight) {
@@ -35,16 +35,26 @@ export function sampleImageEdgeColors(img) {
 
     const left = [];
     const right = [];
+    const top = [];
+    const bottom = [];
     for (let y = 0; y < sampleH; y += 1) {
       const l = ctx.getImageData(0, y, 1, 1).data;
       const r = ctx.getImageData(sampleW - 1, y, 1, 1).data;
       left.push([l[0], l[1], l[2]]);
       right.push([r[0], r[1], r[2]]);
     }
+    for (let x = 0; x < sampleW; x += 1) {
+      const t = ctx.getImageData(x, 0, 1, 1).data;
+      const b = ctx.getImageData(x, sampleH - 1, 1, 1).data;
+      top.push([t[0], t[1], t[2]]);
+      bottom.push([b[0], b[1], b[2]]);
+    }
 
     return {
       left: averageRgb(left),
-      right: averageRgb(right)
+      right: averageRgb(right),
+      top: averageRgb(top),
+      bottom: averageRgb(bottom)
     };
   } catch {
     return null;

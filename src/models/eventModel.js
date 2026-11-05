@@ -46,6 +46,7 @@ const EVENT_CARD_SELECT_SQL = `e.id,
        e.status,
        e.is_listed,
        e.show_on_events_page,
+       e.accept_bookings,
        e.home_featured,
        e.home_featured_at,
        e.is_yay_deal_event,
@@ -236,6 +237,7 @@ function normalizeCheckoutConfigFromPayload(payload = {}) {
     influencer_partner_contact_phone: influencerPhone,
     sponsor_tickets_enabled: sponsorTicketsEnabled ? 1 : 0,
     show_on_events_page: toBoolFlag(payload.show_on_events_page, true) ? 1 : 0,
+    accept_bookings: toBoolFlag(payload.accept_bookings, true) ? 1 : 0,
     // Mirrors show_on_events_page so new events stay consistent with admin Active.
     is_listed: toBoolFlag(
       Object.prototype.hasOwnProperty.call(payload, "is_listed")
@@ -298,6 +300,7 @@ function normalizeEventRow(row) {
       : null,
     sponsor_tickets_enabled: toBoolFlag(row.sponsor_tickets_enabled, false),
     show_on_events_page: toBoolFlag(row.show_on_events_page, true),
+    accept_bookings: toBoolFlag(row.accept_bookings, true),
     home_featured: toBoolFlag(row.home_featured, false),
     event_highlights: parseHighlights(row.event_highlights),
     gallery_image_urls: parseGalleryImageUrls(row.gallery_image_urls),
@@ -420,9 +423,9 @@ async function createEvent(payload) {
        sponsor_contact_email, sponsor_contact_phone,
        influencer_partner_contact_email, influencer_partner_contact_phone,
        sponsor_tickets_enabled,
-       show_on_events_page, is_listed,
+       show_on_events_page, accept_bookings, is_listed,
        status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       title,
       description || null,
@@ -476,6 +479,7 @@ async function createEvent(payload) {
       checkoutConfig.influencer_partner_contact_phone,
       checkoutConfig.sponsor_tickets_enabled,
       checkoutConfig.show_on_events_page,
+      checkoutConfig.accept_bookings,
       checkoutConfig.is_listed,
       initialStatus
     ]
@@ -543,9 +547,8 @@ async function queryEventDetail({ id, slug, publicOnly }) {
     return null;
   }
   if (publicOnly) {
+    // Direct links work for any approved event. Listings still use PUBLIC_LISTED_SQL.
     where.push("e.status = 'approved'");
-    where.push("e.is_listed = 1");
-    where.push("e.show_on_events_page = 1");
   }
   const [rows] = await pool.query(
     `${EVENT_DETAIL_SELECT_SQL} WHERE ${where.join(" AND ")} LIMIT 1`,
@@ -607,15 +610,7 @@ async function findPublicEventById(id) {
   return queryEventDetail({ id, publicOnly: true });
 }
 
-async function findEventDetailBySlugOrIdForViewer(param, viewerUser) {
-  const publicEvent = await findPublicEventBySlugOrId(param);
-  if (publicEvent) {
-    return { event: publicEvent, viewerPreview: false };
-  }
-  const viewerId = Number(viewerUser?.id ?? viewerUser?.userId ?? viewerUser?.sub);
-  if (!Number.isFinite(viewerId) || viewerId <= 0) {
-    return null;
-  }
+async function findEventBySlugOrIdAnyStatus(param) {
   const { id, slug } = resolveListingIdFromParam(param);
   let row = null;
   if (id) {
@@ -628,6 +623,19 @@ async function findEventDetailBySlugOrIdForViewer(param, viewerUser) {
       row = null;
     }
   }
+  return row || null;
+}
+
+async function findEventDetailBySlugOrIdForViewer(param, viewerUser) {
+  const publicEvent = await findPublicEventBySlugOrId(param);
+  if (publicEvent) {
+    return { event: publicEvent, viewerPreview: false };
+  }
+  const viewerId = Number(viewerUser?.id ?? viewerUser?.userId ?? viewerUser?.sub);
+  if (!Number.isFinite(viewerId) || viewerId <= 0) {
+    return null;
+  }
+  const row = await findEventBySlugOrIdAnyStatus(param);
   if (!row || !canPreviewPrivateEvent(row, viewerUser)) {
     return null;
   }
@@ -668,6 +676,15 @@ async function updateEventListed({ eventId, isListed }) {
   const [result] = await pool.query(
     `UPDATE events SET is_listed = ?, show_on_events_page = ?, updated_at = NOW() WHERE id = ?`,
     [flag, flag, eventId]
+  );
+  return result.affectedRows > 0;
+}
+
+async function updateEventAcceptBookings({ eventId, acceptBookings }) {
+  const flag = acceptBookings ? 1 : 0;
+  const [result] = await pool.query(
+    `UPDATE events SET accept_bookings = ?, updated_at = NOW() WHERE id = ?`,
+    [flag, eventId]
   );
   return result.affectedRows > 0;
 }
@@ -749,6 +766,7 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
     "influencer_partner_contact_phone",
     "sponsor_tickets_enabled",
     "show_on_events_page",
+    "accept_bookings",
     "is_listed",
     "ticket_levels",
     "ticket_levels_json",
@@ -817,10 +835,14 @@ async function updateEventByOrganizer({ eventId, organizerId, updates }) {
         key === "influencer_partner_enabled" ||
         key === "sponsor_tickets_enabled" ||
         key === "show_on_events_page" ||
+        key === "accept_bookings" ||
         key === "is_listed"
       ) {
         const defaultOn =
-          key === "coupon_codes_enabled" || key === "show_on_events_page" || key === "is_listed";
+          key === "coupon_codes_enabled" ||
+          key === "show_on_events_page" ||
+          key === "accept_bookings" ||
+          key === "is_listed";
         return [key, toBoolFlag(value, defaultOn) ? 1 : 0];
       }
       if (key === "sponsor_contact_email" || key === "influencer_partner_contact_email") {
@@ -1177,8 +1199,10 @@ module.exports = {
   findEventById,
   findPublicEventById,
   findPublicEventBySlugOrId,
+  findEventBySlugOrIdAnyStatus,
   findEventDetailBySlugOrIdForViewer,
   updateEventListed,
+  updateEventAcceptBookings,
   updateEventHomeFeatured,
   enableCouponCodesForOrganizerEvents,
   enableCouponCodesForAllPlatformEvents,

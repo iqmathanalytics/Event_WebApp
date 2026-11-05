@@ -300,6 +300,45 @@ async function fetchInfluencers(query) {
   return rows.map((row) => attachDynamicInfluencerTags(row));
 }
 
+const YOUTUBE_FETCH_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "music.youtube.com",
+  "youtu.be",
+  "www.youtu.be"
+]);
+
+function normalizeYoutubeFetchUrl(raw) {
+  const input = String(raw || "").trim();
+  if (!input) {
+    return null;
+  }
+  try {
+    const withProto = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+    const u = new URL(withProto);
+    if (u.protocol !== "https:" && u.protocol !== "http:") {
+      return null;
+    }
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    const fullHost = u.hostname.toLowerCase();
+    const allowed =
+      YOUTUBE_FETCH_HOSTS.has(fullHost) ||
+      host === "youtube.com" ||
+      host === "youtu.be";
+    if (!allowed) {
+      return null;
+    }
+    // Block obvious SSRF tricks (userinfo / non-default weirdness is enough to refuse).
+    if (u.username || u.password) {
+      return null;
+    }
+    return u;
+  } catch {
+    return null;
+  }
+}
+
 async function getYoutubeSubscriberCountFromUrl(youtubeUrl) {
   const apiKey = process.env.YOUTUBE_API_KEY;
 
@@ -307,10 +346,15 @@ async function getYoutubeSubscriberCountFromUrl(youtubeUrl) {
     return null;
   }
 
-  // Resolve channelId from various YouTube URL shapes.
+  const safeUrl = normalizeYoutubeFetchUrl(youtubeUrl);
+  if (!safeUrl) {
+    return null;
+  }
+
+  // Resolve channelId from various YouTube URL shapes (never fetch organizer URL until host-checked).
   const resolveChannelId = async () => {
     try {
-      const u = new URL(youtubeUrl);
+      const u = safeUrl;
       const host = u.hostname.toLowerCase();
 
       // youtube.com/channel/CHANNEL_ID
@@ -361,17 +405,33 @@ async function getYoutubeSubscriberCountFromUrl(youtubeUrl) {
     }
   }
 
-  // Fallback without API key: parse subscriber text from public channel page.
+  // Fallback without API key: parse subscriber text from public channel page (allowlisted host only).
   try {
-    const withProto = /^https?:\/\//i.test(String(youtubeUrl)) ? String(youtubeUrl) : `https://${youtubeUrl}`;
-    const channelRes = await fetch(withProto, {
+    const channelRes = await fetch(safeUrl.toString(), {
       headers: {
         accept: "text/html",
         "user-agent": SOCIAL_SCRAPER_UA
-      }
+      },
+      redirect: "manual"
     });
-    if (!channelRes.ok) return null;
-    const html = await channelRes.text();
+    // Follow a single same-host redirect only.
+    let res = channelRes;
+    if ([301, 302, 303, 307, 308].includes(channelRes.status)) {
+      const loc = channelRes.headers.get("location");
+      const next = normalizeYoutubeFetchUrl(loc ? new URL(loc, safeUrl).toString() : "");
+      if (!next) {
+        return null;
+      }
+      res = await fetch(next.toString(), {
+        headers: {
+          accept: "text/html",
+          "user-agent": SOCIAL_SCRAPER_UA
+        },
+        redirect: "manual"
+      });
+    }
+    if (!res.ok) return null;
+    const html = await res.text();
     const m =
       html.match(/"subscriberCountText"\s*:\s*\{\s*"simpleText"\s*:\s*"([^"]+)"/i) ||
       html.match(/([\d.,]+)\s*([KMB])?\s*subscribers/i);
@@ -672,5 +732,7 @@ module.exports = {
   uploadInfluencerGallery,
   fetchInfluencerGalleryById,
   startYoutubeSubscriberRefreshJob,
-  resolveInfluencerSocialMetrics
+  resolveInfluencerSocialMetrics,
+  normalizeYoutubeFetchUrl,
+  getYoutubeSubscriberCountFromUrl
 };

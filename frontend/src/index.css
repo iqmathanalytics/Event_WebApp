@@ -1131,12 +1131,41 @@ textarea {
   animation: home-spotlight-spark 1.6s ease-in-out infinite;
 }
 
+/* Home event cards: compact icon-only badge on mobile */
+@keyframes home-spotlight-icon-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.55), 0 6px 14px rgba(245, 158, 11, 0.32);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.22), 0 8px 18px rgba(245, 158, 11, 0.4);
+    transform: scale(1.06);
+  }
+}
+
+@media (max-width: 639px) {
+  .home-spotlight-chip--icon {
+    border: 1px solid rgba(253, 230, 138, 0.95);
+    animation:
+      home-spotlight-shift 3.2s ease-in-out infinite,
+      home-spotlight-icon-pulse 2.1s ease-in-out infinite;
+  }
+
+  .home-spotlight-chip--icon::after {
+    width: 55%;
+    left: -40%;
+    animation-duration: 2s;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ticket-tier-shine::after,
   .ticket-tier-glow,
   .ticket-tier-badge-gold,
   .ticket-cart-header-shimmer,
   .home-spotlight-chip,
+  .home-spotlight-chip--icon,
   .home-spotlight-chip::after,
   .home-spotlight-chip__icon,
   .hero-event-mark__icon,

@@ -283,7 +283,7 @@ function HeroSlideshow({
   );
 
   return (
-    <div className="hero-swiper aspect-[16/10] w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-900/20 shadow-xl sm:aspect-[16/9] lg:rounded-3xl lg:shadow-2xl xl:aspect-[2/1]">
+    <div className="hero-swiper aspect-[2/1] w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-900/20 shadow-xl lg:rounded-3xl lg:shadow-2xl">
       {isDesktop ? desktopSwiper : mobileSwiper}
     </div>
   );

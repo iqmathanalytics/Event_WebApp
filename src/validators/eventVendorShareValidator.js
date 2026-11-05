@@ -8,18 +8,44 @@ const eventIdParamsSchema = z.object({
   })
 });
 
+const vendorCodeField = z
+  .preprocess((v) => {
+    const code = String(v ?? "")
+      .trim()
+      .toUpperCase();
+    return code || undefined;
+  }, z.string().min(3).max(40).regex(/^[A-Za-z0-9]+$/).optional())
+  .optional();
+
 const createVendorShareSchema = z.object({
-  body: z.object({
-    email: z.string().trim().email().max(190),
-    vendor_code: z
-      .preprocess((v) => {
-        const code = String(v ?? "")
-          .trim()
-          .toUpperCase();
-        return code || undefined;
-      }, z.string().min(3).max(40).regex(/^[A-Za-z0-9]+$/).optional())
-      .optional()
-  }),
+  body: z
+    .object({
+      email: z.string().trim().email().max(190).optional(),
+      name: z.string().trim().min(1).max(120).optional(),
+      invite_kind: z.enum(["account", "link_only"]).optional(),
+      vendor_code: vendorCodeField
+    })
+    .superRefine((data, ctx) => {
+      const kind =
+        data.invite_kind === "link_only" || (data.name && !data.email) ? "link_only" : "account";
+      if (kind === "link_only") {
+        if (!String(data.name || "").trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Enter a partner name.",
+            path: ["name"]
+          });
+        }
+        return;
+      }
+      if (!data.email) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Enter a partner email.",
+          path: ["email"]
+        });
+      }
+    }),
   query: z.object({}).passthrough(),
   params: z.object({
     eventId: z.string().regex(/^\d+$/)

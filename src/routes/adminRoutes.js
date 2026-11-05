@@ -16,6 +16,7 @@ const {
   editListingSchema,
   deleteListingSchema,
   updateEventListedSchema,
+  updateEventAcceptBookingsSchema,
   updateEventHomeFeaturedSchema,
   createTeamUserSchema,
   listTeamUsersSchema,
@@ -58,6 +59,11 @@ router.patch(
   "/listings/events/:id/listed",
   validateRequest(updateEventListedSchema),
   adminController.updateEventListed
+);
+router.patch(
+  "/listings/events/:id/accept-bookings",
+  validateRequest(updateEventAcceptBookingsSchema),
+  adminController.updateEventAcceptBookings
 );
 router.patch(
   "/listings/events/:id/home-featured",

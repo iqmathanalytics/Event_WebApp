@@ -158,6 +158,19 @@ function isOrganizerEventListed(item) {
   );
 }
 
+/** Whether buyers can purchase tickets (independent of website visibility). */
+function isOrganizerAcceptBookings(item) {
+  if (item?.accept_bookings === undefined || item?.accept_bookings === null) {
+    return true;
+  }
+  return (
+    item.accept_bookings !== false &&
+    item.accept_bookings !== 0 &&
+    String(item.accept_bookings) !== "false" &&
+    String(item.accept_bookings) !== "0"
+  );
+}
+
 function todayCalendarDateString() {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -276,7 +289,11 @@ function getStatusNote(status, reviewNote) {
     }
     return "Rejected by admin. Please edit and resubmit.";
   }
-  return "Waiting for admin approval";
+  return "Waiting for admin approval — editing is locked until it’s approved.";
+}
+
+function canOrganizerEditEvent(item) {
+  return String(item?.status || "").toLowerCase() !== "pending";
 }
 
 function formatDateValue(date) {
@@ -370,7 +387,8 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     onEmbeddedWorkspaceInitialReady,
     embeddedSectionMode = "full",
     forcedSection = null,
-    onRequestPlatformTickets = null
+    onRequestPlatformTickets = null,
+    onEventsChange = null
   },
   ref
 ) {
@@ -494,6 +512,12 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   useImperativeHandle(ref, () => ({ openCreateEvent: openCreate }), [openCreate]);
 
   const openEdit = (event) => {
+    if (!canOrganizerEditEvent(event)) {
+      window.alert(
+        "This event is waiting for admin approval and cannot be edited yet. You’ll be able to edit it after it’s approved."
+      );
+      return;
+    }
     setEditingEvent(event);
     setForm({
       title: event.title || "",
@@ -807,11 +831,27 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
   };
 
   useEffect(() => {
+    // Hidden create-event shell should not fetch organizer data until the form opens.
+    if (suppressChrome && !isFormOpen) {
+      return undefined;
+    }
+    if (didKickOffLoadsRef.current) {
+      return undefined;
+    }
     didKickOffLoadsRef.current = true;
     loadEvents();
     loadOverviewBookings();
+    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [suppressChrome, isFormOpen]);
+
+  useEffect(() => {
+    if (typeof onEventsChange !== "function") {
+      return undefined;
+    }
+    onEventsChange(rows);
+    return undefined;
+  }, [rows, onEventsChange]);
 
   useEffect(() => {
     if (!didKickOffLoadsRef.current) {
@@ -1125,36 +1165,25 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
     setIsDeleteOpen(true);
   };
 
-  const handleToggleEventListed = async (item, isListed) => {
+  const handleToggleAcceptBookings = async (item, acceptBookings) => {
     if (String(item?.status || "").toLowerCase() !== "approved") {
       return;
     }
-    const next = Boolean(isListed);
+    const next = Boolean(acceptBookings);
     setRows((prev) =>
-      prev.map((row) =>
-        String(row.id) === String(item.id)
-          ? { ...row, is_listed: next, show_on_events_page: next }
-          : row
-      )
+      prev.map((row) => (String(row.id) === String(item.id) ? { ...row, accept_bookings: next } : row))
     );
     try {
-      await updateEvent(item.id, {
-        show_on_events_page: next,
-        is_listed: next
-      });
+      await updateEvent(item.id, { accept_bookings: next });
     } catch (err) {
       setRows((prev) =>
         prev.map((row) =>
           String(row.id) === String(item.id)
-            ? {
-                ...row,
-                is_listed: item.is_listed,
-                show_on_events_page: item.show_on_events_page
-              }
+            ? { ...row, accept_bookings: item.accept_bookings }
             : row
         )
       );
-      window.alert(err?.response?.data?.message || "Could not update event visibility.");
+      window.alert(err?.response?.data?.message || "Could not update ticket acceptance.");
     }
   };
 
@@ -1475,11 +1504,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
                           <input
                             type="checkbox"
-                            checked={isOrganizerEventListed(item)}
-                            onChange={(e) => handleToggleEventListed(item, e.target.checked)}
+                            checked={isOrganizerAcceptBookings(item)}
+                            onChange={(e) => handleToggleAcceptBookings(item, e.target.checked)}
                             className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                           />
-                          Active (visible on site)
+                          Accept tickets
                         </label>
                       ) : null}
                       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1490,7 +1519,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         <button
                           type="button"
                           onClick={() => openEdit(item)}
-                          className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700"
+                          disabled={!canOrganizerEditEvent(item)}
+                          title={
+                            canOrganizerEditEvent(item)
+                              ? "Edit event"
+                              : "Locked until admin approval"
+                          }
+                          className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-45"
                         >
                           Edit
                         </button>
@@ -1696,11 +1731,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
                             <input
                               type="checkbox"
-                              checked={isOrganizerEventListed(item)}
-                              onChange={(e) => handleToggleEventListed(item, e.target.checked)}
+                              checked={isOrganizerAcceptBookings(item)}
+                              onChange={(e) => handleToggleAcceptBookings(item, e.target.checked)}
                               className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                             />
-                            Active (visible on site)
+                            Accept tickets
                           </label>
                         ) : null}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1711,7 +1746,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                           <button
                             type="button"
                             onClick={() => openEdit(item)}
-                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                            disabled={!canOrganizerEditEvent(item)}
+                            title={
+                              canOrganizerEditEvent(item)
+                                ? "Edit event"
+                                : "Locked until admin approval"
+                            }
+                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             Edit
                           </button>
@@ -1752,7 +1793,7 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                         <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">City</th>
                         <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide">Price</th>
                         <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">Status</th>
-                        <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">Active</th>
+                        <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">Accept tickets</th>
                         <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
@@ -1788,11 +1829,11 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                               <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
                                 <input
                                   type="checkbox"
-                                  checked={isOrganizerEventListed(item)}
-                                  onChange={(e) => handleToggleEventListed(item, e.target.checked)}
+                                  checked={isOrganizerAcceptBookings(item)}
+                                  onChange={(e) => handleToggleAcceptBookings(item, e.target.checked)}
                                   className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                 />
-                                Active
+                                On
                               </label>
                             ) : (
                               <span className="text-xs text-slate-400">—</span>
@@ -1807,7 +1848,13 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                               <button
                                 type="button"
                                 onClick={() => openEdit(item)}
-                                className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                                disabled={!canOrganizerEditEvent(item)}
+                                title={
+                                  canOrganizerEditEvent(item)
+                                    ? "Edit event"
+                                    : "Locked until admin approval"
+                                }
+                                className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-45"
                               >
                                 Edit
                               </button>
@@ -2318,10 +2365,10 @@ const OrganizerDashboardPage = forwardRef(function OrganizerDashboardPage(
                       className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
                     />
                     <span>
-                      <span className="block text-sm font-medium text-slate-900">Active (visible on site)</span>
+                      <span className="block text-sm font-medium text-slate-900">Show on bookmytickets.us</span>
                       <span className="block text-xs text-slate-500">
-                        When off, this event is hidden everywhere — events page, hero slider, and public detail links
-                        (same as admin inactive).
+                        When off, this event is hidden from the public site — events page, home, and public detail links
+                        (same as admin inactive). Ticket acceptance is controlled separately from My Events.
                       </span>
                     </span>
                   </label>

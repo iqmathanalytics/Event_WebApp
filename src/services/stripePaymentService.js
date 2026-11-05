@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const ApiError = require("../utils/ApiError");
 const { pool } = require("../config/db");
 const { assertStripeConfigured } = require("../config/stripe");
@@ -21,6 +22,59 @@ const PI_POLL_ATTEMPTS = 20;
 const PI_POLL_DELAY_MS = 1500;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function hashCheckoutAccessToken(token) {
+  return crypto.createHash("sha256").update(String(token || ""), "utf8").digest("hex");
+}
+
+function mintCheckoutAccessToken() {
+  const token = crypto.randomBytes(32).toString("hex");
+  return { token, hash: hashCheckoutAccessToken(token) };
+}
+
+function assertGuestCheckoutAccessToken(checkout, checkoutAccessToken) {
+  const payload = parsePayloadJson(checkout?.payload_json) || {};
+  const expectedHash = String(payload.checkout_access_token_hash || "").trim();
+  if (!expectedHash) {
+    throw new ApiError(
+      403,
+      "This checkout session is missing a secure access token. Please restart checkout."
+    );
+  }
+  const provided = String(checkoutAccessToken || "").trim();
+  if (!provided) {
+    throw new ApiError(403, "Checkout access token is required.");
+  }
+  const providedHash = hashCheckoutAccessToken(provided);
+  const expectedBuf = Buffer.from(expectedHash, "utf8");
+  const providedBuf = Buffer.from(providedHash, "utf8");
+  if (
+    expectedBuf.length !== providedBuf.length ||
+    !crypto.timingSafeEqual(expectedBuf, providedBuf)
+  ) {
+    throw new ApiError(403, "Invalid checkout access token.");
+  }
+}
+
+/**
+ * Rotate guest checkout access token on the checkout row and return plaintext once.
+ */
+async function rotateGuestCheckoutAccessToken(paymentIntentId, existingPayload = null) {
+  const { token, hash } = mintCheckoutAccessToken();
+  let payload = existingPayload;
+  if (!payload) {
+    const checkout = await checkoutPaymentModel.findByPaymentIntentId(paymentIntentId);
+    payload = parsePayloadJson(checkout?.payload_json) || {};
+  }
+  const nextPayload = {
+    ...payload,
+    checkout_access_token_hash: hash
+  };
+  // Never persist the plaintext token.
+  delete nextPayload.checkout_access_token;
+  await checkoutPaymentModel.updateCheckoutPayloadJson(paymentIntentId, nextPayload);
+  return token;
+}
 
 function buildPricingSnapshot(pricing, payload) {
   return {
@@ -410,7 +464,7 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
           existingPi.status === "requires_confirmation" ||
           existingPi.status === "requires_action"
         ) {
-          return {
+          const reused = {
             clientSecret: existingPi.client_secret,
             paymentIntentId: existingPi.id,
             amountCents,
@@ -425,6 +479,13 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
             couponCode: pricing.couponCode,
             reused: true
           };
+          if (isGuest) {
+            reused.checkoutAccessToken = await rotateGuestCheckoutAccessToken(
+              existingPi.id,
+              parsePayloadJson(sameAttempt.payload_json) || {}
+            );
+          }
+          return reused;
         }
       } catch (_err) {
         /* create a fresh PI below */
@@ -442,6 +503,7 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     await cancelOpenCheckoutPaymentIntents({ stripe, openRows: opensToCancel });
   }
 
+  const guestAccess = isGuest ? mintCheckoutAccessToken() : null;
   const storedPayload = {
     event_id: payload.event_id,
     attendee_count: pricing.attendeeCount,
@@ -462,7 +524,8 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
         ? payload.selected_seats
         : undefined,
     checkout_attempt_id: checkoutAttemptId,
-    pricing_snapshot: buildPricingSnapshot(pricing, payload)
+    pricing_snapshot: buildPricingSnapshot(pricing, payload),
+    ...(guestAccess ? { checkout_access_token_hash: guestAccess.hash } : {})
   };
 
   const buyerName = String(pricing.userName || payload.name || "").trim();
@@ -530,6 +593,15 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     });
   }
 
+  let checkoutAccessToken = guestAccess?.token || null;
+  if (isGuest && existingCheckout) {
+    // Idempotent Stripe create may return an existing PI — rotate token so this client can bind.
+    checkoutAccessToken = await rotateGuestCheckoutAccessToken(
+      paymentIntent.id,
+      parsePayloadJson(existingCheckout.payload_json) || storedPayload
+    );
+  }
+
   return {
     clientSecret: paymentIntent.client_secret,
     paymentIntentId: paymentIntent.id,
@@ -542,7 +614,8 @@ async function createPaymentIntentCore({ userId, payload, isGuest }) {
     platformFeeAmount: pricing.platformFeeAmount ?? 0,
     transactionFeeAmount: pricing.transactionFeeAmount,
     totalAmount: pricing.totalAmount,
-    couponCode: pricing.couponCode
+    couponCode: pricing.couponCode,
+    ...(checkoutAccessToken ? { checkoutAccessToken } : {})
   };
 }
 
@@ -730,9 +803,15 @@ async function fulfillPaymentIntent({ paymentIntentId, userId = null, stripeChar
       }
     }
 
-    if (holdToken && pricing.couponId && checkout.user_id) {
+    // Guest checkouts have null checkout.user_id; still finalize using provisioned bookingUserId.
+    if (holdToken && pricing.couponId) {
       await couponService.finalizeCouponRedemption(
-        { couponId: pricing.couponId, userId: checkout.user_id, bookingId, holdToken },
+        {
+          couponId: pricing.couponId,
+          userId: bookingUserId || checkout.user_id || null,
+          bookingId,
+          holdToken
+        },
         conn
       );
     }
@@ -819,7 +898,12 @@ async function markCheckoutCanceled(paymentIntentId) {
  * Guest closed the card form without paying — cancel the open PaymentIntent in Stripe
  * so it does not linger as "Incomplete" in the dashboard.
  */
-async function cancelAbandonedPaymentIntent({ paymentIntentId, userId = null, isGuest = false }) {
+async function cancelAbandonedPaymentIntent({
+  paymentIntentId,
+  userId = null,
+  isGuest = false,
+  checkoutAccessToken = null
+}) {
   const stripe = assertStripeConfigured();
   const id = String(paymentIntentId || "").trim();
   if (!id) {
@@ -839,6 +923,7 @@ async function cancelAbandonedPaymentIntent({ paymentIntentId, userId = null, is
     if (!checkoutIsGuest) {
       throw new ApiError(403, "This payment is not a guest checkout session.");
     }
+    assertGuestCheckoutAccessToken(checkout, checkoutAccessToken);
   } else if (userId != null && Number(checkout.user_id) !== Number(userId)) {
     throw new ApiError(403, "This payment belongs to another account.");
   }
@@ -948,8 +1033,26 @@ async function handleStripeWebhookEvent(event) {
   return { handled: false };
 }
 
-async function confirmPaymentCore({ userId, paymentIntentId, isGuest }) {
+async function confirmPaymentCore({
+  userId,
+  paymentIntentId,
+  isGuest,
+  checkoutAccessToken = null
+}) {
   const stripe = assertStripeConfigured();
+
+  // Bind guest callers before any Stripe lookup so a leaked pi_ alone is useless.
+  if (isGuest) {
+    const checkout = await checkoutPaymentModel.findByPaymentIntentId(paymentIntentId);
+    if (!checkout) {
+      throw new ApiError(404, "Checkout session not found for this payment.");
+    }
+    if (checkout.user_id != null) {
+      throw new ApiError(403, "This payment is not a guest checkout session.");
+    }
+    assertGuestCheckoutAccessToken(checkout, checkoutAccessToken);
+  }
+
   let pi = await stripe.paymentIntents.retrieve(paymentIntentId);
 
   if (isGuest) {
@@ -1017,8 +1120,13 @@ async function confirmPaymentForUser({ userId, paymentIntentId }) {
   return confirmPaymentCore({ userId, paymentIntentId, isGuest: false });
 }
 
-async function confirmPaymentForGuest({ paymentIntentId }) {
-  return confirmPaymentCore({ userId: null, paymentIntentId, isGuest: true });
+async function confirmPaymentForGuest({ paymentIntentId, checkoutAccessToken }) {
+  return confirmPaymentCore({
+    userId: null,
+    paymentIntentId,
+    isGuest: true,
+    checkoutAccessToken
+  });
 }
 
 module.exports = {

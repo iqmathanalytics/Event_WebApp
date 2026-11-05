@@ -48,6 +48,12 @@ export async function updateAdminListingStatus({ type, id, status, note }) {
 
 export async function updateAdminEventListed({ id, is_listed }) {
   const response = await api.patch(`/admin/listings/events/${id}/listed`, { is_listed });
+  bustPublicEventCaches();
+  return response.data;
+}
+
+export async function updateAdminEventAcceptBookings({ id, accept_bookings }) {
+  const response = await api.patch(`/admin/listings/events/${id}/accept-bookings`, { accept_bookings });
   return response.data;
 }
 

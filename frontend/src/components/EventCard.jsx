@@ -108,9 +108,7 @@ function EventCard({
       <button
         type="button"
         onClick={openEvent}
-        className={`relative w-full shrink-0 overflow-hidden bg-slate-100 text-left ${
-          isLanding ? "aspect-[3/2] lg:aspect-[16/10]" : "aspect-[16/10]"
-        } ${
+        className={`relative w-full shrink-0 overflow-hidden bg-slate-100 text-left aspect-[2/1] ${
           locked ? "cursor-default" : "cursor-pointer"
         }`}
         aria-label={`View ${item.title}`}
@@ -126,6 +124,7 @@ function EventCard({
           src={eventImage}
           alt={item.title}
           emptyLabel="No event image"
+          fit="cover"
           priority={priority}
           sizes={isLanding ? HOME_CARD_SIZES : undefined}
         />

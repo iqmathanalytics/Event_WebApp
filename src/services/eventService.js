@@ -6,6 +6,7 @@ const {
   updateEventStatus,
   findEventById,
   findEventDetailBySlugOrIdForViewer,
+  findEventBySlugOrIdAnyStatus,
   listEvents,
   listEventsByOrganizer,
   updateEventByOrganizer,
@@ -35,8 +36,20 @@ const {
   sanitizeTicketLevelsForSave,
   assertValidTicketLevelsForPlatform
 } = require("../utils/eventTicketLevels");
-const { findUserById } = require("../models/userModel");
+const { findUserById, enableOrganizerById } = require("../models/userModel");
 const { sanitizeEventDescription } = require("../utils/sanitizeRichText");
+
+/** Unlock organizer dashboard tools for anyone who creates/hosts an event. */
+async function ensureOrganizerEnabled(userId) {
+  if (!userId) {
+    return;
+  }
+  try {
+    await enableOrganizerById(userId);
+  } catch (_err) {
+    // Never block event create/approve if the flag update fails.
+  }
+}
 
 async function userCanSellPlatformTickets(userId, { role } = {}) {
   if (role === "admin") {
@@ -397,6 +410,9 @@ async function submitEvent(payload, organizerId, { role } = {}) {
     }
   }
 
+  // Creating an event means this user hosts — unlock Overview/Coupons/Check-in tabs.
+  await ensureOrganizerEnabled(organizerId);
+
   if (!autoApproved) {
     await notifyAdminSafe({
       type: "event_submitted",
@@ -424,6 +440,7 @@ async function approveEvent(eventId, adminId, note) {
   if (!updated) {
     throw new ApiError(400, "Could not approve event");
   }
+  await ensureOrganizerEnabled(existing.organizer_id);
 }
 
 async function rejectEvent(eventId, adminId, note) {
@@ -522,11 +539,43 @@ async function fetchEvents(query, viewerUser) {
   };
 }
 
+function publicEventAccessError(slugOrId) {
+  return findEventBySlugOrIdAnyStatus(slugOrId).then((existing) => {
+    if (!existing) {
+      return new ApiError(
+        404,
+        "We couldn’t find this event. It may have been removed, or the link may be incorrect.",
+        { code: "EVENT_NOT_FOUND" }
+      );
+    }
+    const status = String(existing.status || "").toLowerCase();
+    if (status === "pending") {
+      return new ApiError(
+        404,
+        "This event isn’t published yet. Please check back soon, or browse other events happening near you.",
+        { code: "EVENT_PENDING" }
+      );
+    }
+    if (status === "rejected") {
+      return new ApiError(
+        404,
+        "This event is no longer available. Browse other events to find something you’ll love.",
+        { code: "EVENT_UNAVAILABLE" }
+      );
+    }
+    return new ApiError(
+      404,
+      "This event isn’t available right now. Please try again later or browse other events.",
+      { code: "EVENT_UNAVAILABLE" }
+    );
+  });
+}
+
 async function fetchEventById(slugOrId, viewerUser) {
   const resolved = await findEventDetailBySlugOrIdForViewer(slugOrId, viewerUser);
   const event = resolved?.event;
   if (!event) {
-    throw new ApiError(404, "Event not found");
+    throw await publicEventAccessError(slugOrId);
   }
   const [withPopularity] = withStoredPopularityMetrics([event]);
   const enriched = attachDynamicEventTags({
@@ -570,6 +619,16 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
   }
   if (existing.organizer_id !== organizerId) {
     throw new ApiError(403, "You can only edit your own events");
+  }
+
+  const existingStatus = String(existing.status || "").toLowerCase();
+  // First-time submissions stay locked until an admin approves them.
+  // (Editing used to call publishOrganizerEvent and accidentally go live.)
+  if (existingStatus === "pending") {
+    throw new ApiError(
+      403,
+      "This event is waiting for admin approval and cannot be edited yet. You’ll be able to edit it after it’s approved."
+    );
   }
 
   const normalizedPayload = normalizeEventSchedulePayload({
@@ -671,6 +730,7 @@ async function editOwnEvent(eventId, organizerId, payload, { role } = {}) {
   }
 
   await publishOrganizerEvent({ eventId, organizerId });
+  await ensureOrganizerEnabled(organizerId);
 
   return { skipReapproval: true, autoPublished: true, status: "approved" };
 }

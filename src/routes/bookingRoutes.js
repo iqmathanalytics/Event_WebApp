@@ -9,6 +9,7 @@ const {
   createBookingSchema,
   guestCreateBookingSchema,
   confirmPaymentSchema,
+  guestConfirmPaymentSchema,
   organizerBookingsSchema
 } = require("../validators/bookingValidator");
 const {
@@ -37,12 +38,12 @@ router.post(
 );
 router.post(
   "/guest/confirm-payment",
-  validateRequest(confirmPaymentSchema),
+  validateRequest(guestConfirmPaymentSchema),
   paymentController.confirmGuestPayment
 );
 router.post(
   "/guest/cancel-payment",
-  validateRequest(confirmPaymentSchema),
+  validateRequest(guestConfirmPaymentSchema),
   paymentController.cancelGuestPaymentIntent
 );
 

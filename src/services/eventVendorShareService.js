@@ -112,12 +112,18 @@ function normalizeEmail(email) {
 }
 
 function mapShareRow(row) {
+  const inviteKind =
+    row.invite_kind === "link_only" ||
+    (row.shared_with_user_id == null && row.partner_display_name)
+      ? "link_only"
+      : "account";
   return {
     id: row.id,
     event_id: row.event_id,
-    shared_with_user_id: row.shared_with_user_id,
-    email: row.shared_with_user_email || row.shared_with_email,
-    name: row.shared_with_name || null,
+    shared_with_user_id: row.shared_with_user_id ?? null,
+    email: row.shared_with_user_email || row.shared_with_email || null,
+    name: row.partner_display_name || row.shared_with_name || null,
+    invite_kind: inviteKind,
     vendor_code: row.vendor_code,
     status: row.status || "pending",
     accepted_at: row.accepted_at || null,
@@ -260,23 +266,95 @@ async function listEventVendorShares(ownerUserId, eventId) {
   return mapped;
 }
 
-async function createEventVendorShare(ownerUserId, eventId, { email: emailInput, vendor_code: codeInput }) {
-  let event = await assertOwnsEvent(eventId, ownerUserId);
-
-  // Sharing a vendor link requires checkout tracking so bookings store the code.
+async function ensureVendorTrackingEnabled(eventId, ownerUserId, event) {
   const trackingOn =
     event.vendor_code_enabled === true ||
     event.vendor_code_enabled === 1 ||
     String(event.vendor_code_enabled || "") === "1";
-  if (!trackingOn) {
-    const { updateEventByOrganizer } = require("../models/eventModel");
-    await updateEventByOrganizer({
-      eventId,
-      organizerId: ownerUserId,
-      updates: { vendor_code_enabled: true }
-    });
-    event = await findEventById(eventId);
+  if (trackingOn) {
+    return event;
   }
+  const { updateEventByOrganizer } = require("../models/eventModel");
+  await updateEventByOrganizer({
+    eventId,
+    organizerId: ownerUserId,
+    updates: { vendor_code_enabled: true }
+  });
+  return findEventById(eventId);
+}
+
+async function createLinkOnlyVendorShare(ownerUserId, eventId, { name: nameInput, vendor_code: codeInput }) {
+  let event = await assertOwnsEvent(eventId, ownerUserId);
+  event = await ensureVendorTrackingEnabled(eventId, ownerUserId, event);
+
+  const displayName = String(nameInput || "").trim().slice(0, 120);
+  if (!displayName) {
+    throw new ApiError(400, "Enter a partner name.");
+  }
+
+  let requestedCode = shareModel.normalizeVendorCode(codeInput);
+  if (codeInput && (!requestedCode || requestedCode.length < 3)) {
+    throw new ApiError(400, "Vendor code must be 3–40 letters or numbers.");
+  }
+
+  if (requestedCode) {
+    const existingCode = await shareModel.findShareByCode(eventId, requestedCode);
+    if (existingCode && !existingCode.revoked_at) {
+      throw new ApiError(400, "That vendor code is already used for another partner on this event.");
+    }
+  }
+
+  let result;
+  try {
+    result = await shareModel.createLinkOnlyShare({
+      eventId,
+      ownerUserId,
+      partnerDisplayName: displayName,
+      vendorCode: requestedCode || undefined
+    });
+  } catch (err) {
+    if (String(err?.message || "") === "PARTNER_NAME_REQUIRED") {
+      throw new ApiError(400, "Enter a partner name.");
+    }
+    throw err;
+  }
+
+  return {
+    linkOnly: true,
+    alreadyExists: false,
+    emailSent: false,
+    share: {
+      id: result.id,
+      event_id: eventId,
+      shared_with_user_id: null,
+      email: null,
+      name: result.partnerDisplayName || displayName,
+      invite_kind: "link_only",
+      vendor_code: result.vendorCode,
+      status: "accepted",
+      share_url: vendorEventLink(event, result.vendorCode)
+    }
+  };
+}
+
+async function createEventVendorShare(
+  ownerUserId,
+  eventId,
+  { email: emailInput, name: nameInput, invite_kind: inviteKindInput, vendor_code: codeInput } = {}
+) {
+  const isLinkOnly =
+    inviteKindInput === "link_only" ||
+    (String(nameInput || "").trim() && !String(emailInput || "").trim());
+
+  if (isLinkOnly) {
+    return createLinkOnlyVendorShare(ownerUserId, eventId, {
+      name: nameInput,
+      vendor_code: codeInput
+    });
+  }
+
+  let event = await assertOwnsEvent(eventId, ownerUserId);
+  event = await ensureVendorTrackingEnabled(eventId, ownerUserId, event);
 
   const email = normalizeEmail(emailInput);
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -324,6 +402,7 @@ async function createEventVendorShare(ownerUserId, eventId, { email: emailInput,
     shared_with_user_id: invitee.id,
     email: invitee.email || email,
     name: invitee.name || null,
+    invite_kind: "account",
     vendor_code: result.vendorCode,
     status: result.status || "pending",
     share_url: vendorEventLink(event, result.vendorCode)

@@ -291,7 +291,7 @@ function HomePage() {
                 landingRevealed ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }
               }
               transition={{ duration: 0.65, delay: landingRevealed ? 0.48 : 0, ease: sleek }}
-              className="mt-4 grid w-full grid-cols-2 items-center gap-2 sm:mt-8 lg:mt-4 lg:flex lg:w-auto lg:flex-nowrap lg:gap-2"
+              className="mt-4 hidden w-full grid-cols-2 items-center gap-2 sm:mt-8 md:grid lg:mt-4 lg:flex lg:w-auto lg:flex-nowrap lg:gap-2"
             >
               {heroNarrative.detailPath && heroNarrative.variant ? (
                 <div className="hidden lg:contents">

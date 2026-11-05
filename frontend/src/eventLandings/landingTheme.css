@@ -483,7 +483,7 @@
 
 .event-landing .el-media__slide {
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 2 / 1;
   overflow: hidden;
   background: var(--el-bg-elevated);
   border: 1px solid var(--el-border);

@@ -17,7 +17,9 @@ const createEventVendorShare = asyncHandler(async (req, res) => {
   );
 
   let message = "Invitation sent. Access is granted after they accept.";
-  if (result.alreadyAccepted) {
+  if (result.linkOnly) {
+    message = "Partner link created. Copy and share it — tracking works the same as email invites.";
+  } else if (result.alreadyAccepted) {
     message = "This partner already has dashboard access.";
   } else if (result.resent) {
     message = result.emailSent

@@ -65,4 +65,35 @@ export function getEventSortDate(event) {
   return parseDateOnly(event?.event_date) || "";
 }
 
+/** Local calendar YYYY-MM-DD (not UTC) for “has this show day passed?”. */
+export function todayCalendarDateString(now = new Date()) {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Last scheduled show date for the event. */
+export function getEventLastShowDate(event) {
+  const dates = getEventAvailableDates(event);
+  if (dates.length) {
+    return dates[dates.length - 1];
+  }
+  return parseDateOnly(event?.event_date) || "";
+}
+
+/** True when every show date is before today (day-of still bookable). */
+export function isEventPast(event, todayStr = todayCalendarDateString()) {
+  const end = getEventLastShowDate(event);
+  if (!end) {
+    return false;
+  }
+  return end < todayStr;
+}
+
+/** Show dates that are still on or after today. */
+export function getEventBookableDates(event, todayStr = todayCalendarDateString()) {
+  return getEventAvailableDates(event).filter((d) => d >= todayStr);
+}
+
 export { normalizeDateList, parseDateOnly };

@@ -182,9 +182,20 @@ const confirmPaymentSchema = z.object({
   params: z.object({}).passthrough()
 });
 
+/** Guest confirm/cancel must present the server-issued checkout access token. */
+const guestConfirmPaymentSchema = z.object({
+  body: z.object({
+    payment_intent_id: z.string().min(8).max(255),
+    checkout_access_token: z.string().min(32).max(128)
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough()
+});
+
 module.exports = {
   createBookingSchema,
   guestCreateBookingSchema,
   confirmPaymentSchema,
+  guestConfirmPaymentSchema,
   organizerBookingsSchema
 };

@@ -14,6 +14,11 @@ deploy/milesweb-api.env
 deploy/droplet.env
 deploy/ga-env-patch.env
 deploy/tidb-prod-to-do.sql
+deploy/tidb-*.sql
+deploy/*resync*.sql
+deploy/*-prod*.sql
+deploy/*.dump
+deploy/*.sql.gz
 deploy/*.tgz
 frontend/.netlify/
 
@@ -28,4 +33,10 @@ mobile-ui-prompt.md
 
 deploy/origin.crt
 deploy/origin.key
+
+# Stripe payment exports (cardholder PII) — never commit
+unified_payments*.csv
+
+# One-off production probes and deploy scratch
+scripts/tmp-*
 

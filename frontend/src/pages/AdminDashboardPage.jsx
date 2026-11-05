@@ -46,6 +46,7 @@ import {
   updateTeamUserCapabilities,
   updateAdminListingStatus,
   updateAdminEventListed,
+  updateAdminEventAcceptBookings,
   updateAdminEventHomeFeatured,
   fetchAdminEventInsights
 } from "../services/adminService";
@@ -906,13 +907,34 @@ function AdminDashboardPage() {
     }
     try {
       await updateAdminEventListed({ id: item.id, is_listed: Boolean(isListed) });
+      const flag = isListed ? 1 : 0;
       setRows((prev) =>
         prev.map((row) =>
-          String(row.id) === String(item.id) ? { ...row, is_listed: isListed ? 1 : 0 } : row
+          String(row.id) === String(item.id)
+            ? { ...row, is_listed: flag, show_on_events_page: flag }
+            : row
         )
       );
     } catch (err) {
       window.alert(err?.response?.data?.message || "Could not update event visibility.");
+    }
+  };
+
+  const handleToggleAcceptBookings = async (item, acceptBookings) => {
+    if (listingType !== "events") {
+      return;
+    }
+    try {
+      await updateAdminEventAcceptBookings({ id: item.id, accept_bookings: Boolean(acceptBookings) });
+      setRows((prev) =>
+        prev.map((row) =>
+          String(row.id) === String(item.id)
+            ? { ...row, accept_bookings: acceptBookings ? 1 : 0 }
+            : row
+        )
+      );
+    } catch (err) {
+      window.alert(err?.response?.data?.message || "Could not update ticket acceptance.");
     }
   };
 
@@ -2039,6 +2061,7 @@ function AdminDashboardPage() {
               onReject={handleReject}
               onDelete={handleDelete}
               onToggleEventListed={listingType === "events" ? handleToggleEventListed : undefined}
+              onToggleAcceptBookings={listingType === "events" ? handleToggleAcceptBookings : undefined}
               onToggleEventHomeFeatured={listingType === "events" ? handleToggleEventHomeFeatured : undefined}
             />
           </div>

@@ -1,14 +1,10 @@
-import api, { optionalAuthRequest } from "./api";
+import api from "./api";
 
 export async function lookupCheckInTicket(code) {
-  const response = await api.get(
-    "/public/check-in/verify",
-    {
-      params: { code: String(code || "").trim() },
-      timeout: 8000,
-      ...optionalAuthRequest
-    }
-  );
+  const response = await api.get("/public/check-in/verify", {
+    params: { code: String(code || "").trim() },
+    timeout: 8000
+  });
   return response.data;
 }
 
@@ -16,10 +12,7 @@ export async function checkInTicket(code) {
   const response = await api.post(
     "/public/check-in",
     { code: String(code || "").trim() },
-    {
-      timeout: 8000,
-      ...optionalAuthRequest
-    }
+    { timeout: 8000 }
   );
   return response.data;
 }

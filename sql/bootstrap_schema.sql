@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS events (
   influencer_partner_contact_phone VARCHAR(40) NULL,
   sponsor_tickets_enabled TINYINT(1) NOT NULL DEFAULT 0,
   show_on_events_page TINYINT(1) NOT NULL DEFAULT 1,
+  accept_bookings TINYINT(1) NOT NULL DEFAULT 1,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   is_listed TINYINT(1) NOT NULL DEFAULT 1,
   home_featured TINYINT(1) NOT NULL DEFAULT 0,

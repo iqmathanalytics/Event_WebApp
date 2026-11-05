@@ -5,8 +5,17 @@ export async function fetchEventVendorShares(eventId) {
   return response.data;
 }
 
-export async function createEventVendorShare(eventId, { email, vendor_code } = {}) {
-  const body = { email };
+export async function createEventVendorShare(
+  eventId,
+  { email, name, invite_kind, vendor_code } = {}
+) {
+  const body = {};
+  if (invite_kind === "link_only" || (name && !email)) {
+    body.invite_kind = "link_only";
+    body.name = name;
+  } else {
+    body.email = email;
+  }
   if (vendor_code) {
     body.vendor_code = vendor_code;
   }

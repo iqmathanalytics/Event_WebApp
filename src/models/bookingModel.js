@@ -164,6 +164,7 @@ async function findBookingByCheckInCode(checkInCode, conn) {
             eb.payment_status,
             eb.checked_in_at,
             eb.check_in_code,
+            e.organizer_id AS event_organizer_id,
             e.title AS event_title,
             e.event_date,
             e.event_time,

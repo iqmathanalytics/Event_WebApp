@@ -86,6 +86,7 @@ const checkoutConfigFields = {
     z.string().min(7).max(40).optional()
   ),
   show_on_events_page: boolish,
+  accept_bookings: boolish,
   is_listed: boolish
 };
 

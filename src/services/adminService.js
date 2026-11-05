@@ -10,6 +10,7 @@ const {
   listUsersByRole,
   listUsersByOrganizerEnabled,
   updateUserCapabilitiesById,
+  enableOrganizerById,
   deactivateUserById,
   activateUserById,
   deleteUserById
@@ -409,6 +410,15 @@ async function updateListingStatus({ type, id, status, note, adminId }) {
     );
     const updated = result.affectedRows > 0;
     if (updated && status === "approved") {
+      // Hosting an approved event unlocks organizer dashboard tools.
+      try {
+        const event = await findEventById(id);
+        if (event?.organizer_id) {
+          await enableOrganizerById(event.organizer_id);
+        }
+      } catch (_err) {
+        /* never block approval */
+      }
       const emailContext = await getApprovalEmailContext({ type, id });
       if (emailContext?.recipientEmail) {
         const emailPayload = buildApprovalEmail({
@@ -1037,6 +1047,22 @@ async function updateEventListingVisibility({ eventId, isListed }) {
   return true;
 }
 
+async function updateEventAcceptBookingsFlag({ eventId, acceptBookings }) {
+  const { updateEventAcceptBookings, findEventById } = require("../models/eventModel");
+  const existing = await findEventById(eventId);
+  if (!existing) {
+    throw new ApiError(404, "Event not found");
+  }
+  const updated = await updateEventAcceptBookings({
+    eventId,
+    acceptBookings: Boolean(acceptBookings)
+  });
+  if (!updated) {
+    throw new ApiError(404, "Event not found");
+  }
+  return true;
+}
+
 async function updateEventHomeFeaturedVisibility({ eventId, homeFeatured }) {
   const { updateEventHomeFeatured, findEventById } = require("../models/eventModel");
   const existing = await findEventById(eventId);
@@ -1059,6 +1085,7 @@ module.exports = {
   editListing,
   deleteListing,
   updateEventListingVisibility,
+  updateEventAcceptBookingsFlag,
   updateEventHomeFeaturedVisibility,
   createStaffUser,
   fetchTeamUsers,

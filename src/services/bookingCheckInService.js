@@ -85,19 +85,36 @@ async function loadValidBooking(rawCode) {
   return { code, row, booking };
 }
 
-async function verifyBookingByCode(rawCode) {
-  const { booking } = await loadValidBooking(rawCode);
+function assertActorCanAccessBooking(row, actor) {
+  if (!actor?.type) {
+    throw new ApiError(403, "Check-in authorization required.");
+  }
+  if (actor.type === "admin") {
+    return;
+  }
+  const organizerId = Number(row.event_organizer_id || row.organizer_id || 0);
+  const actorId = Number(actor.userId || 0);
+  if (!organizerId || !actorId || organizerId !== actorId) {
+    throw new ApiError(403, "You can only check in guests for your own events.");
+  }
+}
+
+async function verifyBookingByCode(rawCode, actor = null) {
+  const { row, booking } = await loadValidBooking(rawCode);
+  assertActorCanAccessBooking(row, actor);
   return booking;
 }
 
-async function checkInBookingByCode({ rawCode, adminUserId = null }) {
+async function checkInBookingByCode({ rawCode, adminUserId = null, actor = null }) {
   const { row, booking } = await loadValidBooking(rawCode);
+  assertActorCanAccessBooking(row, actor);
   const wasAlreadyCheckedIn = Boolean(row.checked_in_at);
+  const checkedInBy = adminUserId || actor?.userId || null;
 
   if (!wasAlreadyCheckedIn) {
     await markBookingCheckedIn({
       bookingId: row.id,
-      adminUserId: adminUserId || null
+      adminUserId: checkedInBy
     });
     const nowIso = new Date().toISOString();
     booking.checked_in_at = nowIso;

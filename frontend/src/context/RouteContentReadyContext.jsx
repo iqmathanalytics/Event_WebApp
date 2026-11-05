@@ -115,9 +115,13 @@ function decodeMainContentImages() {
 /**
  * After `loading` is false, waits for layout, several animation frames, web fonts,
  * and images inside `<main>` before marking the route ready.
+ *
+ * Pass `{ waitForImages: false }` for data dashboards where tickets/QR/thumbs should
+ * not keep the full-page overlay up after API data is ready.
  */
-export function useRouteContentReady(loading) {
+export function useRouteContentReady(loading, options = {}) {
   const { signalContentReady, routeKey } = useRouteContentReadyContext();
+  const waitForImages = options.waitForImages !== false;
 
   useLayoutEffect(() => {
     if (loading) {
@@ -137,6 +141,10 @@ export function useRouteContentReady(loading) {
     };
 
     const runAfterPaint = () => {
+      if (!waitForImages) {
+        queueMicrotask(finish);
+        return;
+      }
       Promise.all([waitForFonts(), waitForMainContentImages()])
         .then(() => decodeMainContentImages())
         .then(() => {
@@ -172,5 +180,5 @@ export function useRouteContentReady(loading) {
       cancelAnimationFrame(raf2);
       cancelAnimationFrame(raf3);
     };
-  }, [loading, routeKey, signalContentReady]);
+  }, [loading, routeKey, signalContentReady, waitForImages]);
 }

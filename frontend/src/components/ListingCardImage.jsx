@@ -14,6 +14,7 @@ const DEFAULT_EDGE = { left: "rgb(226, 232, 240)", right: "rgb(203, 213, 225)" }
  * Loads listing images only when the card enters (or nears) the viewport — one request per card.
  * fit="cover" fills the frame; fit="contain-edge" shows the full image and soft-fills letterbox
  * gaps with a blurred image + edge-sampled gradient.
+ * fit="contain-edge-until-lg" uses contain-edge below the lg breakpoint, cover on desktop.
  */
 export default function ListingCardImage({
   src,
@@ -29,7 +30,8 @@ export default function ListingCardImage({
   const [shouldLoad, setShouldLoad] = useState(Boolean(priority));
   const [edgeColors, setEdgeColors] = useState(DEFAULT_EDGE);
   const trimmed = String(src || "").trim();
-  const isContainEdge = fit === "contain-edge";
+  const isContainEdge = fit === "contain-edge" || fit === "contain-edge-until-lg";
+  const containUntilLg = fit === "contain-edge-until-lg";
   const displaySrc = listingCardImageUrl(trimmed);
   const srcSet = listingCardSrcSet(trimmed);
   const blurSrc = displayImageBlurUrl(trimmed);
@@ -38,9 +40,12 @@ export default function ListingCardImage({
   const fetchPriority = priority ? "high" : "auto";
   const imageClassName =
     className ||
-    (isContainEdge
-      ? "relative z-[3] mx-auto h-full w-full object-contain object-center"
-      : "relative h-full w-full object-cover object-center");
+    (containUntilLg
+      ? "relative z-[3] mx-auto h-full w-full object-contain object-center lg:object-cover"
+      : isContainEdge
+        ? "relative z-[3] mx-auto h-full w-full object-contain object-center"
+        : "relative h-full w-full object-cover object-center");
+  const mobileOnlyLayer = containUntilLg ? "lg:hidden" : "";
 
   useEffect(() => {
     const node = rootRef.current;
@@ -94,7 +99,7 @@ export default function ListingCardImage({
         isContainEdge ? (
           <>
             <div
-              className="absolute inset-0"
+              className={`absolute inset-0 ${mobileOnlyLayer}`}
               style={{
                 background: `linear-gradient(to right, ${edgeColors.left}, ${edgeColors.right})`
               }}
@@ -108,27 +113,30 @@ export default function ListingCardImage({
                 loading={loadingAttr}
                 fetchPriority={fetchPriority}
                 decoding="async"
-                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl saturate-[1.2]"
+                className={`absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl saturate-[1.2] ${mobileOnlyLayer}`}
               />
             ) : null}
             <div
-              className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-[max(12%,40px)]"
+              className={`pointer-events-none absolute inset-y-0 left-0 z-[1] w-[max(12%,40px)] ${mobileOnlyLayer}`}
               style={{
                 background: `linear-gradient(to right, ${edgeColors.left} 0%, transparent 100%)`
               }}
               aria-hidden
             />
             <div
-              className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-[max(12%,40px)]"
+              className={`pointer-events-none absolute inset-y-0 right-0 z-[1] w-[max(12%,40px)] ${mobileOnlyLayer}`}
               style={{
                 background: `linear-gradient(to left, ${edgeColors.right} 0%, transparent 100%)`
               }}
               aria-hidden
             />
             <div
-              className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/[0.04] via-transparent to-black/[0.08]"
+              className={`pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/[0.04] via-transparent to-black/[0.08] ${mobileOnlyLayer}`}
               aria-hidden
             />
+            {containUntilLg ? (
+              <div className="pointer-events-none absolute inset-0 hidden bg-slate-100 lg:block" aria-hidden />
+            ) : null}
             <img
               src={displaySrc}
               srcSet={srcSet}

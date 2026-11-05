@@ -8,11 +8,17 @@ import {
   listingBannerSrcSet
 } from "../utils/displayImage";
 
-const DEFAULT_EDGE = { left: "rgb(15, 23, 42)", right: "rgb(15, 23, 42)" };
+const DEFAULT_EDGE = {
+  left: "rgb(15, 23, 42)",
+  right: "rgb(15, 23, 42)",
+  top: "rgb(15, 23, 42)",
+  bottom: "rgb(15, 23, 42)"
+};
 
 /**
- * Detail-page banner image: fits with object-contain and fills side gaps
- * with a gradient sampled from the image's left/right edge colors.
+ * Detail-page banner image: fits with object-contain and soft-fills letterbox
+ * gaps with edge-sampled gradients + a blurred cover of the same image.
+ * Desktop (tall frame) strengthens the top/bottom color fill.
  * Display images omit crossOrigin so Cloudinary/CDN URLs load reliably in production.
  */
 export default function ListingDetailBannerImage({
@@ -24,31 +30,55 @@ export default function ListingDetailBannerImage({
 }) {
   const [edgeColors, setEdgeColors] = useState(DEFAULT_EDGE);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [blurFailed, setBlurFailed] = useState(false);
   const trimmed = String(src || "").trim();
   const displaySrc = listingBannerImageUrl(trimmed);
   const srcSet = listingBannerSrcSet(trimmed);
   const blurSrc = displayImageBlurUrl(trimmed);
-  const showBlurImage = Boolean(blurSrc && blurSrc !== displaySrc);
+  const showBlurImage = Boolean(blurSrc) && !blurFailed;
 
   useEffect(() => {
     setLoadFailed(false);
+    setBlurFailed(false);
     setEdgeColors(DEFAULT_EDGE);
   }, [trimmed]);
 
   const applyEdgeColors = useCallback((img) => {
     const sampled = sampleImageEdgeColors(img);
     if (sampled) {
-      setEdgeColors(sampled);
+      setEdgeColors({
+        left: sampled.left,
+        right: sampled.right,
+        top: sampled.top || sampled.left,
+        bottom: sampled.bottom || sampled.right
+      });
     }
   }, []);
 
-  const handleLoad = useCallback(
-    (event) => {
-      setLoadFailed(false);
-      applyEdgeColors(event.currentTarget);
-    },
-    [applyEdgeColors]
-  );
+  // CORS probe (tiny blur URL) so canvas edge sampling works for Cloudinary/CDN.
+  useEffect(() => {
+    const probeSrc = blurSrc || displaySrc;
+    if (!probeSrc) {
+      return undefined;
+    }
+    let cancelled = false;
+    const probe = new Image();
+    probe.crossOrigin = "anonymous";
+    probe.decoding = "async";
+    probe.onload = () => {
+      if (!cancelled) {
+        applyEdgeColors(probe);
+      }
+    };
+    probe.src = probeSrc;
+    return () => {
+      cancelled = true;
+    };
+  }, [applyEdgeColors, blurSrc, displaySrc]);
+
+  const handleLoad = useCallback(() => {
+    setLoadFailed(false);
+  }, []);
 
   const handleError = useCallback(() => {
     setLoadFailed(true);
@@ -80,16 +110,24 @@ export default function ListingDetailBannerImage({
         }}
         aria-hidden
       />
+      {/* Desktop tall frame: vertical letterbox fill from image edge colors */}
+      <div
+        className="absolute inset-0 hidden scale-105 lg:block"
+        style={{
+          background: `linear-gradient(to bottom, ${edgeColors.top} 0%, ${edgeColors.left} 42%, ${edgeColors.right} 58%, ${edgeColors.bottom} 100%)`
+        }}
+        aria-hidden
+      />
 
       {showBlurImage ? (
         <img
           src={blurSrc}
           alt=""
           aria-hidden
-          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.38] blur-3xl saturate-[1.15]"
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.38] blur-3xl saturate-[1.15] lg:scale-[1.2] lg:opacity-[0.72] lg:blur-[48px] lg:saturate-[1.3]"
           loading={eager ? "eager" : "lazy"}
           decoding="async"
-          onError={handleError}
+          onError={() => setBlurFailed(true)}
         />
       ) : null}
 
@@ -107,9 +145,23 @@ export default function ListingDetailBannerImage({
         }}
         aria-hidden
       />
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-[1] hidden h-[max(22%,120px)] lg:block"
+        style={{
+          background: `linear-gradient(to bottom, ${edgeColors.top} 0%, transparent 100%)`
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] hidden h-[max(22%,120px)] lg:block"
+        style={{
+          background: `linear-gradient(to top, ${edgeColors.bottom} 0%, transparent 100%)`
+        }}
+        aria-hidden
+      />
 
       <div
-        className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/10 via-transparent to-black/25"
+        className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/10 via-transparent to-black/25 lg:from-black/[0.12] lg:to-black/30"
         aria-hidden
       />
 

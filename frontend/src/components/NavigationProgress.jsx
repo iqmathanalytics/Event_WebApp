@@ -5,8 +5,8 @@ import { useRouteContentReadyContext } from "../context/RouteContentReadyContext
 import { shouldShowHomeSplash } from "../utils/homeSplashPolicy";
 import AppLoadingOverlay from "./AppLoadingOverlay";
 
-const MIN_OVERLAY_AFTER_READY_MS = 280;
-const MIN_OVERLAY_AFTER_READY_MS_REDUCED = 180;
+const MIN_OVERLAY_AFTER_READY_MS = 120;
+const MIN_OVERLAY_AFTER_READY_MS_REDUCED = 80;
 const OVERLAY_SAFETY_MS = 12000;
 
 /**

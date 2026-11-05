@@ -101,6 +101,18 @@ async function findOpenCheckoutsForBuyer({ eventId, userId = null, email = null,
   return rows || [];
 }
 
+async function updateCheckoutPayloadJson(paymentIntentId, payloadJson, conn) {
+  const runner = conn || pool;
+  const serialized =
+    typeof payloadJson === "string" ? payloadJson : JSON.stringify(payloadJson || {});
+  await runner.query(
+    `UPDATE event_checkout_payments
+     SET payload_json = ?, updated_at = NOW()
+     WHERE stripe_payment_intent_id = ?`,
+    [serialized, paymentIntentId]
+  );
+}
+
 async function updateCheckoutStatus(
   paymentIntentId,
   { status, booking_id, stripe_charge_id, failure_code, failure_message },
@@ -143,5 +155,6 @@ module.exports = {
   findByPaymentIntentId,
   findRecentSucceededCheckouts,
   findOpenCheckoutsForBuyer,
+  updateCheckoutPayloadJson,
   updateCheckoutStatus
 };

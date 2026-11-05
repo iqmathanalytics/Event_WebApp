@@ -79,6 +79,19 @@ const updateEventListed = asyncHandler(async (req, res) => {
   });
 });
 
+const updateEventAcceptBookings = asyncHandler(async (req, res) => {
+  await adminService.updateEventAcceptBookingsFlag({
+    eventId: Number(req.validated.params.id),
+    acceptBookings: req.validated.body.accept_bookings
+  });
+  return res.status(200).json({
+    success: true,
+    message: req.validated.body.accept_bookings
+      ? "Event is now accepting tickets"
+      : "Ticket sales paused for this event"
+  });
+});
+
 const updateEventHomeFeatured = asyncHandler(async (req, res) => {
   await adminService.updateEventHomeFeaturedVisibility({
     eventId: Number(req.validated.params.id),
@@ -210,7 +223,11 @@ const updateTeamUserCapabilities = asyncHandler(async (req, res) => {
 const bookingCheckInService = require("../services/bookingCheckInService");
 
 const verifyTicket = asyncHandler(async (req, res) => {
-  const booking = await bookingCheckInService.verifyBookingByCode(req.validated.query.code);
+  const actor = { type: "admin", userId: req.user?.id || null };
+  const booking = await bookingCheckInService.verifyBookingByCode(
+    req.validated.query.code,
+    actor
+  );
   return res.status(200).json({
     success: true,
     data: booking
@@ -218,9 +235,11 @@ const verifyTicket = asyncHandler(async (req, res) => {
 });
 
 const checkInTicket = asyncHandler(async (req, res) => {
+  const actor = { type: "admin", userId: req.user?.id || null };
   const result = await bookingCheckInService.checkInBookingByCode({
     rawCode: req.validated.body.code,
-    adminUserId: req.user?.id || null
+    adminUserId: req.user?.id || null,
+    actor
   });
   return res.status(200).json({
     success: true,
@@ -536,6 +555,7 @@ module.exports = {
   getListingById,
   updateListingStatus,
   updateEventListed,
+  updateEventAcceptBookings,
   updateEventHomeFeatured,
   editListing,
   deleteListing,

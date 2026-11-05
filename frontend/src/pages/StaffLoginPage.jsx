@@ -1,14 +1,23 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import { loginStaff } from "../services/authService";
 import AuthBrandLogo from "../components/AuthBrandLogo";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 
+function safeInternalNext(raw) {
+  const value = String(raw || "").trim();
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+  return value;
+}
+
 function StaffLoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,6 +36,11 @@ function StaffLoginPage() {
       login(payload);
       const isAdmin = payload?.user?.role === "admin";
       const canOrganize = payload?.user?.organizer_enabled === 1 || payload?.user?.role === "organizer";
+      const next = safeInternalNext(searchParams.get("next"));
+      if (next && (isAdmin || canOrganize)) {
+        navigate(next);
+        return;
+      }
       navigate(
         isAdmin
           ? "/dashboard/admin"

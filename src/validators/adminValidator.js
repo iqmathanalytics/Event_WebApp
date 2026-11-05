@@ -318,6 +318,16 @@ const updateEventListedSchema = z.object({
   })
 });
 
+const updateEventAcceptBookingsSchema = z.object({
+  body: z.object({
+    accept_bookings: z.boolean()
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({
+    id: z.string().regex(/^\d+$/)
+  })
+});
+
 const updateEventHomeFeaturedSchema = z.object({
   body: z.object({
     home_featured: z.boolean()
@@ -336,6 +346,7 @@ module.exports = {
   editListingSchema,
   deleteListingSchema,
   updateEventListedSchema,
+  updateEventAcceptBookingsSchema,
   updateEventHomeFeaturedSchema,
   createTeamUserSchema,
   listTeamUsersSchema,

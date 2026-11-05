@@ -209,6 +209,19 @@ function assertPlatformEventForBooking(event) {
       "This event sells tickets through an external link. Use the organizer’s ticket page to reserve."
     );
   }
+  const acceptBookings =
+    event.accept_bookings === undefined || event.accept_bookings === null
+      ? true
+      : event.accept_bookings !== false &&
+        event.accept_bookings !== 0 &&
+        String(event.accept_bookings) !== "false" &&
+        String(event.accept_bookings) !== "0";
+  if (!acceptBookings) {
+    throw new ApiError(
+      400,
+      "Ticket sales are paused for this event right now. Please check back later or contact the organizer."
+    );
+  }
 }
 
 const { assertBookingContactNames } = require("../utils/bookingContact");
@@ -821,9 +834,15 @@ async function insertBookingFromPricing({ userId, payload, pricing, paymentMeta 
     }
     const checkInCode = created.check_in_code;
 
-    if (holdToken && (effectiveUserId || userId)) {
+    // Guests may lack a user id until account provisioning; still clear hold + count redemption.
+    if (holdToken && pricing.couponId) {
       await couponService.finalizeCouponRedemption(
-        { couponId: pricing.couponId || null, userId: effectiveUserId || userId, bookingId, holdToken },
+        {
+          couponId: pricing.couponId,
+          userId: effectiveUserId || userId || null,
+          bookingId,
+          holdToken
+        },
         conn
       );
     }

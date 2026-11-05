@@ -49,7 +49,8 @@ router.get(
   "/featured",
   optionalAuthMiddleware,
   validateRequest(fetchFeaturedEventsSchema),
-  publicCacheMiddleware({ maxAge: 180, staleWhileRevalidate: 600 }),
+  // Keep home in sync with show/hide toggles (was 180s; events list uses 60s).
+  publicCacheMiddleware({ maxAge: 15, staleWhileRevalidate: 60, privateMaxAge: 0 }),
   eventController.fetchFeaturedEvents
 );
 router.post(

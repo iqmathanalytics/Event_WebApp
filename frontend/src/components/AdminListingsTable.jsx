@@ -19,7 +19,26 @@ function getListingPrimaryMeta(item) {
 }
 
 function isEventListed(item) {
-  return item?.is_listed !== false && item?.is_listed !== 0;
+  if (item?.is_listed !== undefined && item?.is_listed !== null) {
+    return item.is_listed !== false && item.is_listed !== 0 && String(item.is_listed) !== "false";
+  }
+  return (
+    item?.show_on_events_page !== false &&
+    item?.show_on_events_page !== 0 &&
+    String(item?.show_on_events_page) !== "false"
+  );
+}
+
+function isEventAcceptBookings(item) {
+  if (item?.accept_bookings === undefined || item?.accept_bookings === null) {
+    return true;
+  }
+  return (
+    item.accept_bookings !== false &&
+    item.accept_bookings !== 0 &&
+    String(item.accept_bookings) !== "false" &&
+    String(item.accept_bookings) !== "0"
+  );
 }
 
 function isEventHomeFeatured(item) {
@@ -76,6 +95,7 @@ function AdminListingsTable({
   onReject,
   onDelete,
   onToggleEventListed,
+  onToggleAcceptBookings,
   onToggleEventHomeFeatured
 }) {
   const labels = useMemo(() => getColumnLabels(type), [type]);
@@ -156,7 +176,16 @@ function AdminListingsTable({
                       onChange={(e) => onToggleEventListed?.(item, e.target.checked)}
                       className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     />
-                    Active (visible on site)
+                    Show on bookmytickets.us
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={isEventAcceptBookings(item)}
+                      onChange={(e) => onToggleAcceptBookings?.(item, e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Accept tickets
                   </label>
                   <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
                     <input
@@ -234,17 +263,18 @@ function AdminListingsTable({
         ) : null}
       </div>
       <div className="hidden lg:block">
-      <ScrollableTableFrame minWidthClass="min-w-[1120px]" className="rounded-2xl">
+      <ScrollableTableFrame minWidthClass="min-w-[1280px]" className="rounded-2xl">
       <table className="w-full table-fixed text-left text-sm">
         <colgroup>
-          <col className="w-[24%]" />
-          <col className="w-[12%]" />
-          <col className="w-[12%]" />
+          <col className="w-[20%]" />
           <col className="w-[10%]" />
-          {type === "events" ? <col className="w-[9%]" /> : null}
+          <col className="w-[10%]" />
+          <col className="w-[9%]" />
+          {type === "events" ? <col className="w-[12%]" /> : null}
           {type === "events" ? <col className="w-[11%]" /> : null}
+          {type === "events" ? <col className="w-[9%]" /> : null}
+          <col className="w-[9%]" />
           <col className="w-[10%]" />
-          <col className="w-[12%]" />
         </colgroup>
         <thead className="sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 text-slate-600">
           <tr>
@@ -253,7 +283,10 @@ function AdminListingsTable({
             <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">{labels.category}</th>
             <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
             {type === "events" ? (
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Active</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Show on site</th>
+            ) : null}
+            {type === "events" ? (
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Accept tickets</th>
             ) : null}
             {type === "events" ? (
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Home</th>
@@ -293,7 +326,24 @@ function AdminListingsTable({
                         onChange={(e) => onToggleEventListed?.(item, e.target.checked)}
                         className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                       />
-                      Active
+                      Show
+                    </label>
+                  ) : (
+                    <span className="text-xs text-slate-400">—</span>
+                  )}
+                </td>
+              ) : null}
+              {type === "events" ? (
+                <td className="px-4 py-3">
+                  {String(item.status || "").toLowerCase() === "approved" ? (
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={isEventAcceptBookings(item)}
+                        onChange={(e) => onToggleAcceptBookings?.(item, e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      Accept
                     </label>
                   ) : (
                     <span className="text-xs text-slate-400">—</span>

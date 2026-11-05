@@ -31,8 +31,11 @@ export async function confirmBookingPayment(payment_intent_id) {
   return response.data;
 }
 
-export async function confirmGuestBookingPayment(payment_intent_id) {
-  const response = await api.post("/bookings/guest/confirm-payment", { payment_intent_id });
+export async function confirmGuestBookingPayment(payment_intent_id, checkout_access_token) {
+  const response = await api.post("/bookings/guest/confirm-payment", {
+    payment_intent_id,
+    checkout_access_token
+  });
   return response.data;
 }
 
@@ -41,8 +44,11 @@ export async function cancelBookingPayment(payment_intent_id) {
   return response.data;
 }
 
-export async function cancelGuestBookingPayment(payment_intent_id) {
-  const response = await api.post("/bookings/guest/cancel-payment", { payment_intent_id });
+export async function cancelGuestBookingPayment(payment_intent_id, checkout_access_token) {
+  const response = await api.post("/bookings/guest/cancel-payment", {
+    payment_intent_id,
+    checkout_access_token
+  });
   return response.data;
 }
 

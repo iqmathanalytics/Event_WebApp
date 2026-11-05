@@ -63,9 +63,10 @@ const createGuestPaymentIntent = asyncHandler(async (req, res) => {
 });
 
 const confirmGuestPayment = asyncHandler(async (req, res) => {
-  const { payment_intent_id } = getValidatedBody(req);
+  const { payment_intent_id, checkout_access_token } = getValidatedBody(req);
   const result = await stripePaymentService.confirmPaymentForGuest({
-    paymentIntentId: payment_intent_id
+    paymentIntentId: payment_intent_id,
+    checkoutAccessToken: checkout_access_token
   });
   res.status(200).json({
     success: true,
@@ -85,11 +86,12 @@ const cancelPaymentIntent = asyncHandler(async (req, res) => {
 });
 
 const cancelGuestPaymentIntent = asyncHandler(async (req, res) => {
-  const { payment_intent_id } = getValidatedBody(req);
+  const { payment_intent_id, checkout_access_token } = getValidatedBody(req);
   const data = await stripePaymentService.cancelAbandonedPaymentIntent({
     paymentIntentId: payment_intent_id,
     userId: null,
-    isGuest: true
+    isGuest: true,
+    checkoutAccessToken: checkout_access_token
   });
   res.status(200).json({ success: true, data });
 });

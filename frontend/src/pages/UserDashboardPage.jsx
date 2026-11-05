@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -16,11 +16,8 @@ import { parseInfluencerSocialLinks } from "../utils/influencerSocial";
 import useCityFilter from "../hooks/useCityFilter";
 import { useRouteContentReady } from "../context/RouteContentReadyContext";
 import AppLoadingOverlay from "../components/AppLoadingOverlay";
-import OrganizerDashboardPage from "./OrganizerDashboardPage";
 import CloudinaryImageInput from "../components/CloudinaryImageInput";
-import UserSubmissionsPanel from "../components/UserSubmissionsPanel";
 import PostSubmitFeedbackDialog from "../components/PostSubmitFeedbackDialog";
-import { fetchMyEvents } from "../services/eventService";
 import UserDashboardBookingsAndFavorites from "../components/UserDashboardBookingsAndFavorites";
 import PlatformTicketAccessRequestModal from "../components/PlatformTicketAccessRequestModal";
 import WorkspaceTabSwitchLoader from "../components/WorkspaceTabSwitchLoader";
@@ -28,6 +25,9 @@ import { acceptAnalyticsInvite } from "../services/organizerAnalyticsService";
 import { acceptVendorInvite } from "../services/vendorShareService";
 import { profileMobileOrEmpty } from "../utils/phone";
 import { useIsLgUp } from "../hooks/useMediaQuery";
+
+const OrganizerDashboardPage = lazy(() => import("./OrganizerDashboardPage"));
+const UserSubmissionsPanel = lazy(() => import("../components/UserSubmissionsPanel"));
 
 const interestOptions = [
   "Events",
@@ -168,13 +168,21 @@ function HostWorkspacePanel({
   myEventsCount,
   offersCount,
   onRequestPlatformTickets,
-  onAfterResubmitSuccess
+  onAfterResubmitSuccess,
+  onEventsCountChange
 }) {
   const organizerSection = ORGANIZER_SECTION_BY_TAB[activeTab];
   const showOffers = activeTab === "offers";
   const [tabSwitching, setTabSwitching] = useState(false);
   const prevTabRef = useRef(activeTab);
   const switchTimersRef = useRef({ hide: 0, safety: 0, raf: 0 });
+
+  const handleEventsChange = useCallback(
+    (rows) => {
+      onEventsCountChange?.(Array.isArray(rows) ? rows.length : 0);
+    },
+    [onEventsCountChange]
+  );
 
   const handleTabChange = useCallback(
     (tab) => {
@@ -252,19 +260,29 @@ function HostWorkspacePanel({
       />
       <div className={`relative ${layout === "mobile" ? "mt-3 min-h-[12rem]" : "mt-4 min-h-[14rem]"}`}>
         <WorkspaceTabSwitchLoader show={tabSwitching} label="Loading" />
-        {/* Keep both trees mounted so tab switches do not remount/refetch. */}
+        {/* Keep both trees mounted after first visit so tab switches do not remount/refetch. */}
         <div
           className={`transition-opacity duration-300 ease-out ${
             tabSwitching ? "opacity-40" : "opacity-100"
           } ${showOffers ? "hidden" : "block"}`}
           aria-hidden={showOffers}
         >
-          <OrganizerDashboardPage
-            embedded
-            forcedSection={organizerSection || "my-events"}
-            embeddedSectionMode="full"
-            onRequestPlatformTickets={onRequestPlatformTickets}
-          />
+          <Suspense
+            fallback={
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-soft">
+                Loading hosting tools…
+              </div>
+            }
+          >
+            <OrganizerDashboardPage
+              embedded
+              suppressRouteContentReadySignal
+              forcedSection={organizerSection || "my-events"}
+              embeddedSectionMode="full"
+              onRequestPlatformTickets={onRequestPlatformTickets}
+              onEventsChange={handleEventsChange}
+            />
+          </Suspense>
         </div>
         <div
           className={`transition-opacity duration-300 ease-out ${
@@ -272,11 +290,19 @@ function HostWorkspacePanel({
           } ${showOffers ? "block" : "hidden"}`}
           aria-hidden={!showOffers}
         >
-          <UserSubmissionsPanel
-            variant="standalone"
-            showBackToHub={false}
-            onAfterResubmitSuccess={onAfterResubmitSuccess}
-          />
+          <Suspense
+            fallback={
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-soft">
+                Loading offers…
+              </div>
+            }
+          >
+            <UserSubmissionsPanel
+              variant="standalone"
+              showBackToHub={false}
+              onAfterResubmitSuccess={onAfterResubmitSuccess}
+            />
+          </Suspense>
         </div>
       </div>
     </section>
@@ -341,6 +367,14 @@ function UserDashboardPage() {
   const [creatorHubOpen, setCreatorHubOpen] = useState(false);
   const [submissionSuccessDialog, setSubmissionSuccessDialog] = useState(null);
   const organizerFormShellRef = useRef(null);
+  const [organizerShellMounted, setOrganizerShellMounted] = useState(false);
+  const pendingOpenCreateRef = useRef(false);
+  const handleEventsCountChange = useCallback((count) => {
+    setMyEventsCount(Number(count) || 0);
+  }, []);
+  const [hostingWorkspaceMounted, setHostingWorkspaceMounted] = useState(
+    () => Boolean(tabFromSearch(location.search)) || location.hash === "#host-events"
+  );
   const inviteHandledRef = useRef("");
   const [profileEditorTab, setProfileEditorTab] = useState("basic");
   const [profileForm, setProfileForm] = useState({
@@ -480,7 +514,9 @@ function UserDashboardPage() {
   /** Google: no local password yet — “Set” copy; otherwise still no current-password field */
   const isGoogleFirstPassword = isGoogleUser && profile?.has_local_password !== true;
 
-  useRouteContentReady(loadingBookings || loadingSubmissions || favoritesLoading);
+  // Bookings are the default dashboard content — dismiss overlay as soon as bookings resolve
+  // (don't wait for thumbs/QR/fonts, and don't let hosting tools hold the splash).
+  useRouteContentReady(loadingBookings, { waitForImages: false });
 
   useEffect(() => {
     if (showProfileEditor && profileTabs.every((t) => t.key !== profileEditorTab)) {
@@ -539,24 +575,6 @@ function UserDashboardPage() {
       }
     }
     loadProfile();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    async function loadMyEventsCount() {
-      try {
-        const response = await fetchMyEvents();
-        if (!active) return;
-        setMyEventsCount(Array.isArray(response?.data) ? response.data.length : 0);
-      } catch (_err) {
-        if (!active) return;
-        setMyEventsCount(0);
-      }
-    }
-    loadMyEventsCount();
     return () => {
       active = false;
     };
@@ -994,8 +1012,23 @@ function UserDashboardPage() {
     }
   };
 
+  // Self-heal: anyone who already hosts events should see full organizer tabs.
+  const organizerHealAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (organizerHealAttemptedRef.current) {
+      return undefined;
+    }
+    if (!user?.id || canOrganize || myEventsCount < 1) {
+      return undefined;
+    }
+    organizerHealAttemptedRef.current = true;
+    void enableHostingIfNeeded();
+    return undefined;
+  }, [user?.id, canOrganize, myEventsCount]);
+
   const onListExperienceClick = async () => {
     await enableHostingIfNeeded();
+    setHostingWorkspaceMounted(true);
     setMobileSection("hosting");
     setWorkspaceTab("events");
     requestAnimationFrame(() => {
@@ -1005,10 +1038,53 @@ function UserDashboardPage() {
 
   const onPostEventClick = async () => {
     await enableHostingIfNeeded();
-    requestAnimationFrame(() => {
-      organizerFormShellRef.current?.openCreateEvent();
-    });
+    pendingOpenCreateRef.current = true;
+    setOrganizerShellMounted(true);
+    setHostingWorkspaceMounted(true);
   };
+
+  useEffect(() => {
+    if (!organizerShellMounted || !pendingOpenCreateRef.current) {
+      return undefined;
+    }
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      if (organizerFormShellRef.current?.openCreateEvent) {
+        organizerFormShellRef.current.openCreateEvent();
+        pendingOpenCreateRef.current = false;
+        window.clearInterval(timer);
+      } else if (tries > 80) {
+        pendingOpenCreateRef.current = false;
+        window.clearInterval(timer);
+      }
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, [organizerShellMounted]);
+
+  useEffect(() => {
+    if (mobileSection === "hosting") {
+      setHostingWorkspaceMounted(true);
+    }
+  }, [mobileSection]);
+
+  // Desktop: mount hosting tools only after bookings (necessary data) so the overlay can dismiss first.
+  useEffect(() => {
+    if (!isLgUp || loadingBookings) {
+      return undefined;
+    }
+    const idle =
+      typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback(() => setHostingWorkspaceMounted(true), { timeout: 400 })
+        : window.setTimeout(() => setHostingWorkspaceMounted(true), 0);
+    return () => {
+      if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function" && typeof idle === "number") {
+        window.cancelIdleCallback(idle);
+      } else {
+        window.clearTimeout(idle);
+      }
+    };
+  }, [isLgUp, loadingBookings]);
 
   const onSubmitDealClick = () => {
     if (!canPostDeals) {
@@ -1341,16 +1417,19 @@ function UserDashboardPage() {
             </button>
           </div>
 
-          <HostWorkspacePanel
-            layout="mobile"
-            tabs={workspaceTabs}
-            activeTab={mobileWorkspaceTab}
-            onTabChange={setWorkspaceTab}
-            myEventsCount={myEventsCount}
-            offersCount={offersCount}
-            onRequestPlatformTickets={openPlatformTicketRequestModal}
-            onAfterResubmitSuccess={handleListingResubmitSaved}
-          />
+          {hostingWorkspaceMounted ? (
+            <HostWorkspacePanel
+              layout="mobile"
+              tabs={workspaceTabs}
+              activeTab={mobileWorkspaceTab}
+              onTabChange={setWorkspaceTab}
+              myEventsCount={myEventsCount}
+              offersCount={offersCount}
+              onRequestPlatformTickets={openPlatformTicketRequestModal}
+              onAfterResubmitSuccess={handleListingResubmitSaved}
+              onEventsCountChange={handleEventsCountChange}
+            />
+          ) : null}
         </div>
       </div>
       ) : (
@@ -1467,16 +1546,19 @@ function UserDashboardPage() {
           {profileMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
           {profileError ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
 
-          <HostWorkspacePanel
-            layout="desktop"
-            tabs={workspaceTabs}
-            activeTab={desktopWorkspaceTab}
-            onTabChange={setWorkspaceTab}
-            myEventsCount={myEventsCount}
-            offersCount={offersCount}
-            onRequestPlatformTickets={openPlatformTicketRequestModal}
-            onAfterResubmitSuccess={handleListingResubmitSaved}
-          />
+          {hostingWorkspaceMounted ? (
+            <HostWorkspacePanel
+              layout="desktop"
+              tabs={workspaceTabs}
+              activeTab={desktopWorkspaceTab}
+              onTabChange={setWorkspaceTab}
+              myEventsCount={myEventsCount}
+              offersCount={offersCount}
+              onRequestPlatformTickets={openPlatformTicketRequestModal}
+              onAfterResubmitSuccess={handleListingResubmitSaved}
+              onEventsCountChange={handleEventsCountChange}
+            />
+          ) : null}
 
           <UserDashboardBookingsAndFavorites
             filteredBookings={filteredBookings}
@@ -1556,16 +1638,19 @@ function UserDashboardPage() {
           {profileMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{profileMessage}</p> : null}
           {profileError ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">{profileError}</p> : null}
 
-          <HostWorkspacePanel
-            layout="desktop"
-            tabs={workspaceTabs}
-            activeTab={desktopWorkspaceTab}
-            onTabChange={setWorkspaceTab}
-            myEventsCount={myEventsCount}
-            offersCount={offersCount}
-            onRequestPlatformTickets={openPlatformTicketRequestModal}
-            onAfterResubmitSuccess={handleListingResubmitSaved}
-          />
+          {hostingWorkspaceMounted ? (
+            <HostWorkspacePanel
+              layout="desktop"
+              tabs={workspaceTabs}
+              activeTab={desktopWorkspaceTab}
+              onTabChange={setWorkspaceTab}
+              myEventsCount={myEventsCount}
+              offersCount={offersCount}
+              onRequestPlatformTickets={openPlatformTicketRequestModal}
+              onAfterResubmitSuccess={handleListingResubmitSaved}
+              onEventsCountChange={handleEventsCountChange}
+            />
+          ) : null}
         </>
       )}
       </div>
@@ -2314,15 +2399,19 @@ function UserDashboardPage() {
         </AnimatePresence>
       )}
 
-      <div hidden aria-hidden="true" data-route-splash-ignore>
-        <OrganizerDashboardPage
-          ref={organizerFormShellRef}
-          embedded
-          suppressChrome
-          suppressRouteContentReadySignal
-          onRequestPlatformTickets={openPlatformTicketRequestModal}
-        />
-      </div>
+      {organizerShellMounted ? (
+        <div hidden aria-hidden="true" data-route-splash-ignore>
+          <Suspense fallback={null}>
+            <OrganizerDashboardPage
+              ref={organizerFormShellRef}
+              embedded
+              suppressChrome
+              suppressRouteContentReadySignal
+              onRequestPlatformTickets={openPlatformTicketRequestModal}
+            />
+          </Suspense>
+        </div>
+      ) : null}
 
       <DealSubmissionModal
         open={dealSubmitOpen}

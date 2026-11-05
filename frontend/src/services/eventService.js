@@ -7,7 +7,8 @@ import {
   isAuthenticatedClient
 } from "../utils/clientCache";
 
-const PUBLIC_LIST_CACHE_TTL_MS = 3 * 60 * 1000;
+/** Short TTL so home reflects show/hide quickly (events list is uncached). */
+const FEATURED_CLIENT_CACHE_TTL_MS = 15 * 1000;
 
 function bustPublicEventCaches() {
   clearClientCacheByPrefix("events:featured");
@@ -29,10 +30,14 @@ export async function fetchFeaturedEvents(params = {}) {
   return cachedClientFetch(
     cacheKey,
     async () => {
-      const response = await api.get("/events/featured", { params });
+      const response = await api.get("/events/featured", {
+        params,
+        // Avoid stale browser HTTP cache after organizer/admin visibility toggles.
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" }
+      });
       return response.data;
     },
-    { ttlMs: PUBLIC_LIST_CACHE_TTL_MS }
+    { ttlMs: FEATURED_CLIENT_CACHE_TTL_MS }
   );
 }
 

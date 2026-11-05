@@ -57,11 +57,8 @@ const corsOptions = {
       callback(null, origin);
       return;
     }
+    // Explicit env wildcards only (e.g. CORS_ORIGIN=*.preview.example.com). No blanket *.netlify.app.
     if (wildcardOriginSuffixes.some((suffix) => origin.endsWith(suffix))) {
-      callback(null, origin);
-      return;
-    }
-    if (nodeEnv === "production" && origin.endsWith(".netlify.app")) {
       callback(null, origin);
       return;
     }

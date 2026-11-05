@@ -32,10 +32,59 @@ import EventAirbnbBookingShell from "../components/EventAirbnbBookingShell";
 import RichTextContent from "../components/RichTextContent";
 import { truncateDescriptionPlain } from "../utils/richText";
 import { isHomeFeaturedEvent } from "../utils/eventHomeFeatured";
+import { isEventPast } from "../utils/eventSchedule";
+import PastEventTicketsNotice from "../components/PastEventTicketsNotice";
 
 const EventTicketCheckoutPanel = lazy(() => import("../components/EventTicketCheckoutPanel"));
 import { EXCLUSIVE_DEAL_EVENT_LABEL } from "../constants/brand";
 import { parsePromoVideoUrls } from "../utils/youtubeVideo";
+
+function resolveEventLoadError(err) {
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  const code = data?.details?.code || "";
+  const apiMessage = typeof data?.message === "string" && data.message.trim() ? data.message.trim() : "";
+
+  if (code === "EVENT_PENDING") {
+    return {
+      code,
+      title: "Coming soon",
+      message:
+        apiMessage ||
+        "This event isn’t published yet. Please check back soon, or browse other events happening near you."
+    };
+  }
+  if (code === "EVENT_UNAVAILABLE") {
+    return {
+      code,
+      title: "Event unavailable",
+      message:
+        apiMessage ||
+        "This event isn’t available right now. Please try again later or browse other events."
+    };
+  }
+  if (code === "EVENT_NOT_FOUND" || status === 404) {
+    return {
+      code: code || "EVENT_NOT_FOUND",
+      title: "Event not found",
+      message:
+        apiMessage ||
+        "We couldn’t find this event. It may have been removed, or the link may be incorrect."
+    };
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return {
+      code: "NETWORK",
+      title: "You’re offline",
+      message: "Check your internet connection, then try opening this event again."
+    };
+  }
+  return {
+    code: "LOAD_FAILED",
+    title: "Something went wrong",
+    message: "We couldn’t load this event right now. Please try again in a moment."
+  };
+}
 
 function parseHighlights(value) {
   if (!value) {
@@ -132,7 +181,7 @@ function EventDetailsPage() {
   const { selectedCity } = useCityFilter();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [trackedView, setTrackedView] = useState(false);
   const [trackedVendorHit, setTrackedVendorHit] = useState(false);
   const [showMobileBookBar, setShowMobileBookBar] = useState(false);
@@ -148,15 +197,23 @@ function EventDetailsPage() {
     async function loadEvent() {
       try {
         setLoading(true);
-        setError("");
+        setError(null);
         const response = await fetchEventById(slug, { ownerPreview });
         if (active) {
           setEvent(response?.data || null);
+          if (!response?.data) {
+            setError({
+              code: "EVENT_NOT_FOUND",
+              title: "Event not found",
+              message:
+                "We couldn’t find this event. It may have been removed, or the link may be incorrect."
+            });
+          }
         }
-      } catch (_err) {
+      } catch (err) {
         if (active) {
           setEvent(null);
-          setError("Could not load this event.");
+          setError(resolveEventLoadError(err));
         }
       } finally {
         if (active) {
@@ -329,12 +386,29 @@ function EventDetailsPage() {
   }
 
   if (!event || error) {
+    const title = error?.title || "Event not found";
+    const message =
+      error?.message ||
+      "We couldn’t find this event. It may have been removed, or the link may be incorrect.";
     return (
-      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
-        <p className="text-base font-medium text-rose-600 lg:text-sm">{error || "Event not found."}</p>
-        <Link to="/events" className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-600 lg:inline-block lg:min-h-0">
-          Browse Events
-        </Link>
+      <div className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 px-6 py-10 text-center shadow-soft sm:px-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Book My Tickets</p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-[1.75rem]">{title}</h1>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-600 sm:text-[15px]">{message}</p>
+        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Link
+            to="/events"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-brand-600 px-5 text-sm font-semibold text-white sm:w-auto"
+          >
+            Browse events
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 sm:w-auto"
+          >
+            Go to home
+          </Link>
+        </div>
       </div>
     );
   }
@@ -349,6 +423,14 @@ function EventDetailsPage() {
     String(event.is_yay_deal_event || "") === "1";
   const yayDealGuestLocked = isYayDealEvent && isGuest;
   const ticketSalesMode = normalizeEventTicketSalesMode(event.ticket_sales_mode);
+  const acceptsBookings =
+    event.accept_bookings === undefined || event.accept_bookings === null
+      ? true
+      : event.accept_bookings !== false &&
+        event.accept_bookings !== 0 &&
+        String(event.accept_bookings) !== "false" &&
+        String(event.accept_bookings) !== "0";
+  const eventHasEnded = isEventPast(event);
   const fullDescription = event.description || "";
   const partialDescription = truncateDescriptionPlain(fullDescription, 240) || "No event description provided yet.";
   const aboutText = yayDealGuestLocked
@@ -766,7 +848,9 @@ function EventDetailsPage() {
           className={`scroll-mt-28 lg:self-start ${phoneChapter("tickets")}`}
         >
           <div className="lg:sticky lg:top-24 lg:z-10">
-            {ticketSalesMode === "platform" && (isAuthenticated || !isYayDealEvent) ? (
+            {eventHasEnded ? (
+              <PastEventTicketsNotice />
+            ) : ticketSalesMode === "platform" && (isAuthenticated || !isYayDealEvent) ? (
               <Suspense
                 fallback={
                   <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-soft">
@@ -776,6 +860,14 @@ function EventDetailsPage() {
               >
                 <EventTicketCheckoutPanel event={event} guestMode={!isAuthenticated} />
               </Suspense>
+            ) : ticketSalesMode === "platform" && !acceptsBookings ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-6 text-center shadow-soft">
+                <p className="text-base font-semibold text-amber-950">Ticket sales are paused</p>
+                <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
+                  Tickets aren’t on sale for this event right now. You’re welcome to check back later, or reach out
+                  to the organizer if you have questions.
+                </p>
+              </div>
             ) : (
               <EventAirbnbBookingShell
                 event={event}
@@ -796,17 +888,29 @@ function EventDetailsPage() {
         >
           <div className="mx-auto flex w-full max-w-lg min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 shadow-soft backdrop-blur">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">From</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                {eventHasEnded ? "Tickets" : acceptsBookings ? "From" : "Tickets"}
+              </p>
               <p className="truncate text-sm font-semibold tabular-nums text-slate-900">
-                {pricePerDay != null ? formatCurrency(pricePerDay) : "See tickets"}
+                {eventHasEnded
+                  ? "Event ended"
+                  : acceptsBookings
+                    ? pricePerDay != null
+                      ? formatCurrency(pricePerDay)
+                      : "See tickets"
+                    : "Sales paused"}
               </p>
             </div>
             <button
               type="button"
               onClick={() => openChapter("tickets")}
-              className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-brand-600 px-4 text-sm font-semibold text-white active:scale-[0.98]"
+              className={`inline-flex h-11 shrink-0 items-center justify-center rounded-full px-4 text-sm font-semibold active:scale-[0.98] ${
+                eventHasEnded || !acceptsBookings
+                  ? "border border-slate-300 bg-white text-slate-700"
+                  : "bg-brand-600 text-white"
+              }`}
             >
-              Book tickets
+              {eventHasEnded ? "See details" : acceptsBookings ? "Book tickets" : "View details"}
             </button>
           </div>
         </div>

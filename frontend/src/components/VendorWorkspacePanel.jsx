@@ -43,7 +43,9 @@ function SoftSkeleton({ rows = 3 }) {
 }
 
 function PartnerShareBlock({ event, onViewPartner }) {
+  const [inviteMode, setInviteMode] = useState("email");
   const [email, setEmail] = useState("");
+  const [partnerName, setPartnerName] = useState("");
   const [shares, setShares] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -78,23 +80,55 @@ function PartnerShareBlock({ event, onViewPartner }) {
     e.preventDefault();
     setError("");
     setMessage("");
-    const value = String(email || "").trim();
-    if (!value) {
+    const isLinkOnly = inviteMode === "link";
+    const emailValue = String(email || "").trim();
+    const nameValue = String(partnerName || "").trim();
+    if (isLinkOnly) {
+      if (!nameValue) {
+        setError("Enter a partner name.");
+        return;
+      }
+    } else if (!emailValue) {
       setError("Enter the partner’s email address.");
       return;
     }
     try {
       setSaving(true);
-      const res = await createEventVendorShare(event.id, { email: value });
-      if (res?.data?.email_sent === false && String(res?.data?.status || "") !== "accepted") {
+      const res = isLinkOnly
+        ? await createEventVendorShare(event.id, {
+            invite_kind: "link_only",
+            name: nameValue
+          })
+        : await createEventVendorShare(event.id, { email: emailValue });
+      if (
+        !isLinkOnly &&
+        res?.data?.email_sent === false &&
+        String(res?.data?.status || "") !== "accepted"
+      ) {
         setError(res?.message || "Invite created, but the email could not be sent.");
       } else {
-        setMessage(res?.message || "Invitation sent.");
+        setMessage(
+          res?.message ||
+            (isLinkOnly ? "Partner link created. Copy it to share." : "Invitation sent.")
+        );
       }
       setEmail("");
+      setPartnerName("");
       await loadShares();
+      if (isLinkOnly && res?.data?.share_url) {
+        try {
+          await navigator.clipboard.writeText(res.data.share_url);
+          setCopiedId(res.data.id);
+          window.setTimeout(() => setCopiedId(null), 2000);
+        } catch {
+          /* copy is optional — list still has Copy link */
+        }
+      }
     } catch (err) {
-      setError(err?.response?.data?.message || "Could not send the invitation.");
+      setError(
+        err?.response?.data?.message ||
+          (isLinkOnly ? "Could not create the partner link." : "Could not send the invitation.")
+      );
     } finally {
       setSaving(false);
     }
@@ -140,29 +174,79 @@ function PartnerShareBlock({ event, onViewPartner }) {
         <div>
           <p className="text-xs font-semibold text-slate-900">Invite a partner</p>
           <p className="mt-0.5 text-xs text-slate-600">
-            They receive a unique event link. Visits and bookings from that link appear in their dashboard — and
-            yours.
+            Each partner gets a unique event link. Visits and bookings from that link show in your tracking —
+            email invites also unlock their partner dashboard after they accept.
           </p>
         </div>
 
+        <div className="inline-flex rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => {
+              setInviteMode("email");
+              setError("");
+              setMessage("");
+            }}
+            className={`rounded-full px-3 py-1.5 transition ${
+              inviteMode === "email" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            By email
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInviteMode("link");
+              setError("");
+              setMessage("");
+            }}
+            className={`rounded-full px-3 py-1.5 transition ${
+              inviteMode === "link" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            By name (link only)
+          </button>
+        </div>
+
         <form onSubmit={onInvite} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <label className="min-w-0 flex-1 text-xs font-semibold text-slate-700">
-            Partner email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="partner@company.com"
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-              required
-            />
-          </label>
+          {inviteMode === "email" ? (
+            <label className="min-w-0 flex-1 text-xs font-semibold text-slate-700">
+              Partner email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="partner@company.com"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+                required
+              />
+            </label>
+          ) : (
+            <label className="min-w-0 flex-1 text-xs font-semibold text-slate-700">
+              Partner name
+              <input
+                type="text"
+                value={partnerName}
+                onChange={(e) => setPartnerName(e.target.value)}
+                placeholder="e.g. Campus ambassadors"
+                maxLength={120}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+                required
+              />
+            </label>
+          )}
           <button
             type="submit"
             disabled={saving}
             className="inline-flex min-h-11 items-center rounded-full bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50 lg:min-h-0 lg:py-2"
           >
-            {saving ? "Sending…" : "Send invite"}
+            {saving
+              ? inviteMode === "link"
+                ? "Creating…"
+                : "Sending…"
+              : inviteMode === "link"
+                ? "Generate link"
+                : "Send invite"}
           </button>
         </form>
 
@@ -179,6 +263,12 @@ function PartnerShareBlock({ event, onViewPartner }) {
           <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {shares.map((share) => {
               const revoked = Boolean(share.is_revoked || share.revoked_at);
+              const isLinkOnly = share.invite_kind === "link_only";
+              const statusLabel = revoked
+                ? "Revoked"
+                : isLinkOnly
+                  ? "Link only"
+                  : share.status;
               return (
                 <li
                   key={share.id}
@@ -186,14 +276,15 @@ function PartnerShareBlock({ event, onViewPartner }) {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-900">
-                      {share.name || share.email}
+                      {share.name || share.email || "Partner"}
                       <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                        {revoked ? "Revoked" : share.status}
+                        {statusLabel}
                       </span>
                     </p>
                     <p className="text-xs text-slate-500">
                       {share.visits || 0} visits · {share.bookings || 0} bookings ·{" "}
                       {formatCurrency(share.revenue || 0)}
+                      {share.email && !isLinkOnly ? ` · ${share.email}` : ""}
                     </p>
                   </div>
                   <div className="hide-scrollbar flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto lg:w-auto lg:flex-wrap lg:overflow-visible">

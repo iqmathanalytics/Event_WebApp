@@ -49,54 +49,95 @@ function paymentStatusLabel(status) {
   return "Confirmed";
 }
 
-/** Guest-facing ticket terms for booking confirmation emails (platform copy, not venue-specific). */
-function bookingTermsOfUsePoints() {
+/** Guest-facing ticket terms for booking confirmation emails (shown below the entry QR). */
+function bookingTermsOfUseSections() {
+  const privacyUrl = dashboardUrl("/privacy");
   return [
-    `Welcome! These Terms of Use govern your use of ${BRAND_NAME} and your purchase, possession, or use of any ${BRAND_NAME} tickets, products, or services.`,
-    "Events may have age or entry rules set by the organizer. Please review the event page before you attend.",
-    "Unless the organizer states otherwise in writing, ticket sales are final. Refunds, returns, exchanges, or cancellations are not available after purchase.",
-    "A service or processing fee may apply per order or ticket. Always confirm the total amount before you pay.",
-    `If an event is canceled by the organizer or host, ${BRAND_NAME} (or the organizer, as applicable) may refund the face value of the ticket. Service or processing fees are generally non-refundable unless required by law.`,
-    "At the venue, you must present your ticket or entry QR and a valid photo ID when asked. By presenting an ID, you confirm that the details on it are accurate.",
-    "The organizer/host is responsible for the event experience on site. They are not liable for personal or financial loss, or for items lost, stolen, or misplaced at the venue, except where the law requires otherwise.",
-    `${BRAND_NAME} tickets cannot be redeemed for cash, store credit, or other benefits unless the organizer expressly offers that.`,
-    "You purchase tickets voluntarily. Chargeback or payment disputes filed without a valid reason may lead to account review. Contact support first if something looks wrong with your order.",
-    `By buying, allocating, or holding tickets through ${BRAND_NAME}, you agree to our Terms of Use and Privacy Policy.`,
-    "Arrive at least 30 minutes before the published start time for smoother entry.",
-    "The organizer/host may deny entry if you arrive late (for example, 15 minutes or more after the event starts). Late arrival does not create a refund right."
+    {
+      title: "All Sales Are Final",
+      body:
+        "Tickets cannot be refunded, returned, exchanged, or cancelled, except as expressly provided in these terms or required by applicable law."
+    },
+    {
+      title: "Service Fees",
+      body:
+        "A service fee may apply to each ticket. Mandatory fees will be included in the total ticket price displayed upfront. Please review the total amount before completing your payment."
+    },
+    {
+      title: "Event Cancellation",
+      body:
+        "If an event is cancelled, We will refund the face value of the ticket. Service fees are non-refundable unless otherwise required by applicable law."
+    },
+    {
+      title: "Tickets and Identification",
+      body:
+        "You must present a valid ticket and identification document at the venue entrance. By presenting identification, you confirm that the information it contains is accurate and current."
+    },
+    {
+      title: "Personal Belongings and Liability",
+      body:
+        "To the extent permitted by applicable law, the organizer/host is not responsible for personal injury, financial loss, or belongings lost, stolen, or misplaced at the venue. Claims for reimbursement will not be accepted where liability is lawfully excluded. Nothing in these terms excludes liability that cannot legally be excluded."
+    },
+    {
+      title: "Ticket Redemption",
+      body:
+        "Tickets cannot be redeemed for cash, credits, or other benefits, except for refunds permitted under these terms or required by law."
+    },
+    {
+      title: "Payment Questions and Disputes",
+      body:
+        "Please contact us for assistance with payment or billing concerns. Nothing in these terms limits your rights to dispute a transaction under applicable law or applicable payment-provider rules."
+    },
+    {
+      title: "Acceptance of Terms",
+      body: `By purchasing, receiving, or using a ticket, you agree to these Terms of Use and acknowledge the ${BRAND_NAME} Privacy Policy (${privacyUrl}).`
+    },
+    {
+      title: "Arrival and Late Admission",
+      body:
+        "Please arrive at least 30 minutes before the scheduled event start time. The organizer/host reserves the right to deny admission to attendees arriving 15 minutes or more after the scheduled start time. No refund will be issued for admission denied under this policy, except where required by applicable law."
+    }
   ];
 }
 
 function bookingTermsOfUseText() {
   const termsUrl = dashboardUrl("/terms");
   const privacyUrl = dashboardUrl("/privacy");
-  const lines = ["Terms of Use (summary)", ...bookingTermsOfUsePoints().map((p, i) => `${i + 1}. ${p}`)];
+  const lines = [
+    "Terms and Conditions",
+    ...bookingTermsOfUseSections().map((section) => `${section.title}\n${section.body}`)
+  ];
   lines.push(`Full terms: ${termsUrl}`);
   lines.push(`Privacy policy: ${privacyUrl}`);
-  return lines.join("\n");
+  return lines.join("\n\n");
 }
 
 function bookingTermsOfUseHtml() {
   const termsUrl = dashboardUrl("/terms");
   const privacyUrl = dashboardUrl("/privacy");
-  const items = bookingTermsOfUsePoints()
-    .map(
-      (point) =>
-        `<li style="margin:0 0 8px;padding:0;font-size:12px;line-height:1.5;color:#475569;">${escapeHtml(point)}</li>`
-    )
+  const sections = bookingTermsOfUseSections()
+    .map((section) => {
+      const bodyHtml =
+        section.title === "Acceptance of Terms"
+          ? `By purchasing, receiving, or using a ticket, you agree to these Terms of Use and acknowledge the ${escapeHtml(BRAND_NAME)} <a href="${escapeHtml(privacyUrl)}" style="color:#e11d48;font-weight:700;text-decoration:none;">Privacy Policy</a>.`
+          : escapeHtml(section.body);
+      return `
+        <div style="margin:0 0 12px;">
+          <div style="font-size:12px;font-weight:800;color:#0f172a;margin:0 0 4px;">${escapeHtml(section.title)}</div>
+          <p style="margin:0;font-size:12px;line-height:1.55;color:#475569;">${bodyHtml}</p>
+        </div>`;
+    })
     .join("");
   return `
-    <div style="margin:22px 0 0;padding:16px 16px 14px;border:1px solid #e2e8f0;border-radius:16px;background:#f8fafc;">
-      <div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Terms of Use</div>
-      <p style="margin:8px 0 10px;font-size:12px;line-height:1.5;color:#334155;">
-        Please read these ticket terms carefully. Full policies:
+    <div style="margin:18px 0 0;padding:16px 16px 14px;border:1px solid #e2e8f0;border-radius:16px;background:#f8fafc;text-align:left;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin:0 0 12px;">Terms and Conditions</div>
+      ${sections}
+      <p style="margin:4px 0 0;font-size:11px;line-height:1.5;color:#64748b;">
+        Full policies:
         <a href="${escapeHtml(termsUrl)}" style="color:#e11d48;font-weight:700;text-decoration:none;">Terms</a>
         ·
         <a href="${escapeHtml(privacyUrl)}" style="color:#e11d48;font-weight:700;text-decoration:none;">Privacy</a>
       </p>
-      <ol style="margin:0;padding:0 0 0 18px;">
-        ${items}
-      </ol>
     </div>`;
 }
 
@@ -237,9 +278,9 @@ function buildLayout({
                   ${rowsHtml ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:4px;">${rowsHtml}</table>` : ""}
                   ${extraHtml || ""}
                   ${qrHtml}
+                  ${bottomHtml || ""}
                   ${ctaHtml}
                   <p style="margin:24px 0 0;font-size:12px;line-height:1.55;color:#64748b;">${escapeHtml(footerNote || `You're receiving this because you use ${BRAND_NAME}.`)}</p>
-                  ${bottomHtml || ""}
                 </td>
               </tr>
             </table>

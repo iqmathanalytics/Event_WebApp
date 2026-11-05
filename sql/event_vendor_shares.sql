@@ -1,10 +1,12 @@
--- Vendor partner link shares: invite by email, unique code per partner, soft revoke.
+-- Vendor partner link shares: invite by email (account) or name-only link (no account).
 CREATE TABLE IF NOT EXISTS event_vendor_shares (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   event_id BIGINT UNSIGNED NOT NULL,
   owner_user_id BIGINT UNSIGNED NOT NULL,
-  shared_with_user_id BIGINT UNSIGNED NOT NULL,
-  shared_with_email VARCHAR(190) NOT NULL,
+  shared_with_user_id BIGINT UNSIGNED NULL,
+  shared_with_email VARCHAR(190) NULL,
+  partner_display_name VARCHAR(120) NULL,
+  invite_kind ENUM('account','link_only') NOT NULL DEFAULT 'account',
   vendor_code VARCHAR(40) NOT NULL,
   status ENUM('pending','accepted') NOT NULL DEFAULT 'pending',
   invite_token CHAR(36) NULL,

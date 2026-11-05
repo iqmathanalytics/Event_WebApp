@@ -80,6 +80,8 @@ async function listSharesForEvent(eventId, ownerUserId, { includeRevoked = true 
        s.owner_user_id,
        s.shared_with_user_id,
        s.shared_with_email,
+       s.partner_display_name,
+       s.invite_kind,
        s.vendor_code,
        s.status,
        s.invite_token,
@@ -203,6 +205,8 @@ async function createShare(
        SET revoked_at = NULL,
            owner_user_id = ?,
            shared_with_email = ?,
+           partner_display_name = NULL,
+           invite_kind = 'account',
            vendor_code = ?,
            status = 'pending',
            invite_token = ?,
@@ -236,8 +240,9 @@ async function createShare(
 
   const [result] = await runner.query(
     `INSERT INTO event_vendor_shares
-      (event_id, owner_user_id, shared_with_user_id, shared_with_email, vendor_code, status, invite_token, created_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, NOW())`,
+      (event_id, owner_user_id, shared_with_user_id, shared_with_email, partner_display_name, invite_kind,
+       vendor_code, status, invite_token, created_at)
+     VALUES (?, ?, ?, ?, NULL, 'account', ?, 'pending', ?, NOW())`,
     [eventId, ownerUserId, sharedWithUserId, sharedWithEmail, finalCode, token]
   );
   return {
@@ -245,7 +250,52 @@ async function createShare(
     alreadyExists: false,
     status: "pending",
     vendorCode: finalCode,
-    inviteToken: token
+    inviteToken: token,
+    inviteKind: "account"
+  };
+}
+
+/**
+ * Name-only tracking link — no user account, invite email, or accept step.
+ * Tracking (hits / bookings) uses the same vendor_code as account invites.
+ */
+async function createLinkOnlyShare(
+  { eventId, ownerUserId, partnerDisplayName, vendorCode },
+  conn
+) {
+  const runner = conn || pool;
+  const displayName = String(partnerDisplayName || "").trim().slice(0, 120);
+  if (!displayName) {
+    throw new Error("PARTNER_NAME_REQUIRED");
+  }
+
+  let finalCode = normalizeVendorCode(vendorCode) || generateVendorCode();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const [codeRows] = await runner.query(
+      `SELECT id FROM event_vendor_shares WHERE event_id = ? AND vendor_code = ? LIMIT 1`,
+      [eventId, finalCode]
+    );
+    if (!codeRows[0]) {
+      break;
+    }
+    finalCode = generateVendorCode();
+  }
+
+  const [result] = await runner.query(
+    `INSERT INTO event_vendor_shares
+      (event_id, owner_user_id, shared_with_user_id, shared_with_email, partner_display_name, invite_kind,
+       vendor_code, status, invite_token, accepted_at, created_at)
+     VALUES (?, ?, NULL, NULL, ?, 'link_only', ?, 'accepted', NULL, NOW(), NOW())`,
+    [eventId, ownerUserId, displayName, finalCode]
+  );
+  return {
+    id: result.insertId,
+    alreadyExists: false,
+    status: "accepted",
+    vendorCode: finalCode,
+    inviteToken: null,
+    inviteKind: "link_only",
+    partnerDisplayName: displayName
   };
 }
 
@@ -278,6 +328,11 @@ async function acceptShareByToken({ inviteToken, userId }, conn) {
   const share = await findShareByInviteToken(inviteToken, runner);
   if (!share) {
     return null;
+  }
+  if (share.invite_kind === "link_only" || share.shared_with_user_id == null) {
+    const err = new Error("FORBIDDEN");
+    err.code = "FORBIDDEN";
+    throw err;
   }
   if (Number(share.shared_with_user_id) !== Number(userId)) {
     const err = new Error("FORBIDDEN");
@@ -682,6 +737,7 @@ module.exports = {
   listSharedEventsForUser,
   listOwnedEventsWithShares,
   createShare,
+  createLinkOnlyShare,
   findShareByIdForOwner,
   findShareByInviteToken,
   acceptShareByToken,

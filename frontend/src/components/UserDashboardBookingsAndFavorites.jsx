@@ -232,7 +232,12 @@ function TicketDetailsSheet({ open, onClose, booking, eventUrl, mapUrl, venueLin
             <div className="hide-scrollbar min-h-0 flex-1 overflow-y-auto">
               <div className="relative h-36 bg-slate-900">
                 {booking.event_image ? (
-                  <img src={thumbImageUrl(booking.event_image)} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={thumbImageUrl(booking.event_image)}
+                    alt=""
+                    data-route-splash-ignore
+                    className="h-full w-full object-cover"
+                  />
                 ) : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/35 to-slate-950/10" />
                 <div className="absolute inset-x-0 bottom-0 p-4 text-white">
@@ -352,7 +357,12 @@ function UserBookingCard({ booking }) {
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft lg:hidden">
       <Link to={eventUrl} className="relative block h-40 bg-slate-900">
         {thumb ? (
-          <img src={thumbImageUrl(thumb)} alt="" className="h-full w-full object-cover" />
+          <img
+            src={thumbImageUrl(thumb)}
+            alt=""
+            data-route-splash-ignore
+            className="h-full w-full object-cover"
+          />
         ) : (
           <div className="flex h-full items-center justify-center">
             <Ticket className="h-8 w-8 text-white/70" aria-hidden />
@@ -405,7 +415,12 @@ function UserBookingCard({ booking }) {
       <div className="flex gap-2.5 sm:gap-3">
         <Link to={eventUrl} className="relative block h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-[4.25rem] sm:w-[4.25rem]">
           {thumb ? (
-            <img src={thumbImageUrl(thumb)} alt="" className="h-full w-full object-cover" />
+            <img
+              src={thumbImageUrl(thumb)}
+              alt=""
+              data-route-splash-ignore
+              className="h-full w-full object-cover"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-slate-100">
               <Ticket className="h-6 w-6 text-slate-400" aria-hidden />
@@ -519,7 +534,12 @@ function FavoriteListingCard({ item, toggleFavorite }) {
     "relative block h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-[4.25rem] sm:w-[4.25rem]";
 
   const thumbNode = thumb ? (
-    <img src={thumbImageUrl(thumb)} alt="" className="h-full w-full object-cover" />
+    <img
+      src={thumbImageUrl(thumb)}
+      alt=""
+      data-route-splash-ignore
+      className="h-full w-full object-cover"
+    />
   ) : (
     <div className="flex h-full w-full items-center justify-center bg-slate-100">
       <Heart className="h-6 w-6 text-slate-400" aria-hidden />

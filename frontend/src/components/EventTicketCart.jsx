@@ -98,11 +98,7 @@ function TicketTierCard({
               >
                 {qty} selected
               </span>
-            ) : (
-              <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 ring-1 ring-slate-200/80 lg:text-[10px]">
-                Select on chart
-              </span>
-            )
+            ) : null
           ) : (
             <p
               className={`shrink-0 text-right text-lg font-extrabold leading-none tabular-nums ${
